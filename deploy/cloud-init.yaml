@@ -1,0 +1,62 @@
+#cloud-config
+hostname: pierlimo-next
+fqdn: next.pierlimo.com
+timezone: America/Los_Angeles
+package_update: true
+package_upgrade: true
+ssh_pwauth: false
+disable_root: true
+
+users:
+  - name: deploy
+    gecos: Pierlimo Next Deploy
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGHQ+twSf9bxP/8BNByewhMI8IXlYz+Kj2/l2hGgdIM1 digitalocean-2026-03-14
+
+packages:
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - fail2ban
+  - ufw
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - rsync
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/99-hardening.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      ChallengeResponseAuthentication no
+      PubkeyAuthentication yes
+      PermitRootLogin no
+  - path: /etc/fail2ban/jail.d/sshd.local
+    permissions: "0644"
+    content: |
+      [sshd]
+      enabled = true
+
+runcmd:
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - bash -lc 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list'
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - usermod -aG docker deploy
+  - install -o deploy -g deploy -m 0755 -d /opt/pierlimo-next
+  - install -m 0755 -d /var/www/certbot
+  - systemctl enable --now docker
+  - systemctl enable --now nginx
+  - systemctl enable --now fail2ban
+  - ufw allow OpenSSH
+  - ufw allow 'Nginx Full'
+  - ufw --force enable
+  - systemctl restart ssh

@@ -1,0 +1,38 @@
+<svg width="1600" height="1100" viewBox="0 0 1600 1100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="1100" fill="#0B0C10"/>
+  <rect width="1600" height="1100" fill="url(#sky)"/>
+  <circle cx="1210" cy="210" r="118" fill="url(#sun)" fill-opacity="0.9"/>
+  <path d="M0 760C204 700 406 676 606 688C809 700 973 762 1188 748C1350 738 1480 692 1600 646V1100H0V760Z" fill="#11141B"/>
+  <path d="M196 1100L742 454H874L336 1100H196Z" fill="url(#runway)"/>
+  <path d="M420 1100L906 502" stroke="#E2C18A" stroke-opacity="0.28" stroke-width="8" stroke-dasharray="18 24"/>
+  <path d="M640 838L786 728" stroke="#EFD7AD" stroke-width="12" stroke-linecap="round"/>
+  <path d="M762 742L846 698L796 772" fill="#EFD7AD"/>
+  <path d="M786 728L914 706" stroke="#EFD7AD" stroke-width="10" stroke-linecap="round"/>
+  <rect x="1096" y="434" width="28" height="222" rx="14" fill="#191D25"/>
+  <rect x="1058" y="602" width="108" height="54" rx="16" fill="#1D222B"/>
+  <rect x="1076" y="386" width="70" height="84" rx="35" fill="#C9A36A"/>
+  <rect x="208" y="520" width="352" height="168" rx="28" fill="#151922"/>
+  <rect x="238" y="552" width="62" height="56" rx="12" fill="#E2C18A" fill-opacity="0.8"/>
+  <rect x="316" y="552" width="62" height="56" rx="12" fill="#E2C18A" fill-opacity="0.22"/>
+  <rect x="394" y="552" width="62" height="56" rx="12" fill="#E2C18A" fill-opacity="0.22"/>
+  <rect x="472" y="552" width="62" height="56" rx="12" fill="#E2C18A" fill-opacity="0.22"/>
+  <path d="M0 0H1600V1100H0V0Z" fill="url(#fade)"/>
+  <defs>
+    <linearGradient id="sky" x1="800" y1="0" x2="800" y2="1100" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#131722"/>
+      <stop offset="1" stop-color="#090A0D"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1210 210) rotate(90) scale(118)">
+      <stop stop-color="#E6C88F"/>
+      <stop offset="1" stop-color="#E6C88F" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="runway" x1="469" y1="1100" x2="848" y2="499" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1A1E26"/>
+      <stop offset="1" stop-color="#252B35"/>
+    </linearGradient>
+    <linearGradient id="fade" x1="800" y1="0" x2="800" y2="1100" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B0C10" stop-opacity="0"/>
+      <stop offset="1" stop-color="#0B0C10" stop-opacity="0.42"/>
+    </linearGradient>
+  </defs>
+</svg>
