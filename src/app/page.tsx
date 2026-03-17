@@ -101,7 +101,7 @@ export default async function Home() {
                   Book the airport ride and use the site like a local travel desk.
                 </h1>
                 <p className="mt-5 max-w-2xl text-lg leading-8 text-white/72">
-                  `seatac.co` is built for Sea-Tac pickups, hotel transfers, downtown Seattle
+                  seatac.co is built for Sea-Tac pickups, hotel transfers, downtown Seattle
                   arrivals, Bellevue rides, and airport-day planning that starts with the booking
                   instead of ending with a contact form.
                 </p>
@@ -196,7 +196,7 @@ export default async function Home() {
                 <span className="section-kicker">Airport planning notes</span>
                 <h2 className="section-title">More useful than a bare booking form, without turning into a directory.</h2>
                 <p className="section-copy">
-                  The long-term role of `seatac.co` is simple: make airport transportation easier to
+                  The long-term role of seatac.co is simple: make airport transportation easier to
                   understand, then make it easy to book.
                 </p>
               </div>
