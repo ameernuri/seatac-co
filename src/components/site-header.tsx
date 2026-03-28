@@ -1,35 +1,37 @@
 import Link from "next/link";
 
 import { siteChrome } from "@/lib/site-content";
+import { SiteBrand } from "@/components/site-brand";
 
 export function SiteHeader() {
   return (
-    <>
+    <header className="site-main-header">
       <div className="site-topbar">
         <div className="site-topbar-inner">
-          <span className="truncate">{siteChrome.topbarText}</span>
-          <Link href={siteChrome.reservationPhoneHref} className="hidden whitespace-nowrap lg:inline">
+          <span>{siteChrome.topbarText}</span>
+          <Link href={siteChrome.reservationPhoneHref} className="hidden whitespace-nowrap md:inline hover:text-[#0d5c48] transition-colors">
             {siteChrome.reservationPhoneLabel}
           </Link>
         </div>
       </div>
-      <header className="site-main-header">
-        <div className="site-header-inner">
-          <Link href="/" className="site-brand-lockup">
-            <span className="site-brand-mark">{siteChrome.brandMark}</span>
-            <span className="site-brand-name">{siteChrome.brandName}</span>
+      <div className="site-header-inner">
+        <SiteBrand />
+        <nav className="site-header-nav">
+          {siteChrome.navLinks.map((link) => (
+            <Link key={link.href} href={link.href} className="hover:text-[#0d5c48] transition-colors">
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+        <div className="flex items-center gap-3">
+          <Link href={siteChrome.reservationPhoneHref} className="site-header-utility hidden md:inline-flex">
+            Call
           </Link>
-          <nav className="site-header-nav">
-            {siteChrome.navLinks.map((link) => (
-              <Link key={link.href} href={link.href}>
-                {link.label}
-              </Link>
-            ))}
-            <Link href="/reserve" className="site-header-book-link">Reserve</Link>
-          </nav>
-          <Link href="/reserve" className="site-header-book-link lg:hidden">Reserve</Link>
+          <Link href="/reserve" className="site-header-book-link">
+            Reserve
+          </Link>
         </div>
-      </header>
-    </>
+      </div>
+    </header>
   );
 }

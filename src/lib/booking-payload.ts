@@ -52,6 +52,7 @@ export const bookingPayloadSchema = z.object({
   customerName: z.string().min(2),
   customerEmail: z.string().email(),
   customerPhone: z.string().min(7),
+  customerSmsOptIn: z.boolean().default(false),
   specialInstructions: z.string().nullable(),
 });
 
@@ -242,7 +243,36 @@ export async function createBookingDraft(
     throw new Error("Vehicle not found.");
   }
 
+  const siteVehicles = await db
+    .select({ basePrice: vehicles.basePrice })
+    .from(vehicles)
+    .innerJoin(
+      vehicleSiteAssignments,
+      eq(vehicleSiteAssignments.vehicleId, vehicles.id),
+    )
+    .where(
+      and(
+        eq(vehicleSiteAssignments.siteId, site.id),
+        eq(vehicles.active, true),
+      ),
+    );
+
+  const baseVehicleFloor = siteVehicles.reduce<number | null>((lowest, current) => {
+    const value = Number(current.basePrice);
+
+    if (!Number.isFinite(value) || value <= 0) {
+      return lowest;
+    }
+
+    if (lowest === null || value < lowest) {
+      return value;
+    }
+
+    return lowest;
+  }, null);
+
   const pricing = quoteReservation({
+    baseVehicleFloor,
     serviceMode: payload.serviceMode as ServiceMode,
     tripType: payload.tripType,
     selectedRoute,
@@ -254,6 +284,7 @@ export async function createBookingDraft(
     routeDurationMinutes: payload.routeDurationMinutes,
     returnTrip: payload.returnTrip,
     selectedExtras: payload.selectedExtras,
+    bookingConstraints,
   });
 
   const routeName =
@@ -341,6 +372,8 @@ export async function createBookingDraft(
         customerName: payload.customerName,
         customerEmail: payload.customerEmail,
         customerPhone: payload.customerPhone,
+        customerSmsOptIn: payload.customerSmsOptIn,
+        customerSmsOptInAt: payload.customerSmsOptIn ? new Date() : null,
         specialInstructions: payload.specialInstructions,
         vehicleId: vehicle.id,
         vehicleUnitId: vehicleUnit.id,

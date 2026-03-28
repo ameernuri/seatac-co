@@ -1,26 +1,35 @@
 import type { Metadata } from "next";
-import { Bodoni_Moda, Spline_Sans } from "next/font/google";
+import { Cal_Sans } from "next/font/google";
 
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
-const bodyFont = Spline_Sans({
+const bodyFont = Cal_Sans({
   variable: "--font-body",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: "400",
 });
 
-const displayFont = Bodoni_Moda({
+const displayFont = Cal_Sans({
   variable: "--font-display",
   subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-  style: ["normal", "italic"],
+  weight: "400",
 });
 
 export const metadata: Metadata = {
-  title: "seatac.co | Sea-Tac airport rides and travel planning",
+  metadataBase: new URL("https://seatac.co"),
+  applicationName: "Seatac Connection",
+  title: "Seatac Connection | Sea-Tac airport rides and travel planning",
   description:
     "Airport-first booking and travel planning for Sea-Tac pickups, Seattle hotel transfers, Bellevue rides, and local airport guides.",
+  alternates: {
+    canonical: "/",
+  },
+  icons: {
+    icon: "/seatac.co.icon.svg",
+    shortcut: "/seatac.co.icon.svg",
+    apple: "/seatac.co.icon.svg",
+  },
 };
 
 export default function RootLayout({

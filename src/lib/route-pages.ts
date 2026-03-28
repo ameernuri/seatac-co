@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 
+import type { RouteReservationDefaults } from "@/lib/route-booking";
+import { buildSeatacMetadata } from "@/lib/seo";
+
 export type RoutePage = {
   slug: string;
   title: string;
@@ -14,14 +17,8 @@ export type RoutePage = {
   highlights: { label: string; value: string }[];
   reasons: { title: string; body: string }[];
   faqs: { question: string; answer: string }[];
-  reservationDefaults?: {
-    serviceMode: "airport" | "corporate" | "hourly" | "events";
-    tripType: "flat" | "distance" | "hourly" | "event";
-    routeSlug?: string;
-    pickupAddress?: string;
-    dropoffAddress?: string;
-    pickupDetail?: string;
-  };
+  relatedLinks?: { href: string; label: string; title: string }[];
+  reservationDefaults?: RouteReservationDefaults;
 };
 
 export const routePages: Record<string, RoutePage> = {
@@ -29,11 +26,11 @@ export const routePages: Record<string, RoutePage> = {
     slug: "seatac-airport-car-service",
     title: "Sea-Tac Airport Car Service | seatac.co",
     description:
-      "Private Sea-Tac airport car service for Seattle arrivals, hotel transfers, downtown drop-offs, and Eastside airport rides.",
+      "Private Sea-Tac airport car service for Seattle arrivals, Bellevue transfers, downtown Seattle drop-offs, Sea-Tac hotel rides, and direct airport departures.",
     heroEyebrow: "Sea-Tac airport service",
     heroTitle: "Sea-Tac airport rides built for arrivals, departures, and clean hotel transfers.",
     heroBody:
-      "Book direct airport transportation for Sea-Tac pickups, early departures, downtown Seattle hotels, Bellevue arrivals, and return airport runs without a shared shuttle detour.",
+      "Book direct Sea-Tac airport car service for airport pickups, early departures, downtown Seattle hotels, Bellevue arrivals, and return airport rides without a shared shuttle detour.",
     art: "/scene-airport.svg",
     primaryRoute: "Sea-Tac Airport to downtown Seattle, Bellevue, Kirkland, hotels, and nearby business districts",
     routeNote:
@@ -71,23 +68,36 @@ export const routePages: Record<string, RoutePage> = {
         question: "Do I need to request a quote manually?",
         answer: "No. You can choose the route and submit the booking details directly from the site.",
       },
+      {
+        question: "Is this the main Sea-Tac airport car service page for private rides?",
+        answer: "Yes. This is the main airport car service page for direct Sea-Tac pickups, departures, hotel transfers, and linked route pages for Bellevue, downtown Seattle, and the cruise terminals.",
+      },
+    ],
+    relatedLinks: [
+      { href: "/seatac-to-bellevue", label: "Eastside route", title: "Sea-Tac to Bellevue" },
+      {
+        href: "/seatac-to-downtown-seattle",
+        label: "Downtown route",
+        title: "Sea-Tac to downtown Seattle",
+      },
+      { href: "/seatac-to-pier-66", label: "Cruise route", title: "Sea-Tac to Pier 66" },
     ],
     reservationDefaults: {
       serviceMode: "airport",
       tripType: "distance",
-      pickupAddress: "Sea-Tac Airport",
-      pickupDetail: "Flight number, airline, or pickup notes",
+      pickupAddress:
+        "Seattle-Tacoma International Airport, 17801 International Blvd, SeaTac, WA 98158, USA",
     },
   },
   "seatac-to-downtown-seattle": {
     slug: "seatac-to-downtown-seattle",
     title: "Sea-Tac to Downtown Seattle Car Service | seatac.co",
     description:
-      "Private Sea-Tac to downtown Seattle car service for hotel arrivals, convention trips, waterfront stays, and return airport rides.",
+      "Private Sea-Tac to downtown Seattle car service for hotel arrivals, convention trips, waterfront stays, office drop-offs, and return airport rides into the downtown core.",
     heroEyebrow: "Downtown airport transfer",
     heroTitle: "Sea-Tac to downtown Seattle private car service for hotels, offices, and waterfront arrivals.",
     heroBody:
-      "Reserve a direct ride from Sea-Tac to downtown Seattle for hotel check-ins, meetings, convention traffic, return airport rides, and late-night arrivals.",
+      "Reserve a direct Sea-Tac to downtown Seattle car service for hotel check-ins, meetings, convention traffic, return airport rides, and late-night arrivals.",
     art: "/seattle.water.night.webp",
     primaryRoute: "Sea-Tac Airport to downtown Seattle hotels, offices, Pike Place, Belltown, and the waterfront",
     routeNote:
@@ -101,7 +111,7 @@ export const routePages: Record<string, RoutePage> = {
     reasons: [
       {
         title: "Preset for a core route",
-        body: "This page uses one of the seeded airport routes, so the booking form can open with the downtown Seattle route already selected.",
+        body: "This page uses one of the seeded airport routes, so the booking form can open with the Sea-Tac to downtown Seattle route already selected.",
       },
       {
         title: "Good downtown coverage",
@@ -114,36 +124,45 @@ export const routePages: Record<string, RoutePage> = {
     ],
     faqs: [
       {
-        question: "Can I use this for downtown hotel pickups back to Sea-Tac too?",
-        answer: "Yes. The route page is airport-first, but return departures from downtown Seattle can be booked as well.",
+        question: "Can I use this for downtown Seattle hotel pickups back to Sea-Tac too?",
+        answer: "Yes. The route page is airport-first, but return departures from downtown Seattle hotels and offices can be booked as well.",
       },
       {
         question: "Does this cover South Lake Union and the waterfront?",
-        answer: "Yes. Riders heading to downtown neighborhoods, hotel clusters, and the waterfront can use this page to start the booking.",
+        answer: "Yes. Riders heading to downtown Seattle neighborhoods, hotel clusters, and the waterfront can use this page to start the booking.",
       },
       {
-        question: "Is the route already selected in the form?",
-        answer: "Yes. The booking form opens with the Sea-Tac to downtown Seattle preset selected.",
+        question: "Is the Sea-Tac to downtown Seattle route already selected in the form?",
+        answer: "Yes. The booking form opens with Sea-Tac to downtown Seattle already selected.",
       },
+      {
+        question: "Does this page work for downtown Seattle hotels and office towers?",
+        answer: "Yes. The route is meant for direct Sea-Tac to downtown Seattle hotel transfers, office drop-offs, convention travel, and return airport departures from the downtown core.",
+      },
+    ],
+    relatedLinks: [
+      { href: "/seatac-airport-hotels", label: "Hotel planning", title: "Sea-Tac airport hotels" },
+      { href: "/seatac-to-bellevue", label: "Eastside route", title: "Sea-Tac to Bellevue" },
+      { href: "/departures", label: "Airport guide", title: "Sea-Tac departures guide" },
     ],
     reservationDefaults: {
       serviceMode: "airport",
       tripType: "flat",
       routeSlug: "seatac-downtown-core",
-      pickupAddress: "Sea-Tac Airport",
-      dropoffAddress: "Downtown Seattle",
-      pickupDetail: "Flight number, hotel, or terminal notes",
+      pickupAddress:
+        "Seattle-Tacoma International Airport, 17801 International Blvd, SeaTac, WA 98158, USA",
+      dropoffAddress: "Downtown Seattle, Seattle, WA, USA",
     },
   },
   "seatac-to-bellevue": {
     slug: "seatac-to-bellevue",
     title: "Sea-Tac to Bellevue Car Service | seatac.co",
     description:
-      "Private Sea-Tac to Bellevue car service for hotel arrivals, office runs, tech travelers, and airport departures from the Eastside.",
+      "Private Sea-Tac to Bellevue car service for hotel arrivals, office runs, tech travelers, Bellevue departures, and direct Eastside airport transfers.",
     heroEyebrow: "Bellevue airport transfer",
     heroTitle: "Sea-Tac to Bellevue private car service for hotel arrivals, office runs, and return airport trips.",
     heroBody:
-      "Book a direct ride between Sea-Tac and Bellevue for business arrivals, hotel check-ins, Eastside departures, and airport pickups that need simple timing.",
+      "Book a direct Sea-Tac to Bellevue car service for business arrivals, hotel check-ins, Eastside departures, and airport pickups that need simple timing.",
     art: "/downtown.night.jpeg",
     primaryRoute: "Sea-Tac Airport to Bellevue hotels, office towers, residential towers, and nearby Eastside corridors",
     routeNote:
@@ -157,7 +176,7 @@ export const routePages: Record<string, RoutePage> = {
     reasons: [
       {
         title: "Built for Eastside demand",
-        body: "Bellevue is one of the main airport transfer corridors, so this page is structured around a seeded route instead of a generic quote form.",
+        body: "Bellevue is one of the main airport transfer routes, so this page opens with the trip details already in place.",
       },
       {
         title: "Good for hotels and offices",
@@ -175,20 +194,37 @@ export const routePages: Record<string, RoutePage> = {
       },
       {
         question: "Is Bellevue already selected in the form?",
-        answer: "Yes. The form opens with the Bellevue airport route preset loaded.",
+        answer: "Yes. The form opens with the Bellevue airport route already selected.",
       },
       {
         question: "Does this work for hotels and office towers?",
         answer: "Yes. The route is meant for both Bellevue hotel traffic and office or residential pickups.",
       },
+      {
+        question: "Is this the main page for Sea-Tac to Bellevue car service?",
+        answer: "Yes. This page is the direct booking page for Sea-Tac to Bellevue airport transfers, with hotel, office, and return-airport use cases built into the route copy and booking defaults.",
+      },
+    ],
+    relatedLinks: [
+      {
+        href: "/seatac-to/hyatt-regency-bellevue",
+        label: "Hotel transfer",
+        title: "Sea-Tac to Hyatt Regency Bellevue",
+      },
+      {
+        href: "/seatac-to-downtown-seattle",
+        label: "Downtown route",
+        title: "Sea-Tac to downtown Seattle",
+      },
+      { href: "/seatac-airport-car-service", label: "Airport hub", title: "Sea-Tac airport car service" },
     ],
     reservationDefaults: {
       serviceMode: "airport",
       tripType: "flat",
       routeSlug: "seatac-bellevue-core",
-      pickupAddress: "Sea-Tac Airport",
-      dropoffAddress: "Bellevue",
-      pickupDetail: "Flight number, hotel, or office pickup notes",
+      pickupAddress:
+        "Seattle-Tacoma International Airport, 17801 International Blvd, SeaTac, WA 98158, USA",
+      dropoffAddress: "Downtown Bellevue, Bellevue, WA, USA",
     },
   },
   "seatac-to-kirkland": {
@@ -230,8 +266,8 @@ export const routePages: Record<string, RoutePage> = {
         answer: "Yes. Return departures from Kirkland can be scheduled from the same booking flow.",
       },
       {
-        question: "Is the route preset in the form?",
-        answer: "Yes. The Sea-Tac to Kirkland route is preselected when this page loads.",
+        question: "Is the route already selected in the form?",
+        answer: "Yes. The Sea-Tac to Kirkland route is already selected when this page loads.",
       },
       {
         question: "Does this work for residential pickups?",
@@ -242,9 +278,141 @@ export const routePages: Record<string, RoutePage> = {
       serviceMode: "airport",
       tripType: "flat",
       routeSlug: "seatac-kirkland-core",
-      pickupAddress: "Sea-Tac Airport",
-      dropoffAddress: "Kirkland",
-      pickupDetail: "Flight number, address, or pickup notes",
+      pickupAddress:
+        "Seattle-Tacoma International Airport, 17801 International Blvd, SeaTac, WA 98158, USA",
+      dropoffAddress: "Kirkland, WA, USA",
+    },
+  },
+  "seatac-to-pier-66": {
+    slug: "seatac-to-pier-66",
+    title: "Sea-Tac to Pier 66 Car Service | seatac.co",
+    description:
+      "Private Sea-Tac to Pier 66 transportation for Seattle cruise departures, Bell Street Cruise Terminal transfers, waterfront hotel stays, and direct cruise-port planning near downtown Seattle.",
+    heroEyebrow: "Cruise terminal transfer",
+    heroTitle: "Sea-Tac to Pier 66 car service for Bell Street cruise departures and waterfront hotel stays.",
+    heroBody:
+      "Reserve direct Sea-Tac to Pier 66 transportation from the airport to Bell Street Cruise Terminal for cruise embarkation days, waterfront hotel stays, and luggage-heavy port transfers.",
+    art: "/seattle.water.night.webp",
+    primaryRoute: "Sea-Tac Airport to Bell Street Cruise Terminal at Pier 66, waterfront hotels, and downtown Seattle cruise stays",
+    routeNote:
+      "Best for direct airport-to-cruise transfers, same-day embarkation, and hotel stays near Pier 66 before or after a sailing.",
+    idealFor: ["Pier 66 departures", "Cruise luggage", "Waterfront hotel stays"],
+    highlights: [
+      { label: "Route", value: "Sea-Tac to Pier 66" },
+      { label: "Terminal", value: "Bell Street Cruise Terminal" },
+      { label: "Best fit", value: "Embarkation day transfers" },
+    ],
+    reasons: [
+      {
+        title: "Built for cruise timing",
+        body: "This route is meant for travelers going straight from Sea-Tac to Bell Street Cruise Terminal at Pier 66 without relying on hotel shuttles or rideshare staging.",
+      },
+      {
+        title: "Useful for waterfront stays",
+        body: "It also works well for travelers staying near the waterfront before or after a cruise, where the airport and terminal timing still drive the day.",
+      },
+      {
+        title: "Direct route booking",
+        body: "The route opens with the cruise transfer already selected so you can book without starting over on a generic form.",
+      },
+    ],
+    faqs: [
+      {
+        question: "Is Bell Street Cruise Terminal at Pier 66 already loaded in the booking form?",
+        answer: "Yes. The reservation flow opens with the Sea-Tac to Pier 66 route already selected so you do not have to rebuild the cruise transfer manually.",
+      },
+      {
+        question: "Can I use this if I am staying at a Seattle waterfront hotel first?",
+        answer: "Yes. This page is still useful if your trip includes a nearby Seattle waterfront hotel before boarding at Pier 66.",
+      },
+      {
+        question: "Is this page only for Seattle cruise departures?",
+        answer: "No. It can also be used for post-cruise airport returns if the route timing is the same corridor in reverse on your travel day.",
+      },
+      {
+        question: "Is this the correct route for Bell Street Cruise Terminal at Pier 66?",
+        answer: "Yes. This route is specifically for Sea-Tac to Bell Street Cruise Terminal at Pier 66, not Smith Cove Cruise Terminal at Pier 91.",
+      },
+    ],
+    relatedLinks: [
+      { href: "/seatac-to-pier-91", label: "Other cruise terminal", title: "Sea-Tac to Pier 91" },
+      { href: "/seatac-to-cruise-pre-stay-hotels", label: "Cruise hotels", title: "Cruise pre-stay hotels" },
+      { href: "/bell-street-cruise-terminal-pier-66", label: "Terminal guide", title: "Bell Street Cruise Terminal guide" },
+    ],
+    reservationDefaults: {
+      serviceMode: "airport",
+      tripType: "flat",
+      routeSlug: "seatac-pier-66",
+      pickupAddress:
+        "Seattle-Tacoma International Airport, 17801 International Blvd, SeaTac, WA 98158, USA",
+      dropoffAddress:
+        "Bell Street Cruise Terminal at Pier 66, 2225 Alaskan Way, Seattle, WA 98121, USA",
+    },
+  },
+  "seatac-to-pier-91": {
+    slug: "seatac-to-pier-91",
+    title: "Sea-Tac to Pier 91 Car Service | seatac.co",
+    description:
+      "Private Sea-Tac to Pier 91 transportation for Smith Cove Cruise Terminal departures, luggage-heavy Seattle cruise transfers, family embarkation days, and direct port arrivals from the airport.",
+    heroEyebrow: "Smith Cove transfer",
+    heroTitle: "Sea-Tac to Pier 91 car service for cruise departures, family luggage, and direct port arrivals.",
+    heroBody:
+      "Book direct Sea-Tac to Pier 91 transportation from the airport to Smith Cove Cruise Terminal for cruise embarkation, hotel-to-port planning, and Seattle cruise logistics.",
+    art: "/seattle.water.night.webp",
+    primaryRoute: "Sea-Tac Airport to Smith Cove Cruise Terminal at Pier 91, cruise hotels, and Seattle pre-sailing stays",
+    routeNote:
+      "Best for travelers boarding from Smith Cove who need a direct airport transfer with luggage, timing, and terminal context already built into the reservation.",
+    idealFor: ["Pier 91 departures", "Family luggage", "Cruise embarkation days"],
+    highlights: [
+      { label: "Route", value: "Sea-Tac to Pier 91" },
+      { label: "Terminal", value: "Smith Cove Cruise Terminal" },
+      { label: "Use", value: "Embarkation day transfer" },
+    ],
+    reasons: [
+      {
+        title: "Terminal-specific transfer",
+        body: "Pier 91 is a different terminal from Bell Street, so this page gives Smith Cove Cruise Terminal its own route and booking surface instead of lumping Seattle cruise traffic together.",
+      },
+      {
+        title: "Better for larger luggage loads",
+        body: "Pier 91 trips often involve family luggage, pre-cruise bags, and same-day timing, which makes a direct airport transfer more useful than a generic ride request.",
+      },
+      {
+        title: "Direct booking handoff",
+        body: "The route is already selected so you can finish the reservation with the right terminal details in place.",
+      },
+    ],
+    faqs: [
+      {
+        question: "Is Smith Cove Cruise Terminal at Pier 91 preselected in the booking form?",
+        answer: "Yes. The reservation flow opens with the Sea-Tac to Pier 91 route already selected so you can move straight into the cruise transfer booking.",
+      },
+      {
+        question: "Is this the same as Pier 66?",
+        answer: "No. Pier 91 and Pier 66 are separate Seattle cruise terminals and should be booked as separate transfer routes.",
+      },
+      {
+        question: "Can I use this for return airport service after the cruise too?",
+        answer: "Yes. This page is focused on airport-to-port transfers, but the same corridor matters for return service after the cruise as well.",
+      },
+      {
+        question: "Is this the right page for Smith Cove Cruise Terminal at Pier 91?",
+        answer: "Yes. This route is specifically for Sea-Tac to Smith Cove Cruise Terminal at Pier 91 and should be used instead of the Pier 66 route when your sailing departs from Smith Cove.",
+      },
+    ],
+    relatedLinks: [
+      { href: "/seatac-to-pier-66", label: "Other cruise terminal", title: "Sea-Tac to Pier 66" },
+      { href: "/seatac-to-cruise-pre-stay-hotels", label: "Cruise hotels", title: "Cruise pre-stay hotels" },
+      { href: "/smith-cove-cruise-terminal-pier-91", label: "Terminal guide", title: "Smith Cove Cruise Terminal guide" },
+    ],
+    reservationDefaults: {
+      serviceMode: "airport",
+      tripType: "flat",
+      routeSlug: "seatac-pier-91",
+      pickupAddress:
+        "Seattle-Tacoma International Airport, 17801 International Blvd, SeaTac, WA 98158, USA",
+      dropoffAddress:
+        "Smith Cove Cruise Terminal at Pier 91, 2001 W Garfield St, Seattle, WA 98119, USA",
     },
   },
   "seatac-hourly-charter": {
@@ -277,7 +445,7 @@ export const routePages: Record<string, RoutePage> = {
       },
       {
         title: "Fast booking handoff",
-        body: "You can start with the hourly preset and send the broad itinerary notes directly through the same reservation flow.",
+        body: "You can start with the hourly option and add your itinerary notes in the same reservation flow.",
       },
     ],
     faqs: [
@@ -287,7 +455,7 @@ export const routePages: Record<string, RoutePage> = {
       },
       {
         question: "Is the hourly mode already selected?",
-        answer: "Yes. The booking form opens on the hourly charter preset from this page.",
+        answer: "Yes. The booking form opens on the hourly charter option from this page.",
       },
       {
         question: "Can I still include airport pickup notes?",
@@ -298,8 +466,8 @@ export const routePages: Record<string, RoutePage> = {
       serviceMode: "hourly",
       tripType: "hourly",
       routeSlug: "seatac-hourly-charter",
-      pickupAddress: "Sea-Tac Airport",
-      pickupDetail: "Arrival details and hourly itinerary notes",
+      pickupAddress:
+        "Seattle-Tacoma International Airport, 17801 International Blvd, SeaTac, WA 98158, USA",
     },
   },
 };
@@ -308,9 +476,14 @@ export function getRoutePage(slug: string) {
   return routePages[slug];
 }
 
+export function getRoutePageSlugs() {
+  return Object.keys(routePages);
+}
+
 export function getRouteMetadata(page: RoutePage): Metadata {
-  return {
+  return buildSeatacMetadata({
     title: page.title,
     description: page.description,
-  };
+    path: `/${page.slug}`,
+  });
 }

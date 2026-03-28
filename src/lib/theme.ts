@@ -12,6 +12,7 @@ export type SiteThemeContent = {
     body: string;
     contactPhone: string;
     contactEmail: string;
+    operatingHours?: string;
   };
   coverageAreas: string[];
   serviceCards: {
@@ -28,6 +29,8 @@ export type SiteThemeContent = {
     key: string;
     label: string;
     detail: string;
+    maxQuantity?: number;
+    quantityLabel?: string;
     price: number;
   }[];
 };
@@ -39,8 +42,8 @@ export const siteThemes: Record<string, SiteThemeContent> = {
     brandMark: "Seattle Luxury Transport",
     topbarText:
       "Private black car service for Sea-Tac, Seattle cruise terminals, Bellevue, and downtown Seattle.",
-    reservationPhoneLabel: "Reservations: (206) 555-0142",
-    reservationPhoneHref: "tel:+12065550142",
+    reservationPhoneLabel: "Reservations: (206) 737-0808",
+    reservationPhoneHref: "tel:+12067370808",
     navLinks: [
       { href: "/#services", label: "Services" },
       { href: "/#fleet", label: "Vehicle" },
@@ -52,8 +55,9 @@ export const siteThemes: Record<string, SiteThemeContent> = {
       title: "Airport, cruise, and executive reservations without the dead-end contact form.",
       body:
         "Built for Sea-Tac transfers, Seattle cruise terminal runs, Bellevue and downtown executive rides, and selected hourly bookings with a direct reservation flow.",
-      contactPhone: "(206) 555-0142",
+      contactPhone: "(206) 737-0808",
       contactEmail: "reservations@pierlimo.com",
+      operatingHours: "Dispatch support available daily from 6:00 AM to 11:00 PM.",
     },
     coverageAreas: [
       "Sea-Tac Airport",
@@ -114,6 +118,8 @@ export const siteThemes: Record<string, SiteThemeContent> = {
         key: "child-seat",
         label: "Child seat",
         detail: "Safety seat staged before pickup.",
+        maxQuantity: 4,
+        quantityLabel: "seat",
         price: 25,
       },
       {
@@ -130,26 +136,28 @@ export const siteThemes: Record<string, SiteThemeContent> = {
       },
     ],
   },
-  seatacdrive: {
-    slug: "seatacdrive",
-    brandName: "seatac.co",
-    brandMark: "Sea-Tac rides + local guide",
+  seatac_co: {
+    slug: "seatac_co",
+    brandName: "Seatac Connection",
+    brandMark: "Seatac Connection",
     topbarText:
-      "Sea-Tac pickups, airport hotel transfers, and Seattle arrival planning with direct booking.",
-    reservationPhoneLabel: "Reservations: (206) 555-0188",
-    reservationPhoneHref: "tel:+12065550188",
+      "Sea-Tac airport planning, hotel guides, route pages, and private ride reservations in one local resource.",
+    reservationPhoneLabel: "Reservations: (206) 737-0808",
+    reservationPhoneHref: "tel:+12067370808",
     navLinks: [
       { href: "/#routes", label: "Routes" },
-      { href: "/#guides", label: "Guides" },
+      { href: "/#planning", label: "Planning" },
       { href: "/#coverage", label: "Coverage" },
+      { href: "/#booking", label: "Book" },
     ],
     footer: {
-      eyebrow: "seatac.co Dispatch",
-      title: "Airport-first reservations with enough local context to plan the whole trip.",
+      eyebrow: "Seatac Connection",
+      title: "Plan the airport stay, compare the route options, and reserve when you are ready.",
       body:
-        "Built for Sea-Tac pickups, hotel transfers, downtown arrivals, Bellevue rides, and airport planning content that helps visitors move around Seattle faster.",
-      contactPhone: "(206) 555-0188",
+        "Browse Sea-Tac hotel areas, downtown and Eastside transfer routes, and practical airport planning notes before opening a private ride reservation.",
+      contactPhone: "(206) 737-0808",
       contactEmail: "hello@seatac.co",
+      operatingHours: "Live booking support available daily from 6:00 AM to 11:00 PM.",
     },
     coverageAreas: [
       "Sea-Tac Airport",
@@ -163,28 +171,28 @@ export const siteThemes: Record<string, SiteThemeContent> = {
     serviceCards: [
       {
         eyebrow: "Airport",
-        title: "Sea-Tac pickups and departures with direct booking.",
+        title: "Sea-Tac route pages and airport ride access.",
         body:
-          "Airport-first transportation for travelers who want a clean reservation path instead of hunting through directories and shuttle listings.",
+          "Open the airport transfer page that matches your destination, then reserve from there if you already know the trip.",
       },
       {
         eyebrow: "Hotels",
-        title: "Hotel transfers for early departures and late arrivals.",
+        title: "Hotel areas, pickup planning, and stay research.",
         body:
-          "Useful for visitors staying near Sea-Tac, downtown Seattle, or Bellevue who need one direct ride instead of piecing together airport logistics.",
+          "Useful for travelers deciding where to stay before an early departure, late arrival, or downtown connection.",
       },
       {
         eyebrow: "Local guide",
-        title: "Travel notes that answer the questions airport riders actually have.",
+        title: "Local airport notes that answer the real arrival questions.",
         body:
-          "Built to grow into a Sea-Tac planning resource with route pages, hotel guides, pickup notes, and airport timing advice.",
+          "Find neighborhood pages, hotel recommendations, transfer notes, and timing advice for flights, cruises, and Seattle arrivals.",
       },
     ],
-    fleetNotes: ["Airport-first booking", "Hotel and downtown coverage", "Shared dispatch backend"],
+    fleetNotes: ["Airport planning", "Hotel and neighborhood coverage", "Ride pages when needed"],
     homepageMetrics: [
-      { value: "SEA", label: "Airport-first booking" },
-      { value: "4", label: "Core transfer routes" },
-      { value: "24/7", label: "Reservation intake" },
+      { value: "SEA", label: "Local airport focus" },
+      { value: "Guides", label: "Hotels, routes, terminals" },
+      { value: "Rides", label: "Direct reservation access" },
     ],
     extrasCatalog: [
       {
@@ -192,6 +200,14 @@ export const siteThemes: Record<string, SiteThemeContent> = {
         label: "Meet and greet",
         detail: "Airport greeting with personalized signage.",
         price: 30,
+      },
+      {
+        key: "child-seat",
+        label: "Child seat",
+        detail: "Safety seat staged before pickup.",
+        maxQuantity: 4,
+        quantityLabel: "seat",
+        price: 25,
       },
     ],
   },

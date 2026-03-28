@@ -1,22 +1,46 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import {
+  HomeGradientMetricCard,
+  HomeSurfaceNoteCard,
+} from "@/components/home-gradient-cards";
+import { JsonLd } from "@/components/json-ld";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import type { RoutePage } from "@/lib/route-pages";
+import { buildBreadcrumbJsonLd, buildFaqJsonLd } from "@/lib/seo";
 import { siteChrome } from "@/lib/site-content";
+
+export type RouteFacts = {
+  label: string;
+  value: string;
+}[];
 
 export function RouteLandingPage({
   page,
   reservationPanel,
+  facts,
+  reserveHref,
 }: {
   page: RoutePage;
   reservationPanel?: ReactNode;
+  facts?: RouteFacts;
+  reserveHref?: string;
 }) {
+  const highlightItems = facts && facts.length > 0 ? facts : page.highlights;
+
   return (
     <div className="site-shell min-h-screen">
       <SiteHeader />
       <main>
+        <JsonLd
+          data={buildBreadcrumbJsonLd([
+            { name: "seatac.co", path: "/" },
+            { name: page.primaryRoute, path: `/${page.slug}` },
+          ])}
+        />
+        <JsonLd data={buildFaqJsonLd(page.faqs)} />
         <section className="route-hero">
           <div className="section-inner route-hero-grid">
             <aside className="route-scene-card">
@@ -36,15 +60,18 @@ export function RouteLandingPage({
               <span className="eyebrow">{page.heroEyebrow}</span>
               <h1 className="display-title route-display-title">{page.heroTitle}</h1>
               <p>{page.heroBody}</p>
+              <p className="mt-4 max-w-[52rem] text-base leading-7 text-[#45675d]">
+                {page.description}
+              </p>
               <div className="hero-actions">
                 <Link
-                  href={reservationPanel ? "#reserve-form" : "/reserve"}
+                  href={reserveHref ?? (reservationPanel ? "#reserve-form" : "/reserve")}
                   className="button-link primary"
                 >
                   Reserve this route
                 </Link>
                 <Link href={siteChrome.reservationPhoneHref} className="button-link secondary">
-                  Call dispatch
+                  Call reservations
                 </Link>
               </div>
               <div className="route-mini-pills">
@@ -60,11 +87,12 @@ export function RouteLandingPage({
 
         <section className="section route-summary-section">
           <div className="section-inner route-summary-grid">
-            {page.highlights.map((item) => (
-              <article key={item.label} className="quick-fact-card">
-                <span>{item.label}</span>
-                <strong className="text-[#f5efe5]">{item.value}</strong>
-              </article>
+            {highlightItems.map((item) => (
+              <HomeGradientMetricCard
+                key={item.label}
+                eyebrow={item.label}
+                title={item.value}
+              />
             ))}
           </div>
         </section>
@@ -77,8 +105,8 @@ export function RouteLandingPage({
                   <span className="section-kicker">Reserve this ride</span>
                   <h2 className="section-title">Send your route, timing, and pickup details directly from this page.</h2>
                   <p className="section-copy">
-                    Choose the date, route, and booking details below, then send the trip straight
-                    into dispatch review and confirmation.
+                    Choose the date, route, and trip details below, then finish
+                    the reservation without leaving this page.
                   </p>
                 </div>
                 <div className="booking-panel font-sans">{reservationPanel}</div>
@@ -97,14 +125,38 @@ export function RouteLandingPage({
             </div>
             <div className="route-reason-grid">
               {page.reasons.map((reason) => (
-                <article key={reason.title} className="compact-note-card">
-                  <h3 className="font-sans font-semibold text-[#f5efe5]">{reason.title}</h3>
-                  <p>{reason.body}</p>
-                </article>
+                <HomeSurfaceNoteCard
+                  key={reason.title}
+                  title={reason.title}
+                  body={reason.body}
+                />
               ))}
             </div>
           </div>
         </section>
+
+        {page.relatedLinks && page.relatedLinks.length > 0 ? (
+          <section className="section">
+            <div className="section-inner">
+              <div className="section-heading section-heading-tight">
+                <div>
+                  <span className="section-kicker">Related planning</span>
+                  <h2 className="section-title">Keep moving through the Sea-Tac route cluster.</h2>
+                </div>
+              </div>
+              <div className="route-summary-grid">
+                {page.relatedLinks.map((link) => (
+                  <HomeGradientMetricCard
+                    key={link.href}
+                    eyebrow={link.label}
+                    title={link.title}
+                    href={link.href}
+                  />
+                ))}
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <section className="section">
           <div className="section-inner">
@@ -116,10 +168,12 @@ export function RouteLandingPage({
             </div>
             <div className="route-faq-grid">
               {page.faqs.map((faq) => (
-                <article key={faq.question} className="route-faq-card">
-                  <h3 className="font-sans font-semibold text-[#f5efe5]">{faq.question}</h3>
-                  <p>{faq.answer}</p>
-                </article>
+                <HomeSurfaceNoteCard
+                  key={faq.question}
+                  title={faq.question}
+                  body={faq.answer}
+                  className="route-faq-card"
+                />
               ))}
             </div>
             <div className="mt-8">

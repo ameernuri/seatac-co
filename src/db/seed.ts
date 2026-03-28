@@ -1,10 +1,11 @@
-import { asc, count, eq, isNull, or } from "drizzle-orm";
+import { asc, eq, isNull, or } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
 import { db } from "@/db/client";
 import {
   bookings,
   chauffeurs,
+  hotels,
   routes,
   siteSettings,
   sites,
@@ -24,13 +25,14 @@ import {
 async function upsertSites() {
   for (const site of seededSites) {
     const existing = await db.query.sites.findFirst({
-      where: eq(sites.slug, site.slug),
+      where: or(eq(sites.slug, site.slug), eq(sites.domain, site.domain)),
     });
 
     if (existing) {
       await db
         .update(sites)
         .set({
+          slug: site.slug,
           name: site.name,
           domain: site.domain,
           themeKey: site.themeKey,
@@ -240,9 +242,21 @@ async function ensureVehiclesForSite(slug: keyof typeof seededSiteData) {
           bagsMax: vehicle.bagsMax,
           quantity: vehicle.quantity,
           basePrice: vehicle.basePrice,
+          bagFee:
+            "bagFee" in vehicle && typeof vehicle.bagFee === "string"
+              ? vehicle.bagFee
+              : null,
+          mileageFee:
+            "mileageFee" in vehicle && typeof vehicle.mileageFee === "string"
+              ? vehicle.mileageFee
+              : null,
           perMileRate: vehicle.perMileRate,
           hourlyRate: vehicle.hourlyRate,
           image: vehicle.image,
+          passengerFee:
+            "passengerFee" in vehicle && typeof vehicle.passengerFee === "string"
+              ? vehicle.passengerFee
+              : null,
           displayOrder: vehicle.displayOrder,
           active: true,
           updatedAt: new Date(),
@@ -262,9 +276,21 @@ async function ensureVehiclesForSite(slug: keyof typeof seededSiteData) {
           bagsMax: vehicle.bagsMax,
           quantity: vehicle.quantity,
           basePrice: vehicle.basePrice,
+          bagFee:
+            "bagFee" in vehicle && typeof vehicle.bagFee === "string"
+              ? vehicle.bagFee
+              : null,
+          mileageFee:
+            "mileageFee" in vehicle && typeof vehicle.mileageFee === "string"
+              ? vehicle.mileageFee
+              : null,
           perMileRate: vehicle.perMileRate,
           hourlyRate: vehicle.hourlyRate,
           image: vehicle.image,
+          passengerFee:
+            "passengerFee" in vehicle && typeof vehicle.passengerFee === "string"
+              ? vehicle.passengerFee
+              : null,
           displayOrder: vehicle.displayOrder,
           active: true,
         })
@@ -298,18 +324,95 @@ async function ensureVehiclesForSite(slug: keyof typeof seededSiteData) {
 
 async function ensureRoutesForSite(slug: keyof typeof seededSiteData) {
   const siteId = await getSiteId(slug);
-  const [{ value }] = await db
-    .select({ value: count() })
-    .from(routes)
-    .where(eq(routes.siteId, siteId));
 
-  if (Number(value) > 0) {
-    return;
+  for (const route of seededSiteData[slug].routes) {
+    const existing = await db.query.routes.findFirst({
+      where: (currentRoute, { and, eq }) =>
+        and(eq(currentRoute.siteId, siteId), eq(currentRoute.slug, route.slug)),
+    });
+
+    if (existing) {
+      await db
+        .update(routes)
+        .set({
+          name: route.name,
+          mode: route.mode,
+          origin: route.origin,
+          destination: route.destination,
+          basePrice: route.basePrice,
+          mileage: route.mileage,
+          durationMinutes: route.durationMinutes,
+          active: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(routes.id, existing.id));
+      continue;
+    }
+
+    await db.insert(routes).values({
+      siteId,
+      ...route,
+      active: true,
+    });
   }
+}
 
-  await db
-    .insert(routes)
-    .values(seededSiteData[slug].routes.map((route) => ({ siteId, ...route })));
+async function ensureHotelsForSite(slug: keyof typeof seededSiteData) {
+  const siteId = await getSiteId(slug);
+  const hotelSeed = (seededSiteData[slug] as { hotels?: Array<{
+    slug: string;
+    name: string;
+    address: string;
+    neighborhood: string;
+    area: string;
+    summary: string;
+    airportRouteSlug: string;
+    distanceMiles: string;
+    durationMinutes: number;
+    priority: number;
+  }> }).hotels ?? [];
+
+  for (const hotel of hotelSeed) {
+    const existing = await db.query.hotels.findFirst({
+      where: (currentHotel, { and, eq }) =>
+        and(eq(currentHotel.siteId, siteId), eq(currentHotel.slug, hotel.slug)),
+    });
+
+    if (existing) {
+      await db
+        .update(hotels)
+        .set({
+          name: hotel.name,
+          address: hotel.address,
+          neighborhood: hotel.neighborhood,
+          area: hotel.area,
+          summary: hotel.summary,
+          airportRouteSlug: hotel.airportRouteSlug,
+          distanceMiles: hotel.distanceMiles,
+          durationMinutes: hotel.durationMinutes,
+          priority: hotel.priority,
+          active: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(hotels.id, existing.id));
+      continue;
+    }
+
+    await db.insert(hotels).values({
+      siteId,
+      slug: hotel.slug,
+      name: hotel.name,
+      address: hotel.address,
+      neighborhood: hotel.neighborhood,
+      area: hotel.area,
+      summary: hotel.summary,
+      airportRouteSlug: hotel.airportRouteSlug,
+      distanceMiles: hotel.distanceMiles,
+      durationMinutes: hotel.durationMinutes,
+      priority: hotel.priority,
+      active: true,
+    });
+  }
 }
 
 async function ensureAdmin() {
@@ -429,10 +532,11 @@ async function main() {
   await ensureVehiclesForSite("pierlimo");
   await ensureRoutesForSite("pierlimo");
   await upsertSettingsForSite("pierlimo");
-  await ensureChauffeursForSite("seatacdrive");
-  await ensureVehiclesForSite("seatacdrive");
-  await ensureRoutesForSite("seatacdrive");
-  await upsertSettingsForSite("seatacdrive");
+  await ensureChauffeursForSite("seatac_co");
+  await ensureVehiclesForSite("seatac_co");
+  await ensureRoutesForSite("seatac_co");
+  await ensureHotelsForSite("seatac_co");
+  await upsertSettingsForSite("seatac_co");
   await ensureAdmin();
   await backfillBookings();
   console.log("Platform seed complete.");

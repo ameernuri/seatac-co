@@ -1,12 +1,23 @@
 import Link from "next/link";
 
+import {
+  HomeGradientCard,
+  HomeGradientMetricCard,
+  HomeGradientPanel,
+  HomeGradientRowLink,
+} from "@/components/home-gradient-cards";
+import { JsonLd } from "@/components/json-ld";
 import { ReserveWizard } from "@/components/reserve-wizard";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { normalizeBookingConstraints } from "@/lib/booking-constraints";
+import { getCoverageLinks } from "@/lib/coverage-links";
 import { getActiveRoutes, getActiveVehicles, getSettingsMap } from "@/lib/data";
 import { env } from "@/env";
+import { formatCurrency } from "@/lib/format";
+import { buildLocalBusinessJsonLd, buildWebSiteJsonLd } from "@/lib/seo";
 import { coverageAreas, siteChrome } from "@/lib/site-content";
+import { getSiteThemeContent } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
 
@@ -16,143 +27,274 @@ export default async function Home() {
     getActiveRoutes(env.siteSlug),
     getSettingsMap(env.siteSlug),
   ]);
+
   const bookingConstraints = normalizeBookingConstraints(settings.bookingConstraints);
+  const theme = getSiteThemeContent(env.siteSlug);
+  const startingFare = vehicles.reduce<number | null>((lowest, vehicle) => {
+    const basePrice = Number(vehicle.basePrice);
 
-  const routeCards = [
+    if (!Number.isFinite(basePrice)) {
+      return lowest;
+    }
+
+    if (lowest === null || basePrice < lowest) {
+      return basePrice;
+    }
+
+    return lowest;
+  }, null);
+  const leadHours = bookingConstraints.minimumLeadMinutes / 60;
+  const formatOperatingTime = (value: string) => {
+    const [hoursText, minutes] = value.split(":");
+    const hours = Number(hoursText);
+    const meridiem = hours >= 12 ? "PM" : "AM";
+    const displayHour = hours % 12 === 0 ? 12 : hours % 12;
+
+    return `${displayHour}:${minutes} ${meridiem}`;
+  };
+
+  const highlights = [
+    { label: "Sea-Tac airport car service", href: "/seatac-airport-car-service" },
+    { label: "Sea-Tac airport hotels", href: "/seatac-airport-hotels" },
+    { label: "Sea-Tac flight lookup", href: "/flight" },
+  ] as const;
+
+  const services = [
     {
-      eyebrow: "Airport route",
-      title: "Sea-Tac to downtown Seattle",
-      body: "Useful for hotels, convention traffic, South Lake Union, and waterfront arrivals.",
-      href: "/seatac-to-downtown-seattle",
-      art: "/seattle.water.night.webp",
+      eyebrow: "Airport",
+      title: "Sea-Tac transfers",
+      copy: "Airport pickups and departures with direct booking, fixed routes, and private ride service.",
+      image: "/airport-transfer-card.jpg",
+      imagePosition: "center center",
+      href: "/seatac-airport-car-service",
+      ctaLabel: "See Sea-Tac transfer details",
     },
     {
-      eyebrow: "Eastside route",
-      title: "Sea-Tac to Bellevue",
-      body: "For office towers, hotel check-ins, and airport trips into the Bellevue core.",
+      eyebrow: "Cruise",
+      title: "Pier 66 and Pier 91 transfers",
+      copy: "Direct service between Sea-Tac, downtown hotels, and Seattle cruise terminals.",
+      image: "/seattle.water.night.webp",
+      imagePosition: "center 58%",
+      href: "/seatac-to-pier-66",
+      ctaLabel: "See cruise terminal transfer details",
+    },
+    {
+      eyebrow: "Eastside",
+      title: "Bellevue and downtown hotel rides",
+      copy: "Useful for hotel check-ins, office visits, and planned airport pickups across Seattle.",
+      image: "/eastside-hotel-card.jpg",
+      imagePosition: "center center",
       href: "/seatac-to-bellevue",
-      art: "/downtown.night.jpeg",
-    },
-    {
-      eyebrow: "Eastside route",
-      title: "Sea-Tac to Kirkland",
-      body: "Direct airport transfers for residential pickups, waterfront stays, and Eastside travel.",
-      href: "/seatac-to-kirkland",
-      art: "/scene-city.svg",
-    },
-    {
-      eyebrow: "Flexible service",
-      title: "Hourly airport-day service",
-      body: "For multi-stop itineraries, hosted arrivals, and airport days that keep moving.",
-      href: "/seatac-hourly-charter",
-      art: "/scene-airport.svg",
+      ctaLabel: "See Bellevue and hotel ride details",
     },
   ] as const;
 
-  const guideCards = [
+  const rideDetails = [
     {
-      title: "Sea-Tac hotel pickup planning",
-      body: "Use airport pickup notes, hotel names, and timing windows that make sense for early departures and late arrivals.",
+      title: "Flat-rate airport routes",
+      copy: "See common Sea-Tac trips with set pricing before you choose a pickup time.",
     },
     {
-      title: "Airport-to-city transfer notes",
-      body: "Choose the route page that matches where you are actually staying so the booking form opens closer to the final trip.",
+      title: "Direct private rides",
+      copy: "No shared shuttle stops between the airport, hotel, and terminal.",
     },
     {
-      title: "Built for travel research too",
-      body: "This brand is meant to grow into a Seattle airport guide with hotel rundowns, transfer notes, and local arrival planning.",
+      title: "Simple reservation flow",
+      copy: "Choose the route, date, and vehicle, then finish the reservation online or by phone.",
     },
   ] as const;
 
-  const promisePoints = [
-    "Sea-Tac arrivals and departures",
-    "Seattle hotel and Eastside coverage",
-    "Direct booking with route-aware forms",
+  const quickFacts = [
+    {
+      label: "Airport car service",
+      value: "Sea-Tac airport car service",
+      href: "/seatac-airport-car-service",
+    },
+    {
+      label: "Cruise route",
+      value: "Sea-Tac to Pier 66",
+      href: "/seatac-to-pier-66",
+    },
+    {
+      label: "Airport hotels",
+      value: "Sea-Tac airport hotels",
+      href: "/seatac-airport-hotels",
+    },
   ] as const;
 
-  const bookingTags = [
-    "Airport pickups",
-    "Sea-Tac hotels",
-    "Downtown Seattle",
-    "Bellevue",
-    "Kirkland",
+  const routePillars = [
+    {
+      label: "Bellevue car service",
+      value: "Sea-Tac to Bellevue car service",
+      href: "/seatac-to-bellevue",
+    },
+    {
+      label: "Cruise transfer",
+      value: "Sea-Tac to Pier 66",
+      href: "/seatac-to-pier-66",
+    },
+    {
+      label: "Downtown car service",
+      value: "Sea-Tac to Downtown Seattle",
+      href: "/seatac-to-downtown-seattle",
+    },
+  ] as const;
+
+  const planningPillars = [
+    {
+      label: "Hotel stays",
+      value: "Sea-Tac airport hotels",
+      href: "/seatac-airport-hotels",
+    },
+    {
+      label: "Flight planning",
+      value: "Sea-Tac departures and arrivals",
+      href: "/departures",
+    },
+    {
+      label: "Bellevue hotel route",
+      value: "Sea-Tac to Hyatt Regency Bellevue",
+      href: "/seatac-to/hyatt-regency-bellevue",
+    },
+  ] as const;
+
+  const coverageLinks = getCoverageLinks(coverageAreas);
+  const bookingCategories = [
+    { label: "Sea-Tac car service", href: "/seatac-airport-car-service" },
+    { label: "Sea-Tac hotels", href: "/seatac-airport-hotels" },
+    { label: "Sea-Tac to Pier 66", href: "/seatac-to-pier-66" },
+    { label: "Sea-Tac to Bellevue", href: "/seatac-to-bellevue" },
+  ] as const;
+  const keywordHubLinks = [
+    { label: "Sea-Tac arrivals", href: "/arrivals" },
+    { label: "Sea-Tac departures", href: "/departures" },
+    { label: "Alaska at Sea-Tac", href: "/airlines/alaska-at-seatac" },
+    { label: "Sea-Tac airport hotels", href: "/seatac-airport-hotels" },
+    { label: "Sea-Tac airport car service", href: "/seatac-airport-car-service" },
+    { label: "Sea-Tac to downtown Seattle", href: "/seatac-to-downtown-seattle" },
+    { label: "Sea-Tac to Bellevue car service", href: "/seatac-to-bellevue" },
+    { label: "Sea-Tac to Pier 66", href: "/seatac-to-pier-66" },
+    { label: "Sea-Tac to Pier 91", href: "/seatac-to-pier-91" },
+    { label: "Sea-Tac to Hyatt Regency Bellevue", href: "/seatac-to/hyatt-regency-bellevue" },
+  ] as const;
+  const heroConfidencePoints = [
+    startingFare ? `Flat-rate routes from ${formatCurrency(startingFare)}` : "Flat-rate airport routes",
+    `Reserve at least ${leadHours} hours ahead for pickups between ${formatOperatingTime(
+      bookingConstraints.operatingHoursStart,
+    )} and ${formatOperatingTime(bookingConstraints.operatingHoursEnd)}.`,
+    `Call dispatch at ${theme.footer.contactPhone}`,
   ] as const;
 
   return (
     <div className="site-shell min-h-screen">
       <SiteHeader />
       <main>
-        <section className="border-b border-white/8">
-          <div className="mx-auto max-w-7xl px-6 py-10 lg:px-10 lg:py-12">
-            <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/30 shadow-[0_30px_110px_rgba(0,0,0,0.38)]">
-              <div
-                className="h-[220px] bg-cover bg-center md:h-[280px] lg:h-[320px]"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(180deg, rgba(8,10,16,0.06) 0%, rgba(8,10,16,0.46) 58%, rgba(8,10,16,0.92) 100%), url(/seattle.water.night.webp)",
-                }}
-              />
-            </div>
+        <JsonLd
+          data={buildLocalBusinessJsonLd(theme.footer.contactPhone, theme.footer.contactEmail)}
+        />
+        <JsonLd data={buildWebSiteJsonLd()} />
 
-            <div className="mt-8 grid gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:items-start">
-              <div className="section-frame p-7 lg:p-9">
-                <span className="eyebrow">Sea-Tac airport rides + Seattle arrival planning</span>
-                <h1 className="display-title mt-4 max-w-4xl text-[3.5rem] leading-[0.9] text-white md:text-[5.1rem]">
-                  Book the airport ride and use the site like a local travel desk.
+        <section className="hero">
+          <div className="section-inner">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+              <div className="hero-copy font-sans">
+                <span className="eyebrow">Sea-Tac travel planning and private rides</span>
+                <h1 className="display-title">
+                  Flat-rate Sea-Tac rides for hotels, cruise terminals, and Seattle arrivals.
                 </h1>
-                <p className="mt-5 max-w-2xl text-lg leading-8 text-white/72">
-                  seatac.co is built for Sea-Tac pickups, hotel transfers, downtown Seattle
-                  arrivals, Bellevue rides, and airport-day planning that starts with the booking
-                  instead of ending with a contact form.
+                <p>
+                  Compare airport routes, review nearby hotel areas, confirm the booking window,
+                  and reserve private transportation for Sea-Tac, Bellevue, downtown Seattle, and
+                  the cruise terminals.
                 </p>
-                <div className="mt-7 flex flex-wrap gap-3">
-                  <Link href="#booking" className="action-pill">
-                    Start a reservation
+                <div className="hero-actions">
+                  <Link href="/reserve" className="button-link primary">
+                    Reserve your ride
                   </Link>
-                  <Link href={siteChrome.reservationPhoneHref} className="action-pill action-pill-secondary">
+                  <Link href={siteChrome.reservationPhoneHref} className="button-link secondary">
                     Call dispatch
                   </Link>
                 </div>
-                <div className="mt-7 flex flex-wrap gap-3" aria-label="Popular service zones">
-                  {bookingTags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-                <div className="mt-7 grid gap-3 sm:grid-cols-3">
-                  {promisePoints.map((point) => (
-                    <div
-                      key={point}
-                      className="rounded-[1.4rem] border border-white/8 bg-white/[0.03] px-4 py-4 text-sm text-white/70"
-                    >
-                      {point}
-                    </div>
+                <div className="hero-tags" aria-label="Seatac Connection highlights">
+                  {highlights.map((highlight) => (
+                    <Link key={highlight.label} href={highlight.href} className="hero-tag">
+                      {highlight.label}
+                    </Link>
                   ))}
                 </div>
               </div>
-
-              <div className="editorial-panel p-5 lg:p-6" id="booking">
-                <div className="mb-5 flex items-end justify-between gap-4">
-                  <div>
-                    <p className="text-[0.74rem] uppercase tracking-[0.34em] text-primary/75">
-                      Reserve now
-                    </p>
-                    <h2 className="mt-3 text-2xl font-semibold text-[#f5efe5]">
-                      Start with the route and send the trip straight into dispatch.
-                    </h2>
-                  </div>
+                <div className="rounded-[2rem] border border-[#2d6a4f]/10 bg-white p-6 shadow-[0_8px_30px_rgba(45,106,79,0.08)] lg:p-7">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-sans text-[0.72rem] uppercase tracking-[0.28em] text-[#4a9b7f]">
+                        Before you reserve
+                      </p>
+                      <h2 className="mt-3 max-w-sm text-[2rem] leading-[0.98] tracking-[-0.03em] text-[#1a3d34]">
+                        Check pricing, pickup hours, and contact details before you book.
+                      </h2>
+                    </div>
+                  {startingFare ? (
+                    <div className="rounded-full border border-[#2d6a4f]/10 bg-[#f8f7f4] px-4 py-2 text-right">
+                      <div className="text-[0.68rem] uppercase tracking-[0.2em] text-[#6b857b]">
+                        Starting fare
+                      </div>
+                      <div className="text-xl font-semibold text-[#1a3d34]">
+                        {formatCurrency(startingFare)}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-                <ReserveWizard
-                  bookingConstraints={bookingConstraints}
-                  vehicles={vehicles}
-                  routes={routes}
-                  compact
-                  initialState={{ serviceMode: "airport", tripType: "flat" }}
-                />
+                <div className="mt-5 space-y-3">
+                  {heroConfidencePoints.map((item) => (
+                    <div
+                      key={item}
+                      className="rounded-[1.25rem] border border-[#2d6a4f]/8 bg-[#f8f7f4] px-4 py-3 text-sm leading-6 text-[#36584d]"
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-5 rounded-[1.4rem] border border-[#2d6a4f]/10 bg-[#1a3d34] px-5 py-4 text-[#f5efe5]">
+                  <div className="text-[0.7rem] uppercase tracking-[0.22em] text-[#9fd5bd]">
+                    Private transportation
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-[#ecdfcb]">
+                    Direct pickup and drop-off service for airport, hotel, and cruise trips with no
+                    shared shuttle stops.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="section-inner mt-8">
+            <div className="grid gap-6 md:grid-cols-2" aria-label="Service highlights">
+              <div className="grid gap-3">
+                <HomeGradientPanel eyebrow="Popular routes" aria-label="Popular routes">
+                  <div className="route-pillars">
+                    {routePillars.map((route) => (
+                      <HomeGradientRowLink
+                        key={route.label}
+                        href={route.href}
+                        eyebrow={route.label}
+                        title={route.value}
+                      />
+                    ))}
+                  </div>
+                </HomeGradientPanel>
+              </div>
+              <div className="grid gap-3">
+                <HomeGradientPanel eyebrow="Best fit planning" aria-label="Best fit planning">
+                  <div className="route-pillars">
+                    {planningPillars.map((pillar) => (
+                      <HomeGradientRowLink
+                        key={pillar.label}
+                        href={pillar.href}
+                        eyebrow={pillar.label}
+                        title={pillar.value}
+                      />
+                    ))}
+                  </div>
+                </HomeGradientPanel>
               </div>
             </div>
           </div>
@@ -162,25 +304,26 @@ export default async function Home() {
           <div className="section-inner">
             <div className="section-heading section-heading-tight">
               <div>
-                <span className="section-kicker">Popular airport routes</span>
-                <h2 className="section-title">Start from the page that matches where you are going.</h2>
+                <span className="section-kicker">Travel services</span>
+                <h2 className="section-title">Airport, cruise, and hotel-focused Seattle routes.</h2>
               </div>
             </div>
             <div className="media-card-grid font-sans">
-              {routeCards.map((card) => (
-                <article key={card.title} className="media-card">
+              {services.map((service) => (
+                <article key={service.title} className="media-card">
                   <div
                     className="media-card-art"
                     style={{
-                      backgroundImage: `linear-gradient(180deg, rgba(9,10,13,0.1) 0%, rgba(9,10,13,0.7) 72%, rgba(9,10,13,0.96) 100%), url(${card.art})`,
+                      backgroundImage: `linear-gradient(180deg, rgba(11, 26, 22, 0.02) 0%, rgba(11, 26, 22, 0.14) 56%, rgba(11, 26, 22, 0.4) 100%), url(${service.image})`,
+                      backgroundPosition: service.imagePosition,
                     }}
                   />
                   <div className="media-card-copy">
-                    <span className="service-index">{card.eyebrow}</span>
-                    <h3 className="font-sans text-xl font-semibold text-[#f5efe5]">{card.title}</h3>
-                    <p>{card.body}</p>
-                    <Link href={card.href} className="service-link">
-                      Open route page
+                    <span className="service-index">{service.eyebrow}</span>
+                    <h3 className="font-sans font-semibold text-[#f5efe5]">{service.title}</h3>
+                    <p>{service.copy}</p>
+                    <Link href={service.href} className="service-link">
+                      {service.ctaLabel}
                     </Link>
                   </div>
                 </article>
@@ -189,25 +332,58 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="section" id="guides">
+        <section className="section" id="planning">
           <div className="section-inner">
             <div className="detail-band">
               <div className="detail-band-copy">
-                <span className="section-kicker">Airport planning notes</span>
-                <h2 className="section-title">More useful than a bare booking form, without turning into a directory.</h2>
+                <span className="section-kicker">Ride details</span>
+                <h2 className="section-title">
+                  Choose the route and timing that fit your trip.
+                </h2>
                 <p className="section-copy">
-                  The long-term role of seatac.co is simple: make airport transportation easier to
-                  understand, then make it easy to book.
+                  Use the hotel guides, flight lookup, and route pages to confirm timing, compare
+                  neighborhoods, and choose the pickup window that works best for your schedule.
                 </p>
               </div>
               <div className="detail-band-grid">
-                {guideCards.map((guide) => (
-                  <article key={guide.title} className="compact-note-card">
-                    <h3 className="font-sans font-semibold text-[#f5efe5]">{guide.title}</h3>
-                    <p>{guide.body}</p>
+                {rideDetails.map((detail) => (
+                  <article key={detail.title} className="compact-note-card">
+                    <h3 className="font-sans font-semibold text-[#f5efe5]">{detail.title}</h3>
+                    <p>{detail.copy}</p>
                   </article>
                 ))}
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="section" id="trust">
+          <div className="section-inner">
+            <div className="section-heading section-heading-tight">
+              <div>
+                <span className="section-kicker">Quick links</span>
+                <h2 className="section-title">The pages travelers use most before booking.</h2>
+              </div>
+            </div>
+            <div className="quick-fact-grid font-sans">
+              {quickFacts.map((fact) => (
+                <HomeGradientCard
+                  key={fact.label}
+                  href={fact.href}
+                  eyebrow={fact.label}
+                  title={fact.value}
+                />
+              ))}
+            </div>
+            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {keywordHubLinks.map((link) => (
+                <HomeGradientMetricCard
+                  key={link.label}
+                  href={link.href}
+                  eyebrow="Popular search"
+                  title={link.label}
+                />
+              ))}
             </div>
           </div>
         </section>
@@ -216,30 +392,50 @@ export default async function Home() {
           <div className="section-inner">
             <div className="coverage-panel font-sans">
               <div className="coverage-copy">
-                <span className="section-kicker">Coverage</span>
-                <h2 className="section-title">Airport-focused service for the places Sea-Tac riders ask for most.</h2>
+                <span className="section-kicker">Coverage area</span>
+                <h2 className="section-title">
+                  Serving Sea-Tac, Seattle hotels, Bellevue, and the cruise terminals.
+                </h2>
                 <p>
-                  The current footprint is built around the airport, nearby hotel zones, downtown
-                  Seattle, Bellevue, Kirkland, and the routes visitors and business travelers use most often.
+                  Coverage includes the airport, downtown Seattle, Bellevue, waterfront hotels, and
+                  the cruise terminals travelers use most often.
                 </p>
                 <div className="areas-grid">
-                  {coverageAreas.map((area) => (
-                    <div key={area} className="area-pill">
-                      {area}
-                    </div>
+                  {coverageLinks.map((area) => (
+                    <Link key={area.label} href={area.href} className="area-pill">
+                      {area.label}
+                    </Link>
                   ))}
                 </div>
               </div>
-              <div
-                className="overflow-hidden rounded-[1.8rem] border border-white/10 bg-black/30"
-                aria-hidden="true"
-              >
-                <div
-                  className="min-h-[320px] bg-cover bg-center"
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(180deg, rgba(6,8,14,0.08) 0%, rgba(6,8,14,0.68) 80%, rgba(6,8,14,0.94) 100%), url(/downtown.night.jpeg)",
-                  }}
+              <div className="coverage-map-art coverage-map-photo" aria-hidden="true" />
+            </div>
+          </div>
+        </section>
+
+        <section className="section footer-cta" id="booking">
+          <div className="section-inner">
+            <div className="booking-intro">
+              <div className="booking-intro-copy">
+                <span className="section-kicker">Reserve your ride</span>
+                <h2 className="section-title">Reserve from the homepage.</h2>
+              </div>
+              <div className="booking-intro-actions">
+                <div className="booking-service-pills" aria-label="Reservation categories">
+                  {bookingCategories.map((category) => (
+                    <Link key={category.label} href={category.href} className="hero-tag">
+                      {category.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="booking-shell font-sans">
+              <div className="booking-panel font-sans">
+                <ReserveWizard
+                  bookingConstraints={bookingConstraints}
+                  vehicles={vehicles}
+                  routes={routes}
                 />
               </div>
             </div>

@@ -3,7 +3,7 @@ let googleMapsPromise: Promise<typeof google> | null = null;
 declare global {
   interface Window {
     google?: typeof google;
-    __pierlimoGoogleMapsReady?: () => void;
+    __seatacGoogleMapsReady?: () => void;
   }
 }
 
@@ -42,7 +42,7 @@ export async function loadGoogleMapsApi() {
         libraries: "places",
         loading: "async",
         v: "weekly",
-        callback: "__pierlimoGoogleMapsReady",
+        callback: "__seatacGoogleMapsReady",
       });
 
       if (mapId) {
@@ -54,9 +54,9 @@ export async function loadGoogleMapsApi() {
       script.async = true;
       script.defer = true;
       script.dataset.googleMapsLoader = "true";
-      window.__pierlimoGoogleMapsReady = () => {
+      window.__seatacGoogleMapsReady = () => {
         resolve(window.google!);
-        delete window.__pierlimoGoogleMapsReady;
+        delete window.__seatacGoogleMapsReady;
       };
       script.onerror = () => reject(new Error("Google Maps failed to load."));
       document.head.appendChild(script);

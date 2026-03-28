@@ -3,6 +3,7 @@ import { and, asc, count, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   bookings,
+  hotels,
   routes,
   siteSettings,
   vehicleSiteAssignments,
@@ -60,6 +61,30 @@ export async function getActiveRoutes(siteSlug?: string) {
         : eq(routes.active, true),
     )
     .orderBy(asc(routes.mode), asc(routes.name));
+}
+
+export async function getActiveHotels(siteSlug?: string) {
+  const site = await resolveSite(siteSlug);
+
+  return db
+    .select()
+    .from(hotels)
+    .where(
+      site
+        ? and(eq(hotels.active, true), eq(hotels.siteId, site.id))
+        : eq(hotels.active, true),
+    )
+    .orderBy(asc(hotels.priority), asc(hotels.name));
+}
+
+export async function getHotelBySlug(hotelSlug: string, siteSlug?: string) {
+  const site = await resolveSite(siteSlug);
+
+  return db.query.hotels.findFirst({
+    where: site
+      ? and(eq(hotels.active, true), eq(hotels.siteId, site.id), eq(hotels.slug, hotelSlug))
+      : and(eq(hotels.active, true), eq(hotels.slug, hotelSlug)),
+  });
 }
 
 export async function getDashboardStats(siteSlug?: string) {

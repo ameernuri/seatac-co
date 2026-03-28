@@ -1,15 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowRightLeft,
-  BriefcaseBusiness,
   CalendarDays,
   Check,
   ChevronRight,
   Clock3,
   Luggage,
   MapPinned,
+  Minus,
+  Plus,
   ShieldCheck,
   Sparkles,
   Users,
@@ -18,6 +19,8 @@ import { toast } from "sonner";
 
 import { GoogleAddressInput } from "@/components/google-address-input";
 import { RouteMapCard, type RouteSummary } from "@/components/route-map-card";
+import { AddressSwapButton } from "@/components/ui/address-swap-button";
+import { BadgeSwitcher } from "@/components/ui/badge-switcher";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -38,7 +41,6 @@ import { Textarea } from "@/components/ui/textarea";
 import type { Route, Vehicle } from "@/db/schema";
 import {
   buildBookingTimeOptions,
-  describeBookingConstraints,
   resolveInitialBookingSlot,
   type BookingConstraints,
   validateBookingWindow,
@@ -46,9 +48,9 @@ import {
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import { type GoogleAddress } from "@/lib/google-maps";
 import { quoteReservation, type ServiceMode } from "@/lib/quote";
-import { extrasCatalog } from "@/lib/site-content";
+import { extrasCatalog, siteChrome } from "@/lib/site-content";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { addDays, format } from "date-fns";
 
 type Props = {
   bookingConstraints: BookingConstraints;
@@ -65,6 +67,8 @@ type Props = {
   };
 };
 
+const RESERVE_DRAFT_STORAGE_KEY = "seatac-reserve-draft-v1";
+
 type Step = 1 | 2 | 3 | 4 | 5;
 type TripType = "flat" | "distance" | "hourly" | "event";
 type VehicleAvailabilityStatus = {
@@ -74,86 +78,273 @@ type VehicleAvailabilityStatus = {
   reasonType: "available" | "inventory" | "schedule";
 };
 
-const serviceModeConfig: { key: ServiceMode; title: string; detail: string }[] = [
-  {
-    key: "airport",
-    title: "Airport",
-    detail: "Sea-Tac pickups and departures",
-  },
-  {
-    key: "corporate",
-    title: "Corporate",
-    detail: "Bellevue, downtown, and executive travel",
-  },
-  {
-    key: "hourly",
-    title: "Hourly",
-    detail: "Chauffeur by the hour",
-  },
-  {
-    key: "events",
-    title: "Events",
-    detail: "Private evenings and wedding transport",
-  },
+type CheckoutFieldErrorKey =
+  | "customerEmail"
+  | "customerName"
+  | "customerPhone";
+
+type CheckoutFieldErrors = Partial<Record<CheckoutFieldErrorKey, string>>;
+
+type PricingType = "flat" | "distance" | "hourly";
+
+const pricingTypeConfig: { label: string; value: PricingType }[] = [
+  { label: "Flat rate", value: "flat" },
+  { label: "Per mile", value: "distance" },
+  { label: "Hourly", value: "hourly" },
 ];
 
 const stepMeta = [
   {
     id: 1 as Step,
     label: "Route",
-    eyebrow: "Service, route, and addresses",
+    eyebrow: "Route details",
     cta: "Continue to schedule",
   },
   {
     id: 2 as Step,
     label: "Time",
-    eyebrow: "Pickup, return, and service window",
+    eyebrow: "Schedule",
     cta: "Continue to fit",
   },
   {
     id: 3 as Step,
     label: "Fit",
-    eyebrow: "Passengers and luggage fit",
+    eyebrow: "Party fit",
     cta: "See vehicles",
   },
   {
     id: 4 as Step,
     label: "Vehicle",
-    eyebrow: "Only live available vehicles",
+    eyebrow: "Vehicle choice",
     cta: "Continue to checkout",
   },
   {
     id: 5 as Step,
     label: "Checkout",
-    eyebrow: "Review, extras, and payment details",
+    eyebrow: "Checkout",
     cta: "Continue to payment",
   },
 ] as const;
 
-const tripTypeOptions: Record<ServiceMode, { value: TripType; label: string }[]> = {
-  airport: [
-    { value: "flat", label: "Flat rate" },
-    { value: "distance", label: "Distance" },
-  ],
-  corporate: [
-    { value: "flat", label: "Flat rate" },
-    { value: "distance", label: "Distance" },
-  ],
-  hourly: [{ value: "hourly", label: "Hourly" }],
-  events: [
-    { value: "event", label: "Event hourly" },
-    { value: "distance", label: "Distance" },
-  ],
-};
+function pricingTypeFromTripType(tripType: TripType): PricingType {
+  if (tripType === "distance") {
+    return "distance";
+  }
 
-function defaultTripTypeForMode(mode: ServiceMode): TripType {
-  return tripTypeOptions[mode][0]?.value ?? "flat";
+  if (tripType === "hourly" || tripType === "event") {
+    return "hourly";
+  }
+
+  return "flat";
 }
 
-function defaultRouteForMode(routes: Route[], mode: ServiceMode) {
-  return routes.find((route) =>
-    mode === "hourly" || mode === "events" ? route.mode === "hourly" : route.mode === mode,
+function getEnabledPricingOptions(constraints: BookingConstraints) {
+  return pricingTypeConfig.filter((option) => {
+    if (option.value === "flat") return constraints.enableFlatPricing;
+    if (option.value === "distance") return constraints.enableDistancePricing;
+    return constraints.enableHourlyPricing;
+  });
+}
+
+function coercePricingType(
+  requested: PricingType,
+  constraints: BookingConstraints,
+  prefersPresetRoute: boolean,
+): PricingType {
+  const enabledOptions = getEnabledPricingOptions(constraints);
+
+  if (enabledOptions.some((option) => option.value === requested)) {
+    return requested;
+  }
+
+  const preferredFallback =
+    prefersPresetRoute
+      ? constraints.presetRouteDefaultPricing
+      : constraints.customTripDefaultPricing;
+
+  if (enabledOptions.some((option) => option.value === preferredFallback)) {
+    return preferredFallback;
+  }
+
+  return enabledOptions[0]?.value ?? "flat";
+}
+
+function routesForPricingType(routes: Route[], pricingType: PricingType) {
+  if (pricingType === "hourly") {
+    return routes.filter((route) => route.mode === "hourly");
+  }
+
+  return routes.filter(
+    (route) => route.mode === "airport" || route.mode === "corporate",
   );
+}
+
+type RideExtra = (typeof extrasCatalog)[number];
+
+function formatExtraQuantityLabel(extra: RideExtra, quantity: number) {
+  const unitLabel = extra.quantityLabel ?? "item";
+  const pluralizedUnit =
+    quantity === 1 ? unitLabel : unitLabel.endsWith("s") ? unitLabel : `${unitLabel}s`;
+
+  return `${quantity} ${pluralizedUnit}`;
+}
+
+function getVehicleDisplayName(name: string) {
+  return name.replace(/^Airport\s+/i, "");
+}
+
+function getVehicleImagePosition(name: string) {
+  if (/suv/i.test(name)) {
+    return "center 28%";
+  }
+
+  if (/sprinter/i.test(name) || /van/i.test(name)) {
+    return "center 26%";
+  }
+
+  return "center center";
+}
+
+function RideAdditionCard({
+  extra,
+  quantity,
+  onQuantityChange,
+}: {
+  extra: RideExtra;
+  quantity: number;
+  onQuantityChange: (nextQuantity: number) => void;
+}) {
+  const supportsQuantity = (extra.maxQuantity ?? 1) > 1;
+  const checked = quantity > 0;
+
+  if (supportsQuantity) {
+    return (
+      <div
+        className={cn(
+          "rounded-xl border p-3 text-left transition",
+          checked
+            ? "border-[#2d6a4f]/30 bg-[#2d6a4f]/8"
+            : "border-[#2d6a4f]/10 bg-white",
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="font-sans text-[0.65rem] uppercase tracking-[0.2em] text-[#2d6a4f]">
+              {formatCurrency(extra.price)} each
+            </p>
+            <h3 className="mt-1 text-base font-semibold text-[#1a3d34]">{extra.label}</h3>
+            <p className="mt-0.5 text-sm leading-5 text-[#5a7a6e]">{extra.detail}</p>
+          </div>
+          <div className="rounded-full border border-[#2d6a4f]/15 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#2d6a4f]">
+            {quantity > 0 ? formatExtraQuantityLabel(extra, quantity) : "Optional"}
+          </div>
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p className="text-xs text-[#5a7a6e]">
+            Up to {extra.maxQuantity} {extra.quantityLabel ?? "items"} per ride.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onQuantityChange(Math.max(quantity - 1, 0))}
+              className="grid size-9 place-items-center rounded-full border border-[#2d6a4f]/15 bg-white text-[#1a3d34] transition hover:border-[#2d6a4f]/30 hover:bg-[#f8f7f4]"
+              aria-label={`Remove ${extra.label.toLowerCase()}`}
+            >
+              <Minus className="size-4" />
+            </button>
+            <div className="min-w-10 text-center text-sm font-semibold text-[#1a3d34]">
+              {quantity}
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                onQuantityChange(Math.min(quantity + 1, extra.maxQuantity ?? quantity + 1))
+              }
+              className="grid size-9 place-items-center rounded-full border border-[#2d6a4f]/15 bg-white text-[#1a3d34] transition hover:border-[#2d6a4f]/30 hover:bg-[#f8f7f4]"
+              aria-label={`Add ${extra.label.toLowerCase()}`}
+            >
+              <Plus className="size-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onQuantityChange(checked ? 0 : 1)}
+      className={cn(
+        "rounded-xl border p-3 text-left transition",
+        checked
+          ? "border-[#2d6a4f]/30 bg-[#2d6a4f]/8"
+          : "border-[#2d6a4f]/10 bg-white hover:border-[#2d6a4f]/20 hover:bg-[#f8f7f4]",
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="font-sans text-[0.65rem] uppercase tracking-[0.2em] text-[#2d6a4f]">
+            {formatCurrency(extra.price)}
+          </p>
+          <h3 className="mt-1 text-base font-semibold text-[#1a3d34]">{extra.label}</h3>
+          <p className="mt-0.5 text-sm leading-5 text-[#5a7a6e]">{extra.detail}</p>
+        </div>
+        <Checkbox
+          checked={checked}
+          onCheckedChange={(value) => onQuantityChange(value ? 1 : 0)}
+          className="pointer-events-none mt-0.5 size-5 shrink-0 border-[#2d6a4f]/20 data-checked:bg-[#2d6a4f] data-checked:text-white"
+        />
+      </div>
+    </button>
+  );
+}
+
+function isSeatacLocation(value?: string | null) {
+  return Boolean(value && /sea[- ]?tac|seatac|airport/i.test(value));
+}
+
+function defaultRouteForPricingType(routes: Route[], pricingType: PricingType) {
+  if (pricingType === "hourly") {
+    return routes.find((route) => route.mode === "hourly") ?? null;
+  }
+
+  const matchingRoutes = routes.filter((route) => route.mode === "airport");
+
+  const [preferredRoute] = [...matchingRoutes].sort((left, right) => {
+    const leftOriginSeatac = isSeatacLocation(left.origin);
+    const rightOriginSeatac = isSeatacLocation(right.origin);
+
+    if (leftOriginSeatac !== rightOriginSeatac) {
+      return leftOriginSeatac ? -1 : 1;
+    }
+
+    const leftDestinationSeatac = isSeatacLocation(left.destination);
+    const rightDestinationSeatac = isSeatacLocation(right.destination);
+
+    if (leftDestinationSeatac !== rightDestinationSeatac) {
+      return leftDestinationSeatac ? 1 : -1;
+    }
+
+    return left.name.localeCompare(right.name);
+  });
+
+  return preferredRoute ?? matchingRoutes[0] ?? null;
+}
+
+function defaultPickupAddressForPricingType(
+  pricingType: PricingType,
+  route: Route | null,
+) {
+  if (pricingType === "flat" || pricingType === "distance") {
+    return route?.origin ?? "Sea-Tac Airport";
+  }
+
+  if (pricingType === "hourly") {
+    return "Sea-Tac Airport";
+  }
+
+  return "";
 }
 
 function parseDateValue(value: string) {
@@ -169,12 +360,77 @@ function formatDateValue(date: Date) {
   return format(date, "yyyy-MM-dd");
 }
 
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function isValidPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 10;
+}
+
+function formatAddressPreview(value?: string | null) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return "Not set";
+  }
+
+  return trimmed;
+}
+
+function coalesceText(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function buildChargeSummary(
+  labels: string[],
+  formatter: (label: string) => string,
+) {
+  if (labels.length === 0) {
+    return "";
+  }
+
+  if (labels.length === 1) {
+    return formatter(labels[0]);
+  }
+
+  if (labels.length === 2) {
+    return `${formatter(labels[0])} and ${formatter(labels[1])}`;
+  }
+
+  return `${labels.slice(0, -1).map(formatter).join(", ")}, and ${formatter(
+    labels[labels.length - 1],
+  )}`;
+}
+
 const timeOptions = Array.from({ length: 48 }, (_, index) => {
   const hours = String(Math.floor(index / 2)).padStart(2, "0");
   const minutes = index % 2 === 0 ? "00" : "30";
 
   return `${hours}:${minutes}`;
 });
+
+function formatTimeChoice(value: string) {
+  const [rawHours, rawMinutes] = value.split(":");
+  const hours = Number(rawHours);
+  const minutes = rawMinutes ?? "00";
+
+  if (!Number.isFinite(hours)) {
+    return value;
+  }
+
+  const suffix = hours >= 12 ? "PM" : "AM";
+  const normalizedHours = hours % 12 || 12;
+
+  return `${normalizedHours}:${minutes} ${suffix}`;
+}
 
 function BookingDateField({
   disabled,
@@ -190,30 +446,36 @@ function BookingDateField({
   placeholder: string;
 }) {
   const selectedDate = parseDateValue(value);
+  const [open, setOpen] = useState(false);
 
   return (
     <div className="space-y-2">
-      <Label className="booking-field-label">{label}</Label>
-      <Popover>
+      <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
+        {label} <span className="text-[#8aa398]">PT</span>
+      </Label>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           className={cn(
-            "booking-date-trigger booking-control flex w-full items-center justify-between px-4 text-base font-medium transition",
-            !selectedDate && "is-placeholder",
+            "flex h-12 w-full items-center justify-between rounded-xl border border-[#2d6a4f]/15 bg-white px-4 text-base font-medium text-[#1a3d34] transition hover:border-[#2d6a4f]/30 hover:bg-[#f8f7f4]",
+            !selectedDate && "text-[#8aa398]",
           )}
         >
           <span>{selectedDate ? format(selectedDate, "MM/dd/yyyy") : placeholder}</span>
-          <CalendarDays className="size-4 text-[#d8bb88]" />
+          <CalendarDays className="size-4 text-[#2d6a4f]" />
         </PopoverTrigger>
         <PopoverContent
           align="start"
-          className="booking-popup booking-calendar-popover w-auto p-2"
+          className="w-auto rounded-xl border-[#2d6a4f]/15 bg-white p-2 shadow-[0_20px_60px_rgba(45,106,79,0.15)]"
         >
           <Calendar
             mode="single"
             selected={selectedDate}
             disabled={disabled}
-            onSelect={(date) => onChange(date ? formatDateValue(date) : "")}
-            className="booking-calendar text-[#f5efe5] [--cell-size:--spacing(9)]"
+            onSelect={(date) => {
+              onChange(date ? formatDateValue(date) : "");
+              setOpen(false);
+            }}
+            className="text-[#1a3d34] [--cell-size:--spacing(9)]"
           />
         </PopoverContent>
       </Popover>
@@ -233,24 +495,147 @@ function BookingTimeField({
   onChange: (value: string) => void;
 }) {
   const timeChoices = options && options.length > 0 ? options : timeOptions;
+  const selectedIndex = Math.max(0, timeChoices.indexOf(value));
+  const currentValue = timeChoices[selectedIndex] ?? timeChoices[0] ?? value;
+  const previousValue = selectedIndex > 0 ? timeChoices[selectedIndex - 1] : null;
+  const nextValue =
+    selectedIndex >= 0 && selectedIndex < timeChoices.length - 1
+      ? timeChoices[selectedIndex + 1]
+      : null;
 
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
-      <Select value={value} onValueChange={(next) => next && onChange(next)}>
-        <SelectTrigger className="booking-control h-[3.25rem] w-full px-4 text-base">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent className="booking-popup">
-          {timeChoices.map((time) => (
-            <SelectItem key={time} value={time}>
-              {time}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">{label}</Label>
+      <div className="flex h-12 items-center justify-between rounded-xl border border-[#2d6a4f]/15 bg-white px-3">
+        <button
+          type="button"
+          onClick={() => previousValue && onChange(previousValue)}
+          disabled={!previousValue}
+          className="grid size-9 place-items-center rounded-full border border-[#2d6a4f]/15 bg-white text-[#1a3d34] transition hover:border-[#2d6a4f]/30 hover:bg-[#f8f7f4] disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label={`Earlier ${label.toLowerCase()}`}
+        >
+          <Minus className="size-4" />
+        </button>
+        <Select value={currentValue} onValueChange={(next) => next && onChange(next)}>
+          <SelectTrigger className="h-10 min-w-[8.5rem] border-0 bg-transparent px-3 text-center shadow-none hover:bg-[#f8f7f4] focus:ring-0 focus:ring-offset-0">
+            <span className="w-full text-base font-semibold text-[#1a3d34]">
+              {formatTimeChoice(currentValue)}
+            </span>
+          </SelectTrigger>
+          <SelectContent className="booking-popup rounded-2xl border-[#2d6a4f]/15 bg-white">
+            {timeChoices.map((time) => (
+              <SelectItem key={time} value={time} className="text-[#1a3d34]">
+                {formatTimeChoice(time)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <button
+          type="button"
+          onClick={() => nextValue && onChange(nextValue)}
+          disabled={!nextValue}
+          className="grid size-9 place-items-center rounded-full border border-[#2d6a4f]/15 bg-white text-[#1a3d34] transition hover:border-[#2d6a4f]/30 hover:bg-[#f8f7f4] disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label={`Later ${label.toLowerCase()}`}
+        >
+          <Plus className="size-4" />
+        </button>
+      </div>
     </div>
   );
+}
+
+function BookingCounterField({
+  label,
+  value,
+  options,
+  singularLabel,
+  pluralLabel,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  options: number[];
+  singularLabel: string;
+  pluralLabel?: string;
+  onChange: (value: number) => void;
+}) {
+  const sortedOptions = [...options].sort((left, right) => left - right);
+  const currentIndex = Math.max(0, sortedOptions.indexOf(value));
+  const currentValue = sortedOptions[currentIndex] ?? sortedOptions[0] ?? value;
+  const previousValue = currentIndex > 0 ? sortedOptions[currentIndex - 1] : null;
+  const nextValue =
+    currentIndex >= 0 && currentIndex < sortedOptions.length - 1
+      ? sortedOptions[currentIndex + 1]
+      : null;
+  const canDecrease = previousValue !== null;
+  const canIncrease = nextValue !== null;
+  const unitLabel =
+    currentValue === 1
+      ? singularLabel
+      : pluralLabel ?? (singularLabel.endsWith("s") ? singularLabel : `${singularLabel}s`);
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">{label}</Label>
+      <div className="flex h-12 items-center justify-between rounded-xl border border-[#2d6a4f]/15 bg-white px-3">
+        <button
+          type="button"
+          onClick={() => previousValue !== null && onChange(previousValue)}
+          disabled={!canDecrease}
+          className="grid size-9 place-items-center rounded-full border border-[#2d6a4f]/15 bg-white text-[#1a3d34] transition hover:border-[#2d6a4f]/30 hover:bg-[#f8f7f4] disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label={`Decrease ${label.toLowerCase()}`}
+        >
+          <Minus className="size-4" />
+        </button>
+        <Select value={String(currentValue)} onValueChange={(next) => next && onChange(Number(next))}>
+          <SelectTrigger className="h-10 min-w-[8.5rem] border-0 bg-transparent px-3 text-center shadow-none hover:bg-[#f8f7f4] focus:ring-0 focus:ring-offset-0">
+            <div className="flex w-full flex-col items-center leading-none">
+              <span className="text-base font-semibold text-[#1a3d34]">{currentValue}</span>
+              <span className="mt-1 text-[0.68rem] uppercase tracking-[0.18em] text-[#5a7a6e]">
+                {unitLabel}
+              </span>
+            </div>
+          </SelectTrigger>
+          <SelectContent className="booking-popup rounded-2xl border-[#2d6a4f]/15 bg-white">
+            {sortedOptions.map((option) => {
+              const optionLabel =
+                option === 1
+                  ? singularLabel
+                  : pluralLabel ??
+                    (singularLabel.endsWith("s") ? singularLabel : `${singularLabel}s`);
+
+              return (
+                <SelectItem key={option} value={String(option)} className="text-[#1a3d34]">
+                  {option} {optionLabel}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+        <button
+          type="button"
+          onClick={() => nextValue !== null && onChange(nextValue)}
+          disabled={!canIncrease}
+          className="grid size-9 place-items-center rounded-full border border-[#2d6a4f]/15 bg-white text-[#1a3d34] transition hover:border-[#2d6a4f]/30 hover:bg-[#f8f7f4] disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label={`Increase ${label.toLowerCase()}`}
+        >
+          <Plus className="size-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function getVehicleUseCase(passengerLimit: number) {
+  if (passengerLimit <= 3) {
+    return "Best for solo travelers, couples, and direct airport runs.";
+  }
+
+  if (passengerLimit <= 6) {
+    return "Best for families, premium airport pickups, and hotel departures.";
+  }
+
+  return "Best for larger groups, cruise departures, and multi-stop transport.";
 }
 
 export function ReserveWizard({
@@ -265,30 +650,47 @@ export function ReserveWizard({
     initialState?.routeSlug
       ? routes.find((route) => route.slug === initialState.routeSlug) ?? null
       : null;
-  const initialServiceMode =
-    initialState?.serviceMode ??
-    ((initialRoute?.mode as ServiceMode | undefined) ?? "airport");
-  const initialTripType =
-    initialState?.tripType ??
-    (initialRoute ? "flat" : defaultTripTypeForMode(initialServiceMode));
+  const requestedInitialPricingType = pricingTypeFromTripType(
+    (initialState?.tripType === "event" ? "hourly" : initialState?.tripType) ??
+      (initialRoute
+        ? bookingConstraints.presetRouteDefaultPricing
+        : bookingConstraints.customTripDefaultPricing),
+  );
+  const initialPricingType = coercePricingType(
+    requestedInitialPricingType,
+    bookingConstraints,
+    Boolean(initialRoute),
+  );
+  const initialTripType: TripType =
+    initialPricingType === "hourly" ? "hourly" : initialPricingType;
+  const defaultFlatRoute = defaultRouteForPricingType(routes, "flat");
   const initialModeRoute =
-    initialRoute ?? defaultRouteForMode(routes, initialServiceMode) ?? null;
+    initialPricingType === "flat"
+      ? initialRoute ?? defaultFlatRoute
+      : initialPricingType === "hourly"
+        ? defaultRouteForPricingType(routes, "hourly")
+        : null;
   const [step, setStep] = useState<Step>(1);
-  const [serviceMode, setServiceMode] = useState<ServiceMode>(initialServiceMode);
   const [tripType, setTripType] = useState<TripType>(initialTripType);
   const [routeId, setRouteId] = useState<string>(initialModeRoute?.id ?? "");
   const [pickupAddress, setPickupAddress] = useState(
-    initialState?.pickupAddress ?? initialModeRoute?.origin ?? "",
+    coalesceText(
+      initialState?.pickupAddress,
+      defaultPickupAddressForPricingType(initialPricingType, initialModeRoute),
+    ),
   );
   const [dropoffAddress, setDropoffAddress] = useState(
-    initialState?.dropoffAddress ?? initialModeRoute?.destination ?? "",
+    coalesceText(
+      initialState?.dropoffAddress,
+      initialModeRoute?.destination,
+      defaultFlatRoute?.destination,
+    ),
   );
   const [pickupPlace, setPickupPlace] = useState<GoogleAddress | null>(null);
   const [dropoffPlace, setDropoffPlace] = useState<GoogleAddress | null>(null);
   const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
-  const [pickupDetail, setPickupDetail] = useState(
-    initialState?.pickupDetail ?? "Flight number or venue entrance",
-  );
+  const [stepOneAttempted, setStepOneAttempted] = useState(false);
+  const [flightNumber, setFlightNumber] = useState("");
   const [pickupDate, setPickupDate] = useState(initialPickupSlot.date);
   const [pickupTime, setPickupTime] = useState(initialPickupSlot.time);
   const [returnTrip, setReturnTrip] = useState(false);
@@ -296,13 +698,17 @@ export function ReserveWizard({
   const [returnTime, setReturnTime] = useState("17:00");
   const [passengers, setPassengers] = useState("2");
   const [bags, setBags] = useState("2");
-  const [hoursRequested, setHoursRequested] = useState("3");
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string>(vehicles[0]?.id ?? "");
+  const [hoursRequested, setHoursRequested] = useState(
+    String(bookingConstraints.hourlyMinimumHours),
+  );
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
   const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
-  const [notes, setNotes] = useState("");
+  const [customerSmsOptIn, setCustomerSmsOptIn] = useState(false);
+  const [checkoutErrors, setCheckoutErrors] = useState<CheckoutFieldErrors>({});
+  const [notes, setNotes] = useState(initialState?.pickupDetail ?? "");
   const [availableVehicleCounts, setAvailableVehicleCounts] = useState<Record<string, number> | null>(
     null,
   );
@@ -312,19 +718,33 @@ export function ReserveWizard({
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  const filteredRoutes = useMemo(
-    () =>
-      routes.filter((route) =>
-        serviceMode === "hourly" || serviceMode === "events"
-          ? route.mode === "hourly"
-          : route.mode === serviceMode,
-      ),
-    [routes, serviceMode],
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const selectedPricingType = pricingTypeFromTripType(tripType);
+  const enabledPricingOptions = useMemo(
+    () => getEnabledPricingOptions(bookingConstraints),
+    [bookingConstraints],
   );
 
-  const selectedRoute =
-    filteredRoutes.find((route) => route.id === routeId) ?? filteredRoutes[0] ?? null;
+  const filteredRoutes = useMemo(
+    () => routesForPricingType(routes, selectedPricingType),
+    [routes, selectedPricingType],
+  );
+  const pickupSuggestions = useMemo(
+    () => [
+      "Sea-Tac Airport",
+      ...routes.map((route) => route.origin),
+      ...routes.map((route) => route.destination),
+    ],
+    [routes],
+  );
+  const dropoffSuggestions = useMemo(
+    () => routes.map((route) => route.destination),
+    [routes],
+  );
+
+  const selectedRoute = routeId
+    ? filteredRoutes.find((route) => route.id === routeId) ?? null
+    : null;
 
   const availabilityDurationMinutes =
     routeSummary?.durationMinutes ??
@@ -336,34 +756,142 @@ export function ReserveWizard({
   const availableVehicles = compatibleVehicles.filter((vehicle) =>
     availableVehicleCounts ? (availableVehicleCounts[vehicle.id] ?? 0) > 0 : true,
   );
+  const baseVehicleFloor = useMemo(() => {
+    const basePrices = vehicles
+      .map((vehicle) => Number(vehicle.basePrice))
+      .filter((value) => Number.isFinite(value) && value > 0);
+
+    if (basePrices.length === 0) {
+      return null;
+    }
+
+    return Math.min(...basePrices);
+  }, [vehicles]);
 
   const selectedVehicle =
-    availableVehicles.find((vehicle) => vehicle.id === selectedVehicleId) ??
-    availableVehicles[0] ??
-    null;
+    compatibleVehicles.find((vehicle) => vehicle.id === selectedVehicleId) ?? null;
+  const selectedVehicleStatus = selectedVehicle
+    ? vehicleStatuses?.[selectedVehicle.id] ?? null
+    : null;
+  const selectedVehicleIsAvailable = selectedVehicleStatus
+    ? selectedVehicleStatus.reasonType === "available"
+    : availableVehicles.some((vehicle) => vehicle.id === selectedVehicleId);
 
-  const serviceModeLabel =
-    serviceModeConfig.find((item) => item.key === serviceMode)?.title ?? "Airport";
+  const effectiveServiceMode: ServiceMode =
+    selectedPricingType === "hourly"
+      ? "hourly"
+      : selectedRoute?.mode === "corporate"
+        ? "corporate"
+        : "airport";
   const tripTypeLabel =
-    tripTypeOptions[serviceMode].find((item) => item.value === tripType)?.label ??
+    pricingTypeConfig.find((item) => item.value === selectedPricingType)?.label ??
     "Flat rate";
   const routeConfidenceLabel = routeSummary
     ? `${routeSummary.distanceMiles.toFixed(1)} mi • ${routeSummary.durationMinutes} min`
     : tripType === "flat"
-      ? "Preset route selected"
-      : "Waiting for live route";
+      ? "Route ready"
+      : "Add both addresses";
   const bookingRouteName =
     tripType === "flat" && selectedRoute
       ? selectedRoute.name
       : [pickupAddress, dropoffAddress].filter(Boolean).join(" to ") || "Custom route";
+  const returnTripReady = returnTrip && Boolean(returnDate && returnTime);
+  const recommendedVehicleId = useMemo(() => {
+    if (availableVehicles.length === 0) {
+      return "";
+    }
+
+    return [...availableVehicles]
+      .map((vehicle) => ({
+        total: quoteReservation({
+          baseVehicleFloor,
+          serviceMode: effectiveServiceMode,
+          tripType,
+          selectedRoute: tripType === "flat" ? selectedRoute : null,
+          selectedVehicle: vehicle,
+          passengers: Number(passengers),
+          bags: Number(bags),
+          hoursRequested: Number(hoursRequested),
+          routeDistanceMiles: routeSummary?.distanceMiles ?? null,
+          routeDurationMinutes: routeSummary?.durationMinutes ?? null,
+          returnTrip: returnTripReady,
+          selectedExtras,
+          bookingConstraints,
+        }).total,
+        vehicleId: vehicle.id,
+      }))
+      .sort((left, right) => left.total - right.total)[0]?.vehicleId;
+  }, [
+    availableVehicles,
+    bags,
+    bookingConstraints,
+    baseVehicleFloor,
+    hoursRequested,
+    passengers,
+    returnTripReady,
+    routeSummary?.distanceMiles,
+    routeSummary?.durationMinutes,
+    selectedExtras,
+    selectedRoute,
+    effectiveServiceMode,
+    tripType,
+  ]);
   const routePreviewLabel =
     tripType === "hourly" || tripType === "event"
       ? pickupAddress || "Hourly service area"
       : bookingRouteName;
+  const checkoutPickupPreview = formatAddressPreview(pickupAddress);
+  const checkoutDropoffPreview =
+    tripType === "hourly" || tripType === "event"
+      ? `${hoursRequested} requested hour${hoursRequested === "1" ? "" : "s"}`
+      : formatAddressPreview(dropoffAddress);
+  const distanceCharges = [
+    bookingConstraints.chargeMileageOnDistance && bookingConstraints.perMileFee > 0
+      ? "mileage"
+      : null,
+    bookingConstraints.chargePassengersOnDistance && bookingConstraints.perPassengerFee > 0
+      ? "passengers"
+      : null,
+    bookingConstraints.chargeBagsOnDistance && bookingConstraints.perBagFee > 0
+      ? "bags"
+      : null,
+  ].filter((item): item is "mileage" | "passengers" | "bags" => Boolean(item));
+  const priceTypeSummary =
+    selectedPricingType === "flat"
+      ? "Fixed pricing for preset routes."
+      : selectedPricingType === "distance"
+        ? distanceCharges.length > 0
+          ? `Vehicle base plus ${buildChargeSummary(distanceCharges, (label) => {
+              if (label === "mileage") {
+                return `${formatCurrency(bookingConstraints.perMileFee)}/mi`;
+              }
+
+              if (label === "passengers") {
+                return `${formatCurrency(bookingConstraints.perPassengerFee)}/rider`;
+              }
+
+              return `${formatCurrency(bookingConstraints.perBagFee)}/bag`;
+            })}.`
+          : "Vehicle base pricing for custom routes."
+        : bookingConstraints.hourlyServiceFee > 0
+          ? `Priced by reserved hours plus ${formatCurrency(bookingConstraints.hourlyServiceFee)} service fee.`
+          : `Priced by reserved hours with a ${bookingConstraints.hourlyMinimumHours}-hour minimum.`;
+  const pickupAddressError = pickupAddress.trim() ? null : "Enter a pickup address.";
+  const dropoffAddressRequired = tripType === "flat" || tripType === "distance";
+  const dropoffAddressError =
+    dropoffAddressRequired && !dropoffAddress.trim() ? "Enter a drop-off address." : null;
+  const routeSelectionError =
+    tripType === "flat" && !selectedRoute ? "Choose a flat-rate route." : null;
+  const stepOneMissingItems = [
+    pickupAddressError ? "pickup address" : null,
+    dropoffAddressError ? "drop-off address" : null,
+    routeSelectionError ? "flat-rate route" : null,
+  ].filter((item): item is string => Boolean(item));
+  const stepOneReady = stepOneMissingItems.length === 0;
   const dispatchReadiness = [
-    pickupDate ? "Timing locked" : "Timing pending",
-    selectedVehicle ? selectedVehicle.name : "Vehicle pending",
-    returnTrip ? "Return leg added" : "One-way service",
+    pickupDate ? `Pickup ${pickupDate}` : "Choose pickup date",
+    selectedVehicle ? selectedVehicle.name : "Choose vehicle",
+    returnTrip ? "Round trip" : "One way",
   ];
   const pickupTimeOptions = useMemo(
     () =>
@@ -373,6 +901,13 @@ export function ReserveWizard({
       }),
     [bookingConstraints, pickupDate],
   );
+  const hourlyHourOptions = useMemo(() => {
+    const baseOptions = [2, 3, 4, 5, 6, 8];
+    const minimum = bookingConstraints.hourlyMinimumHours;
+    return Array.from(new Set([minimum, ...baseOptions.filter((value) => value >= minimum)])).sort(
+      (left, right) => left - right,
+    );
+  }, [bookingConstraints.hourlyMinimumHours]);
   const returnTimeOptions = useMemo(
     () =>
       buildBookingTimeOptions({
@@ -430,10 +965,170 @@ export function ReserveWizard({
   ]);
 
   useEffect(() => {
-    if (!availableVehicles.some((vehicle) => vehicle.id === selectedVehicleId)) {
-      setSelectedVehicleId(availableVehicles[0]?.id ?? "");
+    if (availableVehicles.length === 0) {
+      if (!selectedVehicleId) {
+        setSelectedVehicleId("");
+      }
+      return;
     }
-  }, [availableVehicles, selectedVehicleId]);
+
+    if (selectedVehicleId && compatibleVehicles.some((vehicle) => vehicle.id === selectedVehicleId)) {
+      return;
+    }
+
+    setSelectedVehicleId(recommendedVehicleId ?? "");
+  }, [availableVehicles, compatibleVehicles, recommendedVehicleId, selectedVehicleId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const resumeDraft = new URLSearchParams(window.location.search).get("resume") === "1";
+      const raw = window.sessionStorage.getItem(RESERVE_DRAFT_STORAGE_KEY);
+
+      if (!resumeDraft) {
+        if (raw) {
+          window.sessionStorage.removeItem(RESERVE_DRAFT_STORAGE_KEY);
+        }
+        setDraftLoaded(true);
+        return;
+      }
+
+      if (!raw) {
+        setDraftLoaded(true);
+        return;
+      }
+
+      const draft = JSON.parse(raw) as Partial<{
+        bags: string;
+        customerEmail: string;
+        customerName: string;
+        customerPhone: string;
+        customerSmsOptIn: boolean;
+        dropoffAddress: string;
+        flightNumber: string;
+        hoursRequested: string;
+        notes: string;
+        passengers: string;
+        pickupAddress: string;
+        pickupDate: string;
+        pickupTime: string;
+        returnDate: string;
+        returnTime: string;
+        returnTrip: boolean;
+        routeId: string;
+        selectedExtras: string[];
+        selectedVehicleId: string;
+        step: Step;
+        tripType: TripType;
+      }>;
+
+      if (draft.tripType) {
+        const restoredPricingType = coercePricingType(
+          pricingTypeFromTripType(draft.tripType === "event" ? "hourly" : draft.tripType),
+          bookingConstraints,
+          typeof draft.routeId === "string" && Boolean(draft.routeId),
+        );
+        setTripType(restoredPricingType === "hourly" ? "hourly" : restoredPricingType);
+      }
+      if (typeof draft.step === "number") setStep(draft.step);
+      if (typeof draft.routeId === "string") setRouteId(draft.routeId);
+      if (typeof draft.pickupAddress === "string" && draft.pickupAddress.trim()) {
+        setPickupAddress(draft.pickupAddress);
+      }
+      if (typeof draft.dropoffAddress === "string" && draft.dropoffAddress.trim()) {
+        setDropoffAddress(draft.dropoffAddress);
+      }
+      if (typeof draft.flightNumber === "string") setFlightNumber(draft.flightNumber);
+      if (typeof draft.pickupDate === "string") setPickupDate(draft.pickupDate);
+      if (typeof draft.pickupTime === "string") setPickupTime(draft.pickupTime);
+      if (typeof draft.returnTrip === "boolean") setReturnTrip(draft.returnTrip);
+      if (typeof draft.returnDate === "string") setReturnDate(draft.returnDate);
+      if (typeof draft.returnTime === "string") setReturnTime(draft.returnTime);
+      if (typeof draft.passengers === "string") setPassengers(draft.passengers);
+      if (typeof draft.bags === "string") setBags(draft.bags);
+      if (typeof draft.hoursRequested === "string") {
+        setHoursRequested(
+          String(
+            Math.max(
+              Number(draft.hoursRequested) || bookingConstraints.hourlyMinimumHours,
+              bookingConstraints.hourlyMinimumHours,
+            ),
+          ),
+        );
+      }
+      if (typeof draft.selectedVehicleId === "string") {
+        setSelectedVehicleId(draft.selectedVehicleId);
+      }
+      if (Array.isArray(draft.selectedExtras)) setSelectedExtras(draft.selectedExtras);
+      if (typeof draft.customerName === "string") setCustomerName(draft.customerName);
+      if (typeof draft.customerEmail === "string") setCustomerEmail(draft.customerEmail);
+      if (typeof draft.customerPhone === "string") setCustomerPhone(draft.customerPhone);
+      if (typeof draft.customerSmsOptIn === "boolean") {
+        setCustomerSmsOptIn(draft.customerSmsOptIn);
+      }
+      if (typeof draft.notes === "string") setNotes(draft.notes);
+    } finally {
+      setDraftLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !draftLoaded) {
+      return;
+    }
+
+    const draft = {
+      bags,
+      customerEmail,
+      customerName,
+      customerPhone,
+      customerSmsOptIn,
+      dropoffAddress,
+      flightNumber,
+      hoursRequested,
+      notes,
+      passengers,
+      pickupAddress,
+      pickupDate,
+      pickupTime,
+      returnDate,
+      returnTime,
+      returnTrip,
+      routeId,
+      selectedExtras,
+      selectedVehicleId,
+      step,
+      tripType,
+    };
+
+    window.sessionStorage.setItem(RESERVE_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  }, [
+    bags,
+    customerEmail,
+    customerName,
+    customerPhone,
+    customerSmsOptIn,
+    draftLoaded,
+    dropoffAddress,
+    flightNumber,
+    hoursRequested,
+    notes,
+    passengers,
+    pickupAddress,
+    pickupDate,
+    pickupTime,
+    returnDate,
+    returnTime,
+    returnTrip,
+    routeId,
+    selectedExtras,
+    selectedVehicleId,
+    step,
+    tripType,
+  ]);
 
   useEffect(() => {
     if (pickupTimeOptions.length === 0) {
@@ -554,17 +1249,34 @@ export function ReserveWizard({
   ]);
 
   useEffect(() => {
-    if (!selectedRoute) {
-      const fallbackRoute = defaultRouteForMode(routes, serviceMode);
+    const coercedPricingType = coercePricingType(
+      selectedPricingType,
+      bookingConstraints,
+      selectedPricingType === "flat",
+    );
+
+    if (coercedPricingType !== selectedPricingType) {
+      setTripType(coercedPricingType === "hourly" ? "hourly" : coercedPricingType);
+      return;
+    }
+
+    if (selectedPricingType === "flat" && routeId && !selectedRoute) {
+      const fallbackRoute = defaultRouteForPricingType(routes, "flat");
+
       if (fallbackRoute) {
         setRouteId(fallbackRoute.id);
       }
     }
-  }, [routes, selectedRoute, serviceMode]);
+
+    if (selectedPricingType !== "flat" && routeId) {
+      setRouteId("");
+    }
+  }, [bookingConstraints, routeId, routes, selectedPricingType, selectedRoute]);
 
   const pricing = selectedVehicle
     ? quoteReservation({
-        serviceMode,
+        baseVehicleFloor,
+        serviceMode: effectiveServiceMode,
         tripType,
         selectedRoute: tripType === "flat" ? selectedRoute : null,
         selectedVehicle,
@@ -573,24 +1285,39 @@ export function ReserveWizard({
         hoursRequested: Number(hoursRequested),
         routeDistanceMiles: routeSummary?.distanceMiles ?? null,
         routeDurationMinutes: routeSummary?.durationMinutes ?? null,
-        returnTrip,
+        returnTrip: returnTripReady,
         selectedExtras,
+        bookingConstraints,
       })
     : null;
+  const extraSelections = useMemo(
+    () =>
+      extrasCatalog
+        .map((extra) => {
+          const quantity = selectedExtras.filter((entry) => entry === extra.key).length;
+
+          if (quantity === 0) {
+            return null;
+          }
+
+          return {
+            extra,
+            quantity,
+            total: extra.price * quantity,
+          };
+        })
+        .filter((entry): entry is { extra: RideExtra; quantity: number; total: number } =>
+          Boolean(entry),
+        ),
+    [selectedExtras],
+  );
+  const checkoutReady =
+    customerName.trim().length > 0 &&
+    isValidEmail(customerEmail) &&
+    isValidPhone(customerPhone);
 
   const activeStep = stepMeta.find((item) => item.id === step) ?? stepMeta[0];
   const extrasSelected = selectedExtras.length;
-  const vehicleAvailabilityMessage = availabilityError
-    ? availabilityError
-    : availabilityLoading
-      ? "Checking live fleet availability for the selected schedule..."
-      : availableVehicles.length > 0
-        ? `${availableVehicles.length} vehicle class${
-            availableVehicles.length === 1 ? "" : "es"
-          } are open for this schedule.`
-        : compatibleVehicles.length > 0
-          ? "No compatible vehicles are open for that time window. Adjust the schedule to see the next openings."
-          : "No vehicles fit the current passenger and luggage count.";
   const fitReadout =
     compatibleVehicles.length > 0
       ? `${compatibleVehicles.length} vehicle class${
@@ -601,10 +1328,30 @@ export function ReserveWizard({
       : `No current vehicle fits ${passengers} passenger${
           passengers === "1" ? "" : "s"
         } and ${bags} bag${bags === "1" ? "" : "s"}.`;
+  const fitVehiclePreview = compatibleVehicles.slice(0, 3).map((vehicle) => ({
+    id: vehicle.id,
+    label: vehicle.name,
+    detail: `${vehicle.passengersMax} passengers • ${vehicle.bagsMax} bags`,
+  }));
   const vehicleOptionSummaries = compatibleVehicles.map((vehicle) => {
     const status = vehicleStatuses?.[vehicle.id] ?? null;
     const availableUnits = status?.availableUnits ?? availableVehicleCounts?.[vehicle.id] ?? null;
     const isAvailable = status ? status.reasonType === "available" : false;
+    const quotePreview = quoteReservation({
+      baseVehicleFloor,
+      serviceMode: effectiveServiceMode,
+      tripType,
+      selectedRoute: tripType === "flat" ? selectedRoute : null,
+      selectedVehicle: vehicle,
+      passengers: Number(passengers),
+      bags: Number(bags),
+      hoursRequested: Number(hoursRequested),
+      routeDistanceMiles: routeSummary?.distanceMiles ?? null,
+      routeDurationMinutes: routeSummary?.durationMinutes ?? null,
+      returnTrip: returnTripReady,
+      selectedExtras,
+      bookingConstraints,
+    });
     const reasonLabel = status
       ? status.reasonType === "schedule"
         ? "Unavailable for this time"
@@ -623,18 +1370,51 @@ export function ReserveWizard({
       nextAvailableLabel: status?.nextAvailablePickupAt
         ? formatDateTime(status.nextAvailablePickupAt)
         : null,
+      quotePreview,
       reasonLabel,
       status,
       vehicle,
     };
   });
-  const reservationHeadline =
-    tripType === "flat"
-      ? "Choose a live route, lock timing, and move into dispatch."
-      : "Build the trip details the way a real chauffeur request is taken.";
   const nextStepDisabled =
     step === 4 &&
-    (!selectedVehicle || availabilityLoading || Boolean(availabilityError) || !vehicleStatuses);
+    (!selectedVehicle ||
+      !selectedVehicleIsAvailable ||
+      availabilityLoading ||
+      Boolean(availabilityError) ||
+      !vehicleStatuses);
+  const summaryRows = [
+    {
+      label: "Route",
+      value: routePreviewLabel,
+      detail:
+        tripType === "flat"
+          ? routeConfidenceLabel
+          : tripType === "distance"
+            ? "Custom route"
+            : `${hoursRequested} requested hour${hoursRequested === "1" ? "" : "s"}`,
+      onEdit: () => jumpToStep(1),
+    },
+    {
+      label: "Time",
+      value: pickupDate ? `${pickupDate} at ${pickupTime}` : "Choose a pickup time",
+      detail:
+        returnTrip && returnDate ? `Return ${returnDate} at ${returnTime}` : null,
+      onEdit: () => jumpToStep(2),
+    },
+    {
+      label: "Party",
+      value: `${passengers} passenger${passengers === "1" ? "" : "s"} • ${bags} bag${bags === "1" ? "" : "s"}`,
+      detail: null,
+      onEdit: () => jumpToStep(3),
+    },
+    {
+      label: "Vehicle",
+      value: selectedVehicle?.name ?? "Choose a vehicle",
+      detail: flightNumber ? `Flight ${flightNumber}` : null,
+      onEdit: () => jumpToStep(4),
+    },
+  ];
 
   function applyRoute(route: Route | null) {
     if (!route) {
@@ -651,35 +1431,118 @@ export function ReserveWizard({
     }
   }
 
-  function handleModeChange(nextMode: ServiceMode) {
-    const nextTripType = defaultTripTypeForMode(nextMode);
-    const nextRoute = defaultRouteForMode(routes, nextMode) ?? null;
-
-    setServiceMode(nextMode);
+  function handlePricingTypeChange(nextPricingType: PricingType) {
+    const safePricingType = coercePricingType(
+      nextPricingType,
+      bookingConstraints,
+      nextPricingType === "flat",
+    );
+    const nextTripType = safePricingType === "hourly" ? "hourly" : safePricingType;
     setTripType(nextTripType);
-    setRouteId(nextRoute?.id ?? "");
-    setPickupPlace(null);
-    setDropoffPlace(null);
-    setRouteSummary(null);
+    setStepOneAttempted(false);
 
-    if (nextRoute) {
-      setPickupAddress(nextRoute.origin);
-      setDropoffAddress(nextTripType === "flat" ? nextRoute.destination : "");
-    } else {
-      setPickupAddress("");
+    if (safePricingType === "flat") {
+      const nextRoute =
+        (routeId
+          ? routes.find(
+              (route) =>
+                route.id === routeId &&
+                (route.mode === "airport" || route.mode === "corporate"),
+            ) ?? null
+          : null) ??
+        defaultRouteForPricingType(routes, "flat") ??
+        null;
+
+      setRouteId(nextRoute?.id ?? "");
+      if (nextRoute) {
+        setPickupAddress(nextRoute.origin);
+        setDropoffAddress(nextRoute.destination);
+      }
+      setPickupPlace(null);
+      setDropoffPlace(null);
+      return;
+    }
+
+    if (safePricingType === "hourly") {
+      setPickupAddress((current) => current || "Sea-Tac Airport");
       setDropoffAddress("");
+      setPickupPlace(null);
+      setDropoffPlace(null);
+      setHoursRequested(String(Math.max(Number(hoursRequested) || 0, bookingConstraints.hourlyMinimumHours)));
+    } else if (safePricingType === "distance") {
+      setPickupAddress((current) => current || "Sea-Tac Airport");
+      setDropoffAddress((current) => current || defaultFlatRoute?.destination || "");
+      setPickupPlace(null);
+      setDropoffPlace(null);
+    }
+
+    setRouteId("");
+  }
+
+  function handleReturnTripChange(nextChecked: boolean) {
+    setReturnTrip(nextChecked);
+
+    if (nextChecked) {
+      if (!returnDate && pickupDate) {
+        const pickup = parseDateValue(pickupDate);
+        setReturnDate(pickup ? formatDateValue(addDays(pickup, 1)) : pickupDate);
+      }
+      if (!returnTime && pickupTime) {
+        setReturnTime(pickupTime);
+      }
+      return;
+    }
+
+    setReturnDate("");
+  }
+
+  function handlePassengersChange(nextValue: string) {
+    setPassengers(nextValue);
+    setSelectedVehicleId("");
+  }
+
+  function handleBagsChange(nextValue: string) {
+    setBags(nextValue);
+    setSelectedVehicleId("");
+  }
+
+  function handlePickupAddressChange(nextValue: string) {
+    setPickupAddress(nextValue);
+    setRouteSummary(null);
+    setStepOneAttempted(false);
+
+    if (
+      tripType === "flat" &&
+      selectedRoute &&
+      nextValue.trim() !== selectedRoute.origin.trim()
+    ) {
+      const fallbackPricingType = coercePricingType(
+        bookingConstraints.customTripDefaultPricing,
+        bookingConstraints,
+        false,
+      );
+      setTripType(fallbackPricingType === "hourly" ? "hourly" : fallbackPricingType);
+      setRouteId("");
     }
   }
 
-  function handleTripTypeChange(nextType: TripType) {
-    setTripType(nextType);
+  function handleDropoffAddressChange(nextValue: string) {
+    setDropoffAddress(nextValue);
     setRouteSummary(null);
+    setStepOneAttempted(false);
 
-    if (nextType === "flat" && selectedRoute) {
-      setPickupAddress(selectedRoute.origin);
-      setDropoffAddress(selectedRoute.destination);
-      setPickupPlace(null);
-      setDropoffPlace(null);
+    if (
+      tripType === "flat" &&
+      selectedRoute &&
+      nextValue.trim() !== selectedRoute.destination.trim()
+    ) {
+      const fallbackPricingType = coercePricingType(
+        bookingConstraints.customTripDefaultPricing,
+        bookingConstraints,
+        false,
+      );
+      setTripType(fallbackPricingType === "hourly" ? "hourly" : fallbackPricingType);
+      setRouteId("");
     }
   }
 
@@ -693,31 +1556,97 @@ export function ReserveWizard({
     setPickupPlace(dropoffPlace);
     setDropoffPlace(pickupPlace);
     setRouteSummary(null);
+    setStepOneAttempted(false);
   }
 
-  function toggleExtra(key: string, checked: boolean) {
-    if (checked) {
-      setSelectedExtras((current) => [...current, key]);
+  function getExtraQuantity(key: string) {
+    return selectedExtras.filter((entry) => entry === key).length;
+  }
+
+  function setExtraQuantity(key: string, quantity: number) {
+    setSelectedExtras((current) => {
+      const remaining = current.filter((entry) => entry !== key);
+
+      return [...remaining, ...Array.from({ length: Math.max(quantity, 0) }, () => key)];
+    });
+  }
+
+  function buildCheckoutErrors() {
+    const nextErrors: CheckoutFieldErrors = {};
+
+    if (!customerName.trim()) {
+      nextErrors.customerName = "Enter the rider's full name.";
+    }
+
+    if (!customerEmail.trim()) {
+      nextErrors.customerEmail = "Enter an email for the receipt and updates.";
+    } else if (!isValidEmail(customerEmail)) {
+      nextErrors.customerEmail = "Enter a valid email address.";
+    }
+
+    if (!customerPhone.trim()) {
+      nextErrors.customerPhone = "Enter a mobile number for dispatch updates.";
+    } else if (!isValidPhone(customerPhone)) {
+      nextErrors.customerPhone = "Enter a valid mobile number.";
+    }
+
+    return nextErrors;
+  }
+
+  function validateCheckoutFields(options?: { showToast?: boolean }) {
+    const nextErrors = buildCheckoutErrors();
+    setCheckoutErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length === 0) {
+      return true;
+    }
+
+    if (options?.showToast !== false) {
+      toast.error("Complete the required checkout details.");
+    }
+
+    return false;
+  }
+
+  function clearCheckoutError(key: CheckoutFieldErrorKey) {
+    setCheckoutErrors((current) => {
+      if (!current[key]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
+  function jumpToStep(targetStep: Step) {
+    if (targetStep <= step) {
+      setStep(targetStep);
       return;
     }
 
-    setSelectedExtras((current) => current.filter((entry) => entry !== key));
+    if (validateStep(step)) {
+      setStep(targetStep);
+    }
   }
 
   function validateStep(current: Step) {
     if (current === 1) {
-      if (!pickupAddress) {
-        toast.error("Enter a pickup address.");
+      setStepOneAttempted(true);
+
+      if (pickupAddressError) {
+        toast.error(pickupAddressError);
         return false;
       }
 
-      if (tripType === "flat" && !selectedRoute) {
-        toast.error("Choose a flat-rate route.");
+      if (routeSelectionError) {
+        toast.error(routeSelectionError);
         return false;
       }
 
-      if ((tripType === "distance" || tripType === "flat") && !dropoffAddress) {
-        toast.error("Enter a drop-off address.");
+      if (dropoffAddressError) {
+        toast.error(dropoffAddressError);
         return false;
       }
     }
@@ -770,8 +1699,7 @@ export function ReserveWizard({
     }
 
     if (current === 5) {
-      if (!customerName || !customerEmail || !customerPhone) {
-        toast.error("Complete the customer details.");
+      if (!validateCheckoutFields()) {
         return false;
       }
     }
@@ -789,7 +1717,7 @@ export function ReserveWizard({
       return;
     }
 
-    if (!validateStep(5)) {
+    if (!validateStep(5) || !validateCheckoutFields()) {
       return;
     }
 
@@ -808,7 +1736,7 @@ export function ReserveWizard({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          serviceMode,
+          serviceMode: effectiveServiceMode,
           tripType,
           routeId: tripType === "flat" ? selectedRoute?.id ?? null : null,
           routeName: bookingRouteName,
@@ -830,7 +1758,14 @@ export function ReserveWizard({
           customerName,
           customerEmail,
           customerPhone,
-          specialInstructions: [pickupDetail, notes].filter(Boolean).join(" | ") || null,
+          customerSmsOptIn,
+          specialInstructions:
+            [
+              flightNumber.trim() ? `Flight: ${flightNumber.trim()}` : null,
+              notes,
+            ]
+              .filter(Boolean)
+              .join(" | ") || null,
         }),
       });
 
@@ -854,154 +1789,156 @@ export function ReserveWizard({
 
   if (compact) {
     return (
-      <div data-booking-theme="pierlimo" className="theme-pierlimo grid gap-6">
-        <div className="grid gap-6 border-b border-white/8 pb-8">
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
-            <div>
-              <p className="font-sans text-[0.76rem] uppercase tracking-[0.35em] text-[#ebd2ac]">
-                Live reservation engine
-              </p>
-              <h2 className="mt-3 max-w-4xl font-display text-[clamp(2.4rem,4.9vw,4.9rem)] leading-[0.92] text-[#f5efe5]">
-                Plan the route, confirm the vehicle, and send the ride.
-              </h2>
-              <p className="mt-3 max-w-2xl text-base leading-7 text-[#b9b1a4]">
-                Built for Sea-Tac transfers, corporate routes, hourly service, and event bookings.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {serviceModeConfig.map((mode) => (
-                <Button
-                  key={mode.key}
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleModeChange(mode.key)}
-                  className={cn(
-                    "h-auto min-h-11 justify-center rounded-full border px-5 py-3 font-sans text-[0.68rem] uppercase tracking-[0.22em] shadow-none",
-                    serviceMode === mode.key
-                      ? "border-[#d6b67a]/45 bg-[#1b1c22] text-[#f5efe5]"
-                      : "border-white/10 bg-white/[0.03] text-[#f5efe5] hover:bg-white/[0.06]",
-                  )}
-                >
-                  {mode.title}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid gap-5 md:grid-cols-5">
-            {stepMeta.map((item, index) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  if (item.id <= step || validateStep(step)) {
-                    setStep(item.id);
-                  }
-                }}
-                className="relative text-center"
-              >
-                {index < stepMeta.length - 1 && (
-                  <span className="absolute left-[calc(50%+1.5rem)] top-6 hidden h-px w-[calc(100%-3rem)] bg-white/10 md:block" />
+      <div data-booking-theme="seatac" className="theme-seatac grid gap-6">
+        {/* Step Indicators */}
+        <div className="grid gap-3 sm:grid-cols-5">
+          {stepMeta.map((item, index) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => jumpToStep(item.id)}
+              className="group relative flex items-center gap-3 rounded-xl p-2 text-left transition hover:bg-[#2d6a4f]/[0.03] sm:flex-col sm:text-center"
+            >
+              <span
+                className={cn(
+                  "relative z-10 grid size-9 shrink-0 place-items-center rounded-full border text-sm font-semibold transition sm:mx-auto",
+                  step === item.id
+                    ? "border-[#2d6a4f] bg-[#2d6a4f] text-white"
+                    : item.id < step
+                      ? "border-[#2d6a4f]/40 bg-[#2d6a4f]/10 text-[#2d6a4f]"
+                      : "border-[#2d6a4f]/15 bg-[#f8f7f4] text-[#8aa398]",
                 )}
-                <span
-                  className={cn(
-                    "relative z-10 mx-auto grid size-12 place-items-center rounded-full border text-base font-semibold transition",
-                    step === item.id
-                      ? "border-[#ebd2ac] bg-[#ebd2ac] text-[#111113]"
-                      : "border-white/12 bg-white/[0.03] text-[#f5efe5]",
-                  )}
-                >
-                  {item.id}
-                </span>
-                <span className="mt-3 block font-sans text-[0.68rem] uppercase tracking-[0.24em] text-[#f5efe5]">
+              >
+                {item.id < step ? <Check className="size-4" /> : item.id}
+              </span>
+              <div className="min-w-0 flex-1 sm:mt-1">
+                <span className={cn(
+                  "block font-sans text-[0.65rem] uppercase tracking-[0.2em] transition",
+                  step === item.id ? "text-[#1a3d34]" : "text-[#8aa398]"
+                )}>
                   {item.label}
                 </span>
-              </button>
-            ))}
-          </div>
+                <span className="hidden text-[0.6rem] uppercase tracking-[0.15em] text-[#8aa398]/60 sm:block">
+                  Step {item.id}
+                </span>
+              </div>
+              {index < stepMeta.length - 1 && (
+                <span className="absolute right-0 top-1/2 hidden h-px w-4 -translate-y-1/2 bg-[#2d6a4f]/10 sm:left-1/2 sm:top-8 sm:w-8 sm:-translate-x-1/2 md:block" />
+              )}
+            </button>
+          ))}
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid gap-6 lg:grid-cols-[1fr_280px] xl:grid-cols-[1fr_320px]">
           <div className="space-y-5">
             {step === 1 && (
               <div className="space-y-5">
-                <div className="rounded-[1.7rem] border border-white/8 bg-black/20 p-5">
-                  <div className="grid gap-4">
+                <div className="rounded-2xl border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5 lg:p-6">
+                  <div className="grid gap-4 sm:grid-cols-[1.1fr_0.9fr]">
                     <div className="space-y-2">
-                      <Label>Type</Label>
-                      <Select
-                        value={tripType}
-                        onValueChange={(value) => {
-                          if (value) {
-                            handleTripTypeChange(value as TripType);
-                          }
-                        }}
-                      >
-                          <SelectTrigger className="booking-control h-[3.25rem] w-full px-4 text-base">
-                            <SelectValue>{tripTypeLabel}</SelectValue>
-                          </SelectTrigger>
-                        <SelectContent className="booking-popup">
-                          {tripTypeOptions[serviceMode].map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">Pricing</Label>
+                      <BadgeSwitcher
+                        value={selectedPricingType}
+                        onValueChange={(value) => handlePricingTypeChange(value as PricingType)}
+                        options={enabledPricingOptions}
+                        aria-label="Pricing type"
+                        className="w-full bg-white"
+                        itemClassName="flex-1"
+                      />
                     </div>
-
-                    {tripType !== "flat" && (
+                    {selectedPricingType === "flat" ? (
                       <div className="space-y-2">
-                        <Label>Pickup detail</Label>
-                        <Input
-                          value={pickupDetail}
-                          onChange={(event) => setPickupDetail(event.target.value)}
-                          className="booking-control h-[3.25rem] px-4 text-base"
-                          placeholder="Flight number, venue, or hotel"
-                        />
+                        <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">Route</Label>
+                        <Select
+                          value={selectedRoute?.id ?? ""}
+                          onValueChange={(value) => {
+                            if (!value) return;
+                            applyRoute(filteredRoutes.find((route) => route.id === value) ?? null);
+                          }}
+                        >
+                          <SelectTrigger className="booking-control h-12 rounded-xl px-4 text-base border-[#2d6a4f]/15 bg-white text-[#1a3d34]">
+                            <SelectValue placeholder="Choose a route">
+                              {selectedRoute?.name ?? ""}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent className="booking-popup rounded-2xl border-[#2d6a4f]/15 bg-white">
+                            {filteredRoutes.map((route) => (
+                              <SelectItem key={route.id} value={route.id} className="text-[#1a3d34]">
+                                {route.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                    )}
+                    ) : null}
                   </div>
+                  <p className="mt-4 text-sm leading-6 text-[#5a7a6e]">{priceTypeSummary}</p>
 
-                  <div className="mt-4 space-y-4">
+                  <div className="mt-5 space-y-4">
                     <div className="space-y-2">
-                      <Label>Pick up address</Label>
+                      <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">Pick Up Address</Label>
                       <GoogleAddressInput
                         id="compact-pickup-address"
                         value={pickupAddress}
-                        onChange={setPickupAddress}
+                        onChange={handlePickupAddressChange}
                         onResolved={setPickupPlace}
-                        placeholder="Enter Pick Up Address"
-                        className="booking-control h-[3.25rem] px-4 text-base"
+                        placeholder="Enter pick up address"
+                        suggestions={pickupSuggestions}
+                        className="booking-control h-12 rounded-xl px-4 text-base border-[#2d6a4f]/15 bg-white text-[#1a3d34]"
                       />
+                      {stepOneAttempted && pickupAddressError ? (
+                        <p className="text-sm font-medium text-rose-500">{pickupAddressError}</p>
+                      ) : null}
                     </div>
 
                     {(tripType === "flat" || tripType === "distance") && (
-                      <div className="space-y-2">
-                        <Label>Drop off address</Label>
-                        <GoogleAddressInput
-                          id="compact-dropoff-address"
-                          value={dropoffAddress}
-                          onChange={setDropoffAddress}
-                          onResolved={setDropoffPlace}
-                          placeholder="Enter Drop Off Address"
-                          className="booking-control h-[3.25rem] px-4 text-base"
-                        />
-                      </div>
+                      <>
+                        <AddressSwapButton compact onClick={handleSwapAddresses} />
+                        <div className="space-y-2">
+                          <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">Drop Off Address</Label>
+                          <GoogleAddressInput
+                            id="compact-dropoff-address"
+                            value={dropoffAddress}
+                            onChange={handleDropoffAddressChange}
+                            onResolved={setDropoffPlace}
+                            placeholder="Enter drop off address"
+                            suggestions={dropoffSuggestions}
+                            className="booking-control h-12 rounded-xl px-4 text-base border-[#2d6a4f]/15 bg-white text-[#1a3d34]"
+                          />
+                          {stepOneAttempted && dropoffAddressError ? (
+                            <p className="text-sm font-medium text-rose-500">
+                              {dropoffAddressError}
+                            </p>
+                          ) : null}
+                        </div>
+                      </>
                     )}
-                  </div>
 
-                  <div className="mt-4 rounded-[1rem] border border-white/8 bg-black/20 px-4 py-4 text-sm leading-7 text-[#b9b1a4]">
-                    Route first. Once the addresses are locked, the next step narrows the calendar to valid service windows only.
+                      <div
+                        className={cn(
+                          "rounded-xl border px-4 py-3 text-sm",
+                          stepOneReady
+                            ? "border-[#2d6a4f]/12 bg-[#eef7f1] text-[#1f5d44]"
+                            : "border-[#d4b88a]/30 bg-[#fff6ea] text-[#8a6736]",
+                        )}
+                      >
+                        {stepOneReady
+                          ? "Route ready. Continue to schedule to choose the pickup time."
+                          : `Still needed: ${stepOneMissingItems.join(", ")}.`}
+                      </div>
+
+                      {stepOneAttempted && routeSelectionError ? (
+                        <p className="text-sm font-medium text-rose-500">{routeSelectionError}</p>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
               </div>
             )}
 
             {step === 2 && (
               <div className="grid gap-4">
-                <div className="rounded-[1.7rem] border border-white/8 bg-black/20 p-5">
-                  <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5 lg:p-6">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <BookingDateField
                       label="Pick up date"
                       value={pickupDate}
@@ -1018,52 +1955,50 @@ export function ReserveWizard({
                   </div>
 
                   {(tripType === "hourly" || tripType === "event") && (
-                    <div className="mt-4 space-y-2">
-                      <Label>Hours requested</Label>
-                      <Select
-                        value={hoursRequested}
-                        onValueChange={(value) => {
-                          if (value) {
-                            setHoursRequested(value);
-                          }
-                        }}
-                      >
-                        <SelectTrigger className="booking-control h-[3.25rem] w-full px-4 text-base">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="booking-popup">
-                          {[2, 3, 4, 5, 6, 8].map((hours) => (
-                            <SelectItem key={hours} value={String(hours)}>
-                              {hours} hours
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="mt-4">
+                      <BookingCounterField
+                        label="Hours requested"
+                        value={Number(hoursRequested)}
+                        options={hourlyHourOptions}
+                        singularLabel="hour"
+                        onChange={(value) => setHoursRequested(String(value))}
+                      />
                     </div>
                   )}
 
-                  <p className="mt-4 text-sm text-[#b9b1a4]">
-                    {describeBookingConstraints(bookingConstraints)}
-                  </p>
+                  <div className="mt-4 space-y-2">
+                    <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
+                      Flight number optional
+                    </Label>
+                    <Input
+                      value={flightNumber}
+                      onChange={(event) => setFlightNumber(event.target.value)}
+                      className="h-12 rounded-xl border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] placeholder:text-[#8aa398]"
+                      placeholder="Example: AS342 or DL1287"
+                    />
+                  </div>
                   {scheduleValidationMessage ? (
-                    <p className="mt-2 text-sm font-medium text-rose-300">
+                    <p className="mt-4 text-sm font-medium text-rose-500">
                       {scheduleValidationMessage}
                     </p>
                   ) : null}
 
-                  <div className="mt-4 rounded-[1rem] border border-white/8 bg-black/20 px-4 py-3.5">
+                  <div className="mt-5 border-t border-[#2d6a4f]/10 pt-4">
                     <div className="flex items-center gap-3">
                       <Checkbox
+                        id="return-trip"
                         checked={returnTrip}
-                        onCheckedChange={(checked) => setReturnTrip(Boolean(checked))}
-                        className="size-5 border-white/20 data-checked:bg-[#ebd2ac] data-checked:text-[#111113]"
+                        onCheckedChange={(checked) => handleReturnTripChange(Boolean(checked))}
+                        className="size-5 border-[#2d6a4f]/20 data-checked:bg-[#2d6a4f] data-checked:text-white"
                       />
-                      <Label>Book return trip</Label>
+                      <Label htmlFor="return-trip" className="cursor-pointer text-sm text-[#1a3d34]">
+                        Add return ride
+                      </Label>
                     </div>
                   </div>
 
                   {returnTrip && (
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
                       <BookingDateField
                         label="Return date"
                         value={returnDate}
@@ -1085,67 +2020,56 @@ export function ReserveWizard({
 
             {step === 3 && (
               <div className="grid gap-4">
-                <div className="rounded-[1.7rem] border border-white/8 bg-black/20 p-5">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Passengers</Label>
-                      <Select
-                        value={passengers}
-                        onValueChange={(value) => value && setPassengers(value)}
-                      >
-                        <SelectTrigger className="booking-control h-[3.25rem] w-full px-4 text-base">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="booking-popup">
-                          {Array.from({ length: 12 }, (_, index) => index + 1).map((value) => (
-                            <SelectItem key={value} value={String(value)}>
-                              {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                <div className="rounded-2xl border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5 lg:p-6">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <BookingCounterField
+                      label="Passengers"
+                      value={Number(passengers)}
+                      options={Array.from({ length: 12 }, (_, index) => index + 1)}
+                      singularLabel="passenger"
+                      onChange={(value) => handlePassengersChange(String(value))}
+                    />
 
-                    <div className="space-y-2">
-                      <Label>Bags</Label>
-                      <Select
-                        value={bags}
-                        onValueChange={(value) => value && setBags(value)}
-                      >
-                        <SelectTrigger className="booking-control h-[3.25rem] w-full px-4 text-base">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="booking-popup">
-                          {Array.from({ length: 12 }, (_, index) => index).map((value) => (
-                            <SelectItem key={value} value={String(value)}>
-                              {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <BookingCounterField
+                      label="Checked bags"
+                      value={Number(bags)}
+                      options={Array.from({ length: 13 }, (_, index) => index)}
+                      singularLabel="checked bag"
+                      onChange={(value) => handleBagsChange(String(value))}
+                    />
                   </div>
 
-                  <div className="mt-4 rounded-[1rem] border border-white/8 bg-black/20 px-4 py-4">
-                    <p className="text-sm text-[#f5efe5]">{fitReadout}</p>
-                    <p className="mt-2 text-sm leading-6 text-[#b9b1a4]">
-                      Vehicles are filtered after this step, so dispatch classes that do not fit never appear as choices.
+                  <div className="mt-5 rounded-xl border border-[#2d6a4f]/10 bg-white px-4 py-4">
+                    <p className="text-sm text-[#1a3d34]">{fitReadout}</p>
+                    <p className="mt-2 text-sm leading-6 text-[#5a7a6e]">
+                      Luggage means full-size checked bags. Carry-ons and personal items are usually easier to fit than this count suggests.
                     </p>
                   </div>
+                  {fitVehiclePreview.length > 0 ? (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      {fitVehiclePreview.map((vehicle) => (
+                        <div
+                          key={vehicle.id}
+                          className="rounded-xl border border-[#2d6a4f]/10 bg-white px-4 py-4"
+                        >
+                          <p className="text-sm font-medium text-[#1a3d34]">{vehicle.label}</p>
+                          <p className="mt-1 text-sm text-[#5a7a6e]">{vehicle.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             )}
 
             {step === 4 && (
               <div className="grid gap-4">
-                <div className="rounded-[1.35rem] border border-white/10 bg-black/20 px-4 py-3 text-sm text-[#b9b1a4]">
-                  {vehicleAvailabilityMessage}
-                </div>
                 {vehicleOptionSummaries.map(
                   ({
                     availableUnits,
                     isAvailable,
                     nextAvailableLabel,
+                    quotePreview,
                     reasonLabel,
                     status,
                     vehicle,
@@ -1156,40 +2080,48 @@ export function ReserveWizard({
                       disabled={!isAvailable}
                       onClick={() => isAvailable && setSelectedVehicleId(vehicle.id)}
                       className={cn(
-                        "rounded-[1.5rem] border p-5 text-left transition",
+                        "relative rounded-2xl border p-5 text-left transition",
                         isAvailable
                           ? selectedVehicle?.id === vehicle.id
-                            ? "border-[#d6b67a]/50 bg-[#17181d]"
-                            : "border-white/8 bg-black/20 hover:border-white/16"
-                          : "border-white/6 bg-black/10 opacity-75",
+                            ? "border-[#2d6a4f]/30 bg-[#2d6a4f]/8"
+                            : "border-[#2d6a4f]/10 bg-white hover:border-[#2d6a4f]/20 hover:bg-[#f8f7f4]"
+                          : "border-[#2d6a4f]/5 bg-[#f8f7f4]/50 opacity-70",
                       )}
                     >
+                    {selectedVehicle?.id === vehicle.id && isAvailable && (
+                      <span className="absolute right-4 top-4 inline-flex items-center gap-2 rounded-full border border-[#2d6a4f]/16 bg-white/96 px-3 py-1 text-xs uppercase tracking-[0.15em] text-[#2d6a4f] shadow-[0_1px_2px_rgba(13,92,72,0.06)]">
+                        <span className="grid size-4 place-items-center rounded-full bg-[#2d6a4f] text-white">
+                          <Check className="size-3" />
+                        </span>
+                        Selected
+                      </span>
+                    )}
                     <div className="flex items-start justify-between gap-4">
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p
                           className={cn(
-                            "font-sans text-[0.68rem] uppercase tracking-[0.26em]",
-                            isAvailable ? "text-[#ebd2ac]" : "text-[#9f9a90]",
+                            "font-sans text-[0.65rem] uppercase tracking-[0.2em]",
+                            isAvailable ? "text-[#2d6a4f]" : "text-[#8aa398]",
                           )}
                         >
                           {vehicle.passengersMax} pax · {vehicle.bagsMax} bags
                         </p>
                         <h3
                           className={cn(
-                            "mt-3 text-[1.35rem] font-semibold",
-                            isAvailable ? "text-[#f5efe5]" : "text-[#d8d0c4]",
+                            "mt-2 text-xl font-semibold",
+                            isAvailable ? "text-[#1a3d34]" : "text-[#8aa398]",
                           )}
                         >
-                          {vehicle.name}
+                          {getVehicleDisplayName(vehicle.name)}
                         </h3>
-                        <p className="mt-2 text-sm leading-6 text-[#b9b1a4]">
+                        <p className="mt-1 text-sm leading-6 text-[#5a7a6e]">
                           {vehicle.summary}
                         </p>
-                        <div className="mt-4 space-y-2 text-sm">
+                        <div className="mt-3 space-y-1 text-sm">
                           <p
                             className={cn(
                               "font-medium",
-                              isAvailable ? "text-[#f5efe5]" : "text-[#d8d0c4]",
+                              isAvailable ? "text-[#1a3d34]" : "text-[#8aa398]",
                             )}
                           >
                             {reasonLabel}
@@ -1198,26 +2130,21 @@ export function ReserveWizard({
                               : ""}
                           </p>
                           {!isAvailable && status?.reason ? (
-                            <p className="text-[#b9b1a4]">{status.reason}</p>
+                            <p className="text-[#8aa398]">{status.reason}</p>
                           ) : null}
                           {!isAvailable && nextAvailableLabel ? (
-                            <p className="text-[#ebd2ac]">
+                            <p className="text-[#2d6a4f]/80">
                               Next opening: {nextAvailableLabel}
                             </p>
                           ) : null}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-sans text-3xl font-semibold text-[#f5efe5]">
-                          {formatCurrency(Number(vehicle.basePrice))}
+                      <div className="shrink-0 text-right">
+                        <p className="font-sans text-2xl font-semibold text-[#1a3d34]">
+                          {formatCurrency(quotePreview.baseFare)}
                         </p>
-                        {selectedVehicle?.id === vehicle.id && isAvailable && (
-                          <span className="mt-3 inline-flex rounded-full border border-[#d6b67a]/30 bg-[#ebd2ac]/10 px-3 py-1 text-xs uppercase tracking-[0.22em] text-[#ebd2ac]">
-                            Selected
-                          </span>
-                        )}
                         {!isAvailable && (
-                          <span className="mt-3 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.22em] text-white/60">
+                          <span className="mt-2 inline-flex rounded-full border border-[#2d6a4f]/10 bg-[#f8f7f4] px-3 py-1 text-xs uppercase tracking-[0.15em] text-[#8aa398]">
                             Unavailable
                           </span>
                         )}
@@ -1230,104 +2157,209 @@ export function ReserveWizard({
             )}
 
             {step === 5 && (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-5 lg:grid-cols-2">
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label className="font-sans text-[0.72rem] uppercase tracking-[0.26em] text-[#ebd2ac]">
-                      Full name
+                    <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
+                      Full name required
                     </Label>
                     <Input
+                      id="checkout-name-compact"
+                      name="name"
+                      autoComplete="name"
                       value={customerName}
-                      onChange={(event) => setCustomerName(event.target.value)}
-                      className="h-[3.25rem] rounded-[1rem] border-white/10 bg-[#08090d] px-4 text-base text-[#f5efe5]"
+                      onChange={(event) => {
+                        setCustomerName(event.target.value);
+                        clearCheckoutError("customerName");
+                      }}
+                      onBlur={() => validateCheckoutFields({ showToast: false })}
+                      className={cn(
+                        "h-12 rounded-xl bg-white px-4 text-base text-[#1a3d34] placeholder:text-[#8aa398]",
+                        checkoutErrors.customerName
+                          ? "border-rose-300 focus-visible:ring-rose-200"
+                          : "border-[#2d6a4f]/15",
+                      )}
+                      placeholder="Enter your full name"
                     />
+                    {checkoutErrors.customerName ? (
+                      <p className="text-sm text-rose-600">{checkoutErrors.customerName}</p>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
-                    <Label className="font-sans text-[0.72rem] uppercase tracking-[0.26em] text-[#ebd2ac]">
-                      Email
+                    <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
+                      Email required
                     </Label>
                     <Input
+                      id="checkout-email-compact"
+                      name="email"
                       type="email"
+                      autoComplete="email"
                       value={customerEmail}
-                      onChange={(event) => setCustomerEmail(event.target.value)}
-                      className="h-[3.25rem] rounded-[1rem] border-white/10 bg-[#08090d] px-4 text-base text-[#f5efe5]"
+                      onChange={(event) => {
+                        setCustomerEmail(event.target.value);
+                        clearCheckoutError("customerEmail");
+                      }}
+                      onBlur={() => validateCheckoutFields({ showToast: false })}
+                      className={cn(
+                        "h-12 rounded-xl bg-white px-4 text-base text-[#1a3d34] placeholder:text-[#8aa398]",
+                        checkoutErrors.customerEmail
+                          ? "border-rose-300 focus-visible:ring-rose-200"
+                          : "border-[#2d6a4f]/15",
+                      )}
+                      placeholder="Enter your email"
                     />
+                    {checkoutErrors.customerEmail ? (
+                      <p className="text-sm text-rose-600">{checkoutErrors.customerEmail}</p>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
-                    <Label className="font-sans text-[0.72rem] uppercase tracking-[0.26em] text-[#ebd2ac]">
-                      Mobile
+                    <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
+                      Mobile required
                     </Label>
                     <Input
+                      id="checkout-phone-compact"
+                      name="tel"
+                      autoComplete="tel"
+                      inputMode="tel"
                       value={customerPhone}
-                      onChange={(event) => setCustomerPhone(event.target.value)}
-                      className="h-[3.25rem] rounded-[1rem] border-white/10 bg-[#08090d] px-4 text-base text-[#f5efe5]"
+                      onChange={(event) => {
+                        setCustomerPhone(event.target.value);
+                        clearCheckoutError("customerPhone");
+                      }}
+                      onBlur={() => validateCheckoutFields({ showToast: false })}
+                      className={cn(
+                        "h-12 rounded-xl bg-white px-4 text-base text-[#1a3d34] placeholder:text-[#8aa398]",
+                        checkoutErrors.customerPhone
+                          ? "border-rose-300 focus-visible:ring-rose-200"
+                          : "border-[#2d6a4f]/15",
+                      )}
+                      placeholder="Enter your phone number"
                     />
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div className="grid gap-3">
-                    {extrasCatalog.map((extra) => {
-                      const checked = selectedExtras.includes(extra.key);
-
-                      return (
-                        <button
-                          key={extra.key}
-                          type="button"
-                          onClick={() => toggleExtra(extra.key, !checked)}
-                          className={cn(
-                            "rounded-[1.2rem] border p-4 text-left transition",
-                            checked
-                              ? "border-[#d6b67a]/50 bg-[#17181d]"
-                              : "border-white/8 bg-black/20 hover:border-white/16",
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div>
-                              <p className="font-sans text-[0.66rem] uppercase tracking-[0.24em] text-[#ebd2ac]">
-                                {formatCurrency(extra.price)}
-                              </p>
-                              <h3 className="mt-2 text-lg font-semibold text-[#f5efe5]">
-                                {extra.label}
-                              </h3>
-                              <p className="mt-1 text-sm leading-6 text-[#b9b1a4]">
-                                {extra.detail}
-                              </p>
-                            </div>
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(value) => toggleExtra(extra.key, Boolean(value))}
-                              className="pointer-events-none mt-1 size-5 border-white/20 data-checked:bg-[#ebd2ac] data-checked:text-[#111113]"
-                            />
-                          </div>
-                        </button>
-                      );
-                    })}
+                    {checkoutErrors.customerPhone ? (
+                      <p className="text-sm text-rose-600">{checkoutErrors.customerPhone}</p>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
-                    <Label className="font-sans text-[0.72rem] uppercase tracking-[0.26em] text-[#ebd2ac]">
-                      Trip notes
+                    <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
+                      Notes optional
                     </Label>
                     <Textarea
                       value={notes}
                       onChange={(event) => setNotes(event.target.value)}
-                      className="min-h-40 rounded-[1.2rem] border-white/10 bg-[#08090d] px-4 py-3 text-base text-[#f5efe5]"
-                      placeholder="Flight number, client name, venue timing, or special entry notes"
+                      className="min-h-28 rounded-xl border-[#2d6a4f]/15 bg-white px-4 py-3 text-base text-[#1a3d34] placeholder:text-[#8aa398]"
+                      placeholder="Client name, venue timing, gate code, or special entry notes"
                     />
                   </div>
-                  <div className="rounded-[1.2rem] border border-white/8 bg-black/20 p-4 text-sm text-[#b9b1a4]">
+                  <div className="rounded-xl border border-[#2d6a4f]/10 bg-[#f8f7f4] p-4">
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="customer-sms-opt-in-compact"
+                        checked={customerSmsOptIn}
+                        onCheckedChange={(checked) => {
+                          setCustomerSmsOptIn(checked === true);
+                        }}
+                        className="mt-1"
+                      />
+                      <div className="space-y-1">
+                        <Label
+                          htmlFor="customer-sms-opt-in-compact"
+                          className="cursor-pointer text-sm font-medium text-[#1a3d34]"
+                        >
+                          Send text confirmations and pickup reminders
+                        </Label>
+                        <p className="text-sm leading-6 text-[#5a7a6e]">
+                          By checking this box, you agree to receive reservation updates from
+                          seatac.co at the mobile number above. Message frequency varies. Reply
+                          STOP to opt out, HELP for help. Msg & data rates may apply. See our{" "}
+                          <Link href="/privacy" className="text-[#0d5c48] underline underline-offset-4">
+                            privacy policy
+                          </Link>{" "}
+                          and{" "}
+                          <Link href="/sms-policy" className="text-[#0d5c48] underline underline-offset-4">
+                            SMS policy
+                          </Link>
+                          .
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
+                    Add-ons
+                  </Label>
+                  <div className="grid gap-2">
+                    {extrasCatalog.map((extra) => {
+                      return (
+                        <RideAdditionCard
+                          key={extra.key}
+                          extra={extra}
+                          quantity={getExtraQuantity(extra.key)}
+                          onQuantityChange={(nextQuantity) =>
+                            setExtraQuantity(extra.key, nextQuantity)
+                          }
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="rounded-xl border border-[#2d6a4f]/10 bg-[#f8f7f4] p-4">
                     <div className="flex items-center justify-between">
-                      <span>Estimated total</span>
-                      <strong className="font-sans text-3xl font-semibold text-[#f5efe5]">
-                        {formatCurrency(pricing?.total ?? 0)}
+                      <span className="text-sm text-[#5a7a6e]">
+                        {selectedVehicle ? "Estimated total" : "Choose a vehicle to price"}
+                      </span>
+                      <strong className="font-sans text-2xl font-semibold text-[#1a3d34]">
+                        {selectedVehicle ? formatCurrency(pricing?.total ?? 0) : "Not priced yet"}
                       </strong>
                     </div>
+                    {pricing ? (
+                      <div className="mt-3 grid gap-2 border-t border-[#2d6a4f]/8 pt-3 text-sm text-[#5a7a6e]">
+                        <div className="flex items-center justify-between">
+                          <span>Vehicle base</span>
+                          <span>{formatCurrency(pricing.baseFare)}</span>
+                        </div>
+                        {(pricing.mileageCharge ?? 0) > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span>
+                              Mileage ({pricing.routeDistanceMiles.toFixed(1)} mi ×{" "}
+                              {formatCurrency(pricing.mileageFee ?? 0)})
+                            </span>
+                            <span>{formatCurrency(pricing.mileageCharge ?? 0)}</span>
+                          </div>
+                        )}
+                        {(pricing.passengerTotal ?? 0) > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span>
+                              Passengers ({passengers} ×{" "}
+                              {formatCurrency(pricing.passengerFee ?? 0)})
+                            </span>
+                            <span>{formatCurrency(pricing.passengerTotal ?? 0)}</span>
+                          </div>
+                        )}
+                        {(pricing.bagTotal ?? 0) > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span>
+                              Bags ({bags} × {formatCurrency(pricing.bagFee ?? 0)})
+                            </span>
+                            <span>{formatCurrency(pricing.bagTotal ?? 0)}</span>
+                          </div>
+                        )}
+                        {extraSelections.map(({ extra, quantity, total }) => (
+                          <div key={extra.key} className="flex items-center justify-between">
+                            <span>
+                              {extra.label} ({formatExtraQuantityLabel(extra, quantity)})
+                            </span>
+                            <span>{formatCurrency(total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/8 pt-5">
-              <div className="font-sans text-[0.72rem] uppercase tracking-[0.26em] text-[#b9b1a4]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#2d6a4f]/10 pt-5">
+              <div className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
                 {activeStep.eyebrow}
               </div>
               <div className="flex gap-3">
@@ -1336,7 +2368,7 @@ export function ReserveWizard({
                     type="button"
                     variant="outline"
                     onClick={() => setStep((step - 1) as Step)}
-                    className="h-12 rounded-full border-white/12 bg-white/[0.03] px-5 text-[#f5efe5] shadow-none hover:bg-white/[0.06]"
+                    className="h-11 rounded-full border-[#2d6a4f]/15 bg-[#f8f7f4] px-5 text-[#5a7a6e] shadow-none hover:bg-[#2d6a4f]/5 hover:text-[#1a3d34]"
                   >
                     Back
                   </Button>
@@ -1350,25 +2382,36 @@ export function ReserveWizard({
                         setStep((step + 1) as Step);
                       }
                     }}
-                    className="booking-primary-button h-12 rounded-full px-6 text-[#111113]"
+                    className="h-11 rounded-full bg-[#2d6a4f] px-6 text-sm font-semibold text-white hover:bg-[#2d6a4f]/90"
                   >
                     {activeStep.cta}
                   </Button>
                 ) : (
-                  <Button
-                    type="button"
-                    onClick={submitBooking}
-                    disabled={submitting}
-                    className="booking-primary-button h-12 rounded-full px-6 text-[#111113]"
-                  >
-                    {submitting ? "Redirecting..." : "Pay now"}
-                  </Button>
+                  <div className="space-y-2">
+                    <Button
+                      type="button"
+                      onClick={submitBooking}
+                      disabled={submitting || !checkoutReady}
+                      className="h-11 rounded-full bg-[#2d6a4f] px-6 text-sm font-semibold text-white hover:bg-[#2d6a4f]/90"
+                    >
+                      {submitting
+                        ? "Redirecting..."
+                        : pricing
+                          ? `Pay ${formatCurrency(pricing.total)} now`
+                          : "Pay now"}
+                    </Button>
+                    {!checkoutReady ? (
+                      <p className="text-right text-xs text-[#8aa398]">
+                        Complete the required rider details to continue.
+                      </p>
+                    ) : null}
+                  </div>
                 )}
               </div>
             </div>
           </div>
 
-          <aside className="space-y-4">
+          <aside className="hidden lg:block">
             <RouteMapCard
               compact
               pickupAddress={pickupAddress}
@@ -1385,93 +2428,41 @@ export function ReserveWizard({
 
   return (
     <div
-      data-booking-theme="pierlimo"
+      data-booking-theme="seatac"
       className={cn(
-        "theme-pierlimo grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_24rem]",
+        "theme-seatac grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_21rem]",
         compact && "gap-5",
       )}
     >
-      <div className="rounded-[2rem] border border-white/8 bg-white/[0.03] p-6 shadow-[0_30px_90px_rgba(0,0,0,0.45)] lg:p-8">
-        <div className="flex flex-col gap-5 border-b border-white/8 pb-7">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <div>
-              <p className="font-sans text-[0.76rem] uppercase tracking-[0.35em] text-primary/80">
-                Live reservation engine
-              </p>
-              <h2 className="mt-3 max-w-3xl font-display text-5xl leading-[0.92] text-white md:text-6xl">
-                {reservationHeadline}
-              </h2>
-              <p className="mt-4 max-w-2xl text-lg leading-8 text-white/66">
-                The reservation panel is structured to feel closer to a real
-                chauffeur intake: route presets, service mode context, live map
-                feedback, and a running quote that stays visible as dispatch details
-                tighten.
-              </p>
-              <div className="mt-5 flex flex-wrap gap-3">
-                {[
-                  `${serviceModeLabel} service`,
-                  routeConfidenceLabel,
-                  returnTrip ? "Return leg active" : "One-way booking",
-                ].map((item) => (
-                  <div
-                    key={item}
-                    className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/62"
-                  >
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {serviceModeConfig.map((mode) => (
-                <button
-                  key={mode.key}
-                  type="button"
-                  onClick={() => handleModeChange(mode.key)}
-                  className={cn(
-                    "rounded-[1.5rem] border px-5 py-3 text-left transition",
-                    serviceMode === mode.key
-                      ? "border-primary/60 bg-primary/16 text-white shadow-[0_18px_50px_rgba(214,182,122,0.12)]"
-                      : "border-white/10 bg-white/[0.03] text-white/72 hover:border-white/20 hover:bg-white/[0.06]",
-                  )}
-                >
-                  <div className="font-sans text-[0.7rem] uppercase tracking-[0.26em]">
-                    {mode.title}
-                  </div>
-                  <div className="mt-1 text-sm leading-6">{mode.detail}</div>
-                </button>
-              ))}
-            </div>
-          </div>
+      <div className="rounded-[2rem] border border-[#2d6a4f]/10 bg-white p-6 shadow-[0_4px_30px_rgba(45,106,79,0.1)] lg:p-8">
+        <div className="flex flex-col gap-5 border-b border-[#2d6a4f]/10 pb-6">
+          <h1 className="max-w-2xl font-display text-4xl leading-[0.96] text-[#1a3d34] md:text-5xl">
+            Reserve your ride.
+          </h1>
           <div className="grid gap-3 md:grid-cols-5">
             {stepMeta.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => {
-                  if (item.id <= step || validateStep(step)) {
-                    setStep(item.id);
-                  }
-                }}
+                onClick={() => jumpToStep(item.id)}
                 className="group text-left"
               >
-                <div className="rounded-[1.6rem] border border-white/8 bg-black/20 px-4 py-4 transition group-hover:border-white/14">
+                <div className="rounded-[1.3rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] px-4 py-3 transition group-hover:border-[#2d6a4f]/20">
                   <div className="flex items-center gap-4">
                     <div
                       className={cn(
-                        "grid size-12 place-items-center rounded-full border text-base font-semibold transition",
+                        "grid size-10 place-items-center rounded-full border text-sm font-semibold transition",
                         step === item.id
-                          ? "border-primary bg-primary text-[#111]"
-                          : "border-white/12 bg-white/[0.03] text-white/72 group-hover:border-white/24",
+                          ? "border-[#2d6a4f] bg-[#2d6a4f] text-white"
+                          : item.id < step
+                            ? "border-[#2d6a4f]/40 bg-[#2d6a4f]/10 text-[#1a3d34]"
+                            : "border-[#2d6a4f]/15 bg-white text-[#5a7a6e] group-hover:border-[#2d6a4f]/30",
                       )}
                     >
-                      {item.id}
+                      {item.id < step ? <Check className="size-4" /> : item.id}
                     </div>
                     <div>
-                      <div className="font-sans text-[0.72rem] uppercase tracking-[0.24em] text-white/55">
-                        {item.eyebrow}
-                      </div>
-                      <div className="mt-1 text-sm font-medium text-white/88">
+                      <div className="text-sm font-medium text-[#1a3d34]">
                         {item.label}
                       </div>
                     </div>
@@ -1484,424 +2475,201 @@ export function ReserveWizard({
 
         <div className="grid gap-5 pt-7">
           {step === 1 && (
-            <div className="grid gap-5">
-              <div className="rounded-[1.8rem] border border-white/8 bg-black/20 p-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-primary/78">
-                      Dispatch presets
-                    </p>
-                    <h3 className="mt-3 font-display text-4xl leading-[0.95] text-white">
-                      Start from a real route, or switch to a custom trip.
-                    </h3>
-                    <p className="mt-3 max-w-2xl text-sm leading-7 text-white/62">
-                      Flat-rate airport and corporate corridors behave like preset
-                      dispatch lanes. Distance trips stay flexible, but still quote
-                      off the live map once pickup and drop-off are entered.
-                    </p>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.03] px-4 py-3">
-                      <p className="text-xs uppercase tracking-[0.24em] text-white/46">
-                        Estimated total
-                      </p>
-                      <p className="mt-2 font-display text-4xl text-white">
-                        {formatCurrency(pricing?.total ?? 0)}
-                      </p>
-                    </div>
-                    <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.03] px-4 py-3">
-                      <p className="text-xs uppercase tracking-[0.24em] text-white/46">
-                        Route confidence
-                      </p>
-                      <p className="mt-2 text-base text-white/82">
-                        {routeConfidenceLabel}
-                      </p>
-                    </div>
-                    <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.03] px-4 py-3">
-                      <p className="text-xs uppercase tracking-[0.24em] text-white/46">
-                        Dispatch tempo
-                      </p>
-                      <p className="mt-2 text-base text-white/82">
-                        {selectedVehicle
-                          ? `${selectedVehicle.name} ready`
-                          : "Vehicle suggested next"}
-                      </p>
-                    </div>
-                  </div>
+            <div className="rounded-[1.8rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5 lg:p-6">
+              <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+                <div className="space-y-2">
+                  <Label className="text-[#5a7a6e]">Pricing</Label>
+                  <BadgeSwitcher
+                    value={selectedPricingType}
+                    onValueChange={(value) => handlePricingTypeChange(value as PricingType)}
+                    options={enabledPricingOptions}
+                    aria-label="Pricing type"
+                    className="w-full bg-white"
+                    itemClassName="flex-1"
+                  />
                 </div>
-                <div className="mt-5 flex flex-wrap gap-3">
-                  {filteredRoutes.slice(0, 5).map((route) => (
-                    <button
-                      key={route.id}
-                      type="button"
-                      onClick={() => applyRoute(route)}
-                      className={cn(
-                        "rounded-full border px-4 py-3 text-left transition",
-                        selectedRoute?.id === route.id && tripType === "flat"
-                          ? "border-primary/55 bg-primary/[0.1] text-white"
-                          : "border-white/10 bg-white/[0.03] text-white/72 hover:border-white/18 hover:bg-white/[0.06]",
-                      )}
+              </div>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                {selectedPricingType === "flat" ? (
+                  <div className="space-y-2">
+                    <Label className="text-[#5a7a6e]">Route</Label>
+                    <Select
+                      value={selectedRoute?.id ?? ""}
+                      onValueChange={(value) => {
+                        if (!value) return;
+                        applyRoute(filteredRoutes.find((route) => route.id === value) ?? null);
+                      }}
                     >
-                      <div className="font-sans text-[0.66rem] uppercase tracking-[0.24em] text-primary/80">
-                        {route.mode}
-                      </div>
-                      <div className="mt-1 text-sm font-medium">{route.name}</div>
-                    </button>
-                  ))}
+                      <SelectTrigger className="booking-control h-14 w-full rounded-2xl px-4 text-base border-[#2d6a4f]/15 bg-white text-[#1a3d34]">
+                        <SelectValue placeholder="Choose a route">
+                          {selectedRoute?.name ?? ""}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="booking-popup rounded-2xl border-[#2d6a4f]/15 bg-white">
+                        {filteredRoutes.map((route) => (
+                          <SelectItem key={route.id} value={route.id} className="text-[#1a3d34]">
+                            {route.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+              </div>
+              <p className="mt-4 text-sm leading-6 text-[#5a7a6e]">{priceTypeSummary}</p>
+
+              <div className="mt-6 grid gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[#5a7a6e]">Pick up address</Label>
+                  <GoogleAddressInput
+                    id="pickup-address"
+                    value={pickupAddress}
+                    onChange={handlePickupAddressChange}
+                    onResolved={setPickupPlace}
+                    placeholder="Enter pick up address"
+                    suggestions={pickupSuggestions}
+                    className="booking-control h-14 rounded-2xl px-4 text-base border-[#2d6a4f]/15 bg-white text-[#1a3d34]"
+                  />
                 </div>
+
+                {(tripType === "flat" || tripType === "distance") && (
+                  <>
+                    <AddressSwapButton onClick={handleSwapAddresses} />
+                    <div className="space-y-2">
+                      <Label className="text-[#5a7a6e]">Drop off address</Label>
+                      <GoogleAddressInput
+                        id="dropoff-address"
+                        value={dropoffAddress}
+                        onChange={handleDropoffAddressChange}
+                        onResolved={setDropoffPlace}
+                        placeholder="Enter drop off address"
+                        suggestions={dropoffSuggestions}
+                        className="booking-control h-14 rounded-2xl px-4 text-base border-[#2d6a4f]/15 bg-white text-[#1a3d34]"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1.18fr)_minmax(0,0.82fr)]">
-                <div className="space-y-5">
-                  <div className="rounded-[1.8rem] border border-white/8 bg-black/20 p-5">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-primary/78">
-                          Service shape
-                        </p>
-                        <p className="mt-2 text-sm leading-7 text-white/62">
-                          Pick the trip logic first, then either lock a preset lane or type the route live.
-                        </p>
-                      </div>
-                      <div className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/62">
-                        {tripTypeLabel}
-                      </div>
-                    </div>
-                    <div className="mt-5 grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>Type</Label>
-                        <Select
-                          value={tripType}
-                          onValueChange={(value) => {
-                            if (value) {
-                              handleTripTypeChange(value as TripType);
-                            }
-                          }}
-                        >
-                          <SelectTrigger className="booking-control h-14 w-full rounded-2xl px-4 text-base">
-                            <SelectValue>{tripTypeLabel}</SelectValue>
-                          </SelectTrigger>
-                          <SelectContent className="booking-popup rounded-2xl">
-                            {tripTypeOptions[serviceMode].map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {tripType === "flat" ? (
-                        <div className="space-y-2">
-                          <Label>Flat-rate route</Label>
-                          <Select
-                            value={selectedRoute?.id ?? ""}
-                            onValueChange={(value) => {
-                              if (!value) {
-                                return;
-                              }
-
-                              applyRoute(filteredRoutes.find((route) => route.id === value) ?? null);
-                            }}
-                          >
-                            <SelectTrigger className="booking-control h-14 w-full rounded-2xl px-4 text-base">
-                              <SelectValue placeholder="Choose a route">
-                                {selectedRoute?.name ?? ""}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent className="booking-popup rounded-2xl">
-                              {filteredRoutes.map((route) => (
-                                <SelectItem key={route.id} value={route.id}>
-                                  {route.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <Label>Pickup detail</Label>
-                          <Input
-                            value={pickupDetail}
-                            onChange={(event) => setPickupDetail(event.target.value)}
-                            className="booking-control h-14 rounded-2xl px-4 text-base"
-                            placeholder="Flight number, hotel, or venue entrance"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[1.8rem] border border-white/8 bg-black/20 p-5">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-primary/78">
-                          Route entry
-                        </p>
-                        <p className="mt-2 text-sm leading-7 text-white/62">
-                          Enter the exact addresses the chauffeur will see on dispatch.
-                        </p>
-                      </div>
-                      {(tripType === "flat" || tripType === "distance") && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={handleSwapAddresses}
-                          className="h-11 rounded-full border-white/12 bg-white/[0.03] px-4 text-white hover:bg-white/[0.06]"
-                        >
-                          <ArrowRightLeft className="mr-2 size-4" />
-                          Swap
-                        </Button>
-                      )}
-                    </div>
-
-                    <div className="mt-5 grid gap-4">
-                      <div className="space-y-2">
-                        <Label>Pick up address</Label>
-                        <GoogleAddressInput
-                          id="pickup-address"
-                          value={pickupAddress}
-                          onChange={setPickupAddress}
-                          onResolved={setPickupPlace}
-                          placeholder="Enter pick up address"
-                          className="booking-control h-14 rounded-2xl px-4 text-base"
-                        />
-                      </div>
-
-                      {(tripType === "flat" || tripType === "distance") && (
-                        <div className="space-y-2">
-                          <Label>Drop off address</Label>
-                          <GoogleAddressInput
-                            id="dropoff-address"
-                            value={dropoffAddress}
-                            onChange={setDropoffAddress}
-                            onResolved={setDropoffPlace}
-                            placeholder="Enter drop off address"
-                            className="booking-control h-14 rounded-2xl px-4 text-base"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-5">
-                  <div className="rounded-[1.8rem] border border-white/8 bg-black/20 p-5">
-                    <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-primary/78">
-                      Funnel order
-                    </p>
-                    <p className="mt-2 text-sm leading-7 text-white/62">
-                      This intake now moves like dispatch: route first, then schedule, then party fit, and only then does the live fleet open up.
-                    </p>
-                    <div className="mt-4 grid gap-4">
-                      <div className="flex items-start gap-3 rounded-[1.25rem] border border-white/8 bg-black/20 px-4 py-4">
-                        <MapPinned className="mt-1 size-4 text-primary" />
-                        <div>
-                          <p className="text-sm font-medium text-white">Route comes first</p>
-                          <p className="mt-1 text-sm leading-6 text-white/62">
-                            Lock the addresses and service shape before touching schedule or vehicle.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3 rounded-[1.25rem] border border-white/8 bg-black/20 px-4 py-4">
-                        <Clock3 className="mt-1 size-4 text-primary" />
-                        <div>
-                          <p className="text-sm font-medium text-white">Time is validated next</p>
-                          <p className="mt-1 text-sm leading-6 text-white/62">
-                            Operating hours, lead time, and booking horizon are enforced before party fit and inventory.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-[1.8rem] border border-white/8 bg-gradient-to-br from-white/[0.05] to-primary/[0.06] p-5">
-                    <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-primary/78">
-                      Route memo
-                    </p>
-                    <div className="mt-4 grid gap-4">
-                      <div className="flex items-start gap-3 rounded-[1.25rem] border border-white/8 bg-black/20 px-4 py-4">
-                        <BriefcaseBusiness className="mt-1 size-4 text-primary" />
-                        <div>
-                          <p className="text-sm font-medium text-white">Use case</p>
-                          <p className="mt-1 text-sm leading-6 text-white/62">
-                            {serviceMode === "airport"
-                              ? "Best for Sea-Tac arrivals, hotel departures, and direct terminal runs."
-                              : serviceMode === "corporate"
-                                ? "Tuned for Bellevue meetings, downtown pickups, and executive transfers."
-                                : serviceMode === "hourly"
-                                  ? "Structured for blocks of chauffeured time with waiting built into the quote."
-                                  : "Best for venue windows, evening movement, and wedding transport."}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3 rounded-[1.25rem] border border-white/8 bg-black/20 px-4 py-4">
-                        <ArrowRightLeft className="mt-1 size-4 text-primary" />
-                        <div>
-                          <p className="text-sm font-medium text-white">Current route</p>
-                          <p className="mt-1 text-sm leading-6 text-white/62">
-                            {bookingRouteName}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div
+                className={cn(
+                  "mt-5 rounded-xl border px-4 py-3 text-sm",
+                  stepOneReady
+                    ? "border-[#2d6a4f]/12 bg-[#eef7f1] text-[#1f5d44]"
+                    : "border-[#d4b88a]/30 bg-[#fff6ea] text-[#8a6736]",
+                )}
+              >
+                {stepOneReady
+                  ? "Route looks good."
+                  : `Still needed: ${stepOneMissingItems.join(", ")}.`}
               </div>
+              {stepOneAttempted && routeSelectionError ? (
+                <p className="mt-3 text-sm font-medium text-rose-500">{routeSelectionError}</p>
+              ) : null}
             </div>
           )}
 
           {step === 2 && (
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)]">
-              <div className="rounded-[1.8rem] border border-white/8 bg-black/20 p-5">
-                <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-primary/78">
-                  Schedule window
+            <div className="rounded-[1.8rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5 lg:p-6">
+              <div className="max-w-2xl">
+                <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-[#2d6a4f]/80">
+                  Schedule
                 </p>
-                <p className="mt-2 text-sm leading-7 text-white/62">
-                  Choose a valid pickup window before the party fit and live inventory are unlocked.
-                </p>
+                <h3 className="mt-3 font-display text-3xl leading-[0.96] text-[#1a3d34] md:text-4xl">
+                  Choose the pickup time.
+                </h3>
+              </div>
 
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Pickup date</Label>
-                    <BookingDateField
-                      label="Pickup date"
-                      value={pickupDate}
-                      onChange={setPickupDate}
-                      placeholder="Select Date"
-                      disabled={pickupDateDisabled}
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <BookingDateField
+                  label="Pickup date"
+                  value={pickupDate}
+                  onChange={setPickupDate}
+                  placeholder="Select Date"
+                  disabled={pickupDateDisabled}
+                />
+                <BookingTimeField
+                  label="Pickup time"
+                  options={pickupTimeOptions}
+                  value={pickupTime}
+                  onChange={setPickupTime}
+                />
+
+                {(tripType === "hourly" || tripType === "event") && (
+                  <div className="md:col-span-2">
+                    <BookingCounterField
+                      label="Hours requested"
+                      value={Number(hoursRequested)}
+                      options={hourlyHourOptions}
+                      singularLabel="hour"
+                      onChange={(value) => setHoursRequested(String(value))}
                     />
                   </div>
-                  <BookingTimeField
-                    label="Pickup time"
-                    options={pickupTimeOptions}
-                    value={pickupTime}
-                    onChange={setPickupTime}
+                )}
+              </div>
+
+              <div className="mt-4 space-y-2">
+                <Label className="text-[#5a7a6e]">Flight number optional</Label>
+                <Input
+                  value={flightNumber}
+                  onChange={(event) => setFlightNumber(event.target.value)}
+                  className="h-14 rounded-2xl border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34]"
+                  placeholder="Example: AS342 or DL1287"
+                />
+              </div>
+
+              {scheduleValidationMessage ? (
+                <p className="mt-4 text-sm font-medium text-rose-500">
+                  {scheduleValidationMessage}
+                </p>
+              ) : null}
+
+              <div className="mt-5 border-t border-[#2d6a4f]/10 pt-4">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    id="return-trip-desktop"
+                    checked={returnTrip}
+                    onCheckedChange={(checked) => handleReturnTripChange(Boolean(checked))}
+                    className="size-5 border-[#2d6a4f]/20 data-checked:bg-[#2d6a4f] data-checked:text-white"
                   />
-
-                  {(tripType === "hourly" || tripType === "event") && (
-                    <div className="space-y-2 md:col-span-2">
-                      <Label>Hours requested</Label>
-                      <Select
-                        value={hoursRequested}
-                        onValueChange={(value) => {
-                          if (value) {
-                            setHoursRequested(value);
-                          }
-                        }}
-                      >
-                        <SelectTrigger className="booking-control h-14 w-full rounded-2xl px-4 text-base">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="booking-popup rounded-2xl">
-                          {[2, 3, 4, 5, 6, 8].map((hours) => (
-                            <SelectItem key={hours} value={String(hours)}>
-                              {hours} hours
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
-                  <div className="flex items-center gap-3">
-                    <Checkbox
-                      checked={returnTrip}
-                      onCheckedChange={(checked) => setReturnTrip(Boolean(checked))}
-                      className="size-5 border-white/20 data-checked:bg-primary data-checked:text-[#111]"
-                    />
-                    <div>
-                      <p className="font-sans text-[0.76rem] uppercase tracking-[0.26em] text-primary/80">
-                        Return trip
-                      </p>
-                      <p className="text-sm text-white/68">
-                        Add the return leg now and dispatch will mirror the timing.
-                      </p>
-                    </div>
-                  </div>
-
-                  {returnTrip && (
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>Return date</Label>
-                        <BookingDateField
-                          label="Return date"
-                          value={returnDate}
-                          onChange={setReturnDate}
-                          placeholder="Select Date"
-                          disabled={returnDateDisabled}
-                        />
-                      </div>
-                      <BookingTimeField
-                        label="Return time"
-                        options={returnTimeOptions}
-                        value={returnTime}
-                        onChange={setReturnTime}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-5">
-                <div className="rounded-[1.8rem] border border-white/8 bg-black/20 p-5">
-                  <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-primary/78">
-                    Booking rules
-                  </p>
-                  <div className="mt-4 rounded-[1.25rem] border border-white/8 bg-black/20 px-4 py-4">
-                    <p className="text-sm leading-7 text-white/62">
-                      {describeBookingConstraints(bookingConstraints)}
+                  <Label htmlFor="return-trip-desktop" className="cursor-pointer">
+                    <p className="font-sans text-[0.76rem] uppercase tracking-[0.26em] text-[#2d6a4f]/80">
+                      Return trip
                     </p>
-                    {scheduleValidationMessage ? (
-                      <p className="mt-2 text-sm font-medium text-rose-300">
-                        {scheduleValidationMessage}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="rounded-[1.8rem] border border-white/8 bg-gradient-to-br from-white/[0.05] to-primary/[0.06] p-5">
-                  <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-primary/78">
-                    Schedule memo
-                  </p>
-                  <div className="mt-4 grid gap-4">
-                    <div className="flex items-start gap-3 rounded-[1.25rem] border border-white/8 bg-black/20 px-4 py-4">
-                      <CalendarDays className="mt-1 size-4 text-primary" />
-                      <div>
-                        <p className="text-sm font-medium text-white">Pickup window</p>
-                        <p className="mt-1 text-sm leading-6 text-white/62">
-                          {pickupDate ? `${pickupDate} at ${pickupTime}` : "Choose a pickup window"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3 rounded-[1.25rem] border border-white/8 bg-black/20 px-4 py-4">
-                      <Clock3 className="mt-1 size-4 text-primary" />
-                      <div>
-                        <p className="text-sm font-medium text-white">Route confidence</p>
-                        <p className="mt-1 text-sm leading-6 text-white/62">
-                          {routeConfidenceLabel}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  </Label>
                 </div>
               </div>
+
+                {returnTrip && (
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <BookingDateField
+                      label="Return date"
+                      value={returnDate}
+                      onChange={setReturnDate}
+                      placeholder="Select Date"
+                      disabled={returnDateDisabled}
+                    />
+                    <BookingTimeField
+                      label="Return time"
+                      options={returnTimeOptions}
+                      value={returnTime}
+                      onChange={setReturnTime}
+                    />
+                  </div>
+                )}
             </div>
           )}
 
           {step === 4 && (
             <div className="grid gap-4">
-              <div className="rounded-[1.35rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/64">
-                {vehicleAvailabilityMessage}
-              </div>
-              <div className="grid gap-4 xl:grid-cols-3">
+              <div className="grid items-start gap-4 pt-2 xl:grid-cols-3">
               {vehicleOptionSummaries.map(
                 ({
                   availableUnits,
                   isAvailable,
                   nextAvailableLabel,
+                  quotePreview,
                   reasonLabel,
                   status,
                   vehicle,
@@ -1912,79 +2680,84 @@ export function ReserveWizard({
                   disabled={!isAvailable}
                   onClick={() => isAvailable && setSelectedVehicleId(vehicle.id)}
                   className={cn(
-                    "overflow-hidden rounded-[1.7rem] border text-left transition",
+                    "relative self-start overflow-hidden rounded-[1.7rem] border text-left transition",
                     isAvailable
                       ? selectedVehicle?.id === vehicle.id
-                        ? "border-primary/55 bg-primary/[0.08]"
-                        : "border-white/10 bg-white/[0.03] hover:border-white/18 hover:bg-white/[0.05]"
-                      : "border-white/10 bg-white/[0.02] opacity-80",
+                        ? "-mt-4 pb-4 border-[#2d6a4f]/40 bg-[#2d6a4f]/8"
+                        : "mt-4 border-[#2d6a4f]/10 bg-white hover:border-[#2d6a4f]/20 hover:bg-[#f8f7f4]"
+                      : "border-[#2d6a4f]/10 bg-[#f8f7f4]/50 opacity-80",
                   )}
                 >
                   <div
-                    className={cn(
-                      "h-44 bg-cover bg-center",
-                      !isAvailable && "grayscale",
-                    )}
-                    style={{ backgroundImage: `url(${vehicle.image})` }}
+                    className={cn("h-44 bg-cover bg-center", !isAvailable && "grayscale")}
+                    style={{
+                      backgroundImage: `url(${vehicle.image})`,
+                      backgroundPosition: getVehicleImagePosition(vehicle.name),
+                    }}
                   />
+                  {selectedVehicle?.id === vehicle.id && isAvailable && (
+                    <span className="absolute right-4 top-4 z-10 inline-flex items-center gap-2 rounded-full border border-[#2d6a4f]/16 bg-white/96 px-3 py-1 text-xs uppercase tracking-[0.15em] text-[#2d6a4f] shadow-[0_1px_2px_rgba(13,92,72,0.06)]">
+                      <span className="grid size-4 place-items-center rounded-full bg-[#2d6a4f] text-white">
+                        <Check className="size-3" />
+                      </span>
+                      Selected
+                    </span>
+                  )}
                   <div className="space-y-4 p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="font-sans text-3xl font-semibold text-white">{vehicle.name}</p>
-                        <p className="mt-2 text-sm leading-6 text-white/62">
+                        <p className="font-sans text-3xl font-semibold text-[#1a3d34]">
+                          {getVehicleDisplayName(vehicle.name)}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-[#5a7a6e]">
                           {vehicle.summary}
                         </p>
                       </div>
-                      {selectedVehicle?.id === vehicle.id && isAvailable && (
-                        <span className="grid size-9 place-items-center rounded-full bg-primary text-[#111]">
-                          <Check className="size-4" />
-                        </span>
-                      )}
                       {!isAvailable && (
-                        <Badge className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-[0.68rem] uppercase tracking-[0.2em] text-white/62">
+                        <Badge className="rounded-full border border-[#2d6a4f]/10 bg-[#f8f7f4] px-3 py-1 text-[0.68rem] uppercase tracking-[0.2em] text-[#8aa398]">
                           Unavailable
                         </Badge>
                       )}
                     </div>
-                    <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-white/58">
-                      <Badge className="rounded-full bg-white/[0.06] px-3 py-1 text-[0.68rem] text-white/72">
+                    <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[#5a7a6e]">
+                      <Badge className="rounded-full bg-[#f8f7f4] px-3 py-1 text-[0.68rem] text-[#5a7a6e]">
                         {vehicle.passengersMax} pax
                       </Badge>
-                      <Badge className="rounded-full bg-white/[0.06] px-3 py-1 text-[0.68rem] text-white/72">
+                      <Badge className="rounded-full bg-[#f8f7f4] px-3 py-1 text-[0.68rem] text-[#5a7a6e]">
                         {vehicle.bagsMax} bags
                       </Badge>
-                      <Badge className="rounded-full bg-white/[0.06] px-3 py-1 text-[0.68rem] text-white/72">
-                        from {formatCurrency(Number(vehicle.basePrice))}
-                      </Badge>
                     </div>
-                    <div className="rounded-[1.2rem] border border-white/8 bg-black/20 px-4 py-3 text-sm text-white/64">
-                      Best for {vehicle.passengersMax <= 3 ? "airport executives and direct hotel runs" : vehicle.passengersMax <= 6 ? "corporate groups, families, and premium airport service" : "event movement, group transport, and multi-stop service"}.
+                    <div className="border-t border-[#2d6a4f]/10 pt-4">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-[#5a7a6e]">Base price</span>
+                        <span className="font-medium text-[#1a3d34]">
+                          {formatCurrency(quotePreview.baseFare)}
+                        </span>
+                      </div>
                     </div>
-                    <div
-                      className={cn(
-                        "rounded-[1.2rem] border px-4 py-3 text-sm",
-                        isAvailable
-                          ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100"
-                          : status?.reasonType === "schedule"
-                            ? "border-amber-400/20 bg-amber-500/10 text-amber-100"
-                            : "border-white/10 bg-white/[0.04] text-white/72",
-                      )}
-                    >
-                      <p className="font-medium">
-                        {reasonLabel}
-                        {typeof availableUnits === "number" && isAvailable
-                          ? ` · ${availableUnits} unit${availableUnits === 1 ? "" : "s"} open`
-                          : ""}
-                      </p>
-                      {!isAvailable && status?.reason ? (
-                        <p className="mt-2 text-sm leading-6 text-current/80">{status.reason}</p>
-                      ) : null}
-                      {!isAvailable && nextAvailableLabel ? (
-                        <p className="mt-2 text-sm text-current/90">
-                          Next opening: {nextAvailableLabel}
-                        </p>
-                      ) : null}
+                    <div className="border-t border-[#2d6a4f]/10 pt-4 text-sm text-[#5a7a6e]">
+                      {getVehicleUseCase(vehicle.passengersMax)}
                     </div>
+                    {!isAvailable && (
+                      <div
+                        className={cn(
+                          "border-t px-0 pt-4 text-sm",
+                          status?.reasonType === "schedule"
+                            ? "border-amber-500/20 text-amber-800"
+                            : "border-[#2d6a4f]/10 text-[#5a7a6e]",
+                        )}
+                      >
+                        <p className="font-medium">{reasonLabel}</p>
+                        {status?.reason ? (
+                          <p className="mt-2 text-sm leading-6 text-current/80">{status.reason}</p>
+                        ) : null}
+                        {nextAvailableLabel ? (
+                          <p className="mt-2 text-sm text-current/90">
+                            Next opening: {nextAvailableLabel}
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
                 </button>
                 ),
@@ -1994,246 +2767,197 @@ export function ReserveWizard({
           )}
 
           {step === 3 && (
-            <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_360px]">
-              <div className="rounded-[1.8rem] border border-white/8 bg-black/20 p-5">
-                <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-primary/78">
-                  Party fit
+            <div className="rounded-[1.8rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5 lg:p-6">
+              <div className="max-w-2xl">
+                <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-[#2d6a4f]/80">
+                  Fit
                 </p>
-                <p className="mt-2 text-sm leading-7 text-white/62">
-                  Set the actual passenger and luggage count before the vehicle step opens.
+                <h3 className="mt-3 font-display text-3xl leading-[0.96] text-[#1a3d34] md:text-4xl">
+                  Set the party size.
+                </h3>
+                <p className="mt-3 text-sm leading-7 text-[#5a7a6e]">
+                  Count checked bags here. Carry-ons and personal items usually fit more easily.
                 </p>
-
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Passengers</Label>
-                    <Select
-                      value={passengers}
-                      onValueChange={(value) => {
-                        if (value) {
-                          setPassengers(value);
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="booking-control h-14 w-full rounded-2xl px-4 text-base">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="booking-popup rounded-2xl">
-                        {Array.from({ length: 12 }, (_, index) => index + 1).map((value) => (
-                          <SelectItem key={value} value={String(value)}>
-                            {value} passenger{value === 1 ? "" : "s"}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Bags</Label>
-                    <Select
-                      value={bags}
-                      onValueChange={(value) => {
-                        if (value) {
-                          setBags(value);
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="booking-control h-14 w-full rounded-2xl px-4 text-base">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="booking-popup rounded-2xl">
-                        {Array.from({ length: 12 }, (_, index) => index).map((value) => (
-                          <SelectItem key={value} value={String(value)}>
-                            {value} bag{value === 1 ? "" : "s"}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
               </div>
 
-              <div className="rounded-[1.8rem] border border-white/8 bg-gradient-to-br from-white/[0.05] to-primary/[0.06] p-5">
-                <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-primary/78">
-                  Fit memo
-                </p>
-                <div className="mt-4 grid gap-4">
-                  <div className="flex items-start gap-3 rounded-[1.25rem] border border-white/8 bg-black/20 px-4 py-4">
-                    <Users className="mt-1 size-4 text-primary" />
-                    <div>
-                      <p className="text-sm font-medium text-white">Compatibility</p>
-                      <p className="mt-1 text-sm leading-6 text-white/62">{fitReadout}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 rounded-[1.25rem] border border-white/8 bg-black/20 px-4 py-4">
-                    <Luggage className="mt-1 size-4 text-primary" />
-                    <div>
-                      <p className="text-sm font-medium text-white">Next step</p>
-                      <p className="mt-1 text-sm leading-6 text-white/62">
-                        The vehicle list only shows classes that fit this party and are still available.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <BookingCounterField
+                  label="Passengers"
+                  value={Number(passengers)}
+                  options={Array.from({ length: 12 }, (_, index) => index + 1)}
+                  singularLabel="passenger"
+                  onChange={(value) => handlePassengersChange(String(value))}
+                />
+
+                <BookingCounterField
+                  label="Checked bags"
+                  value={Number(bags)}
+                  options={Array.from({ length: 13 }, (_, index) => index)}
+                  singularLabel="checked bag"
+                  onChange={(value) => handleBagsChange(String(value))}
+                />
               </div>
+
+              <div className="mt-6 border-t border-[#2d6a4f]/10 pt-5">
+                <p className="text-sm font-medium text-[#1a3d34]">{fitReadout}</p>
+                <p className="mt-2 text-sm leading-6 text-[#5a7a6e]">
+                  The next step only shows vehicles that fit this party, checked bags, and live availability.
+                </p>
+              </div>
+              {fitVehiclePreview.length > 0 ? (
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  {fitVehiclePreview.map((vehicle) => (
+                    <div
+                      key={vehicle.id}
+                      className="border-l border-[#2d6a4f]/15 pl-4 py-1"
+                    >
+                      <p className="text-sm font-medium text-[#1a3d34]">{vehicle.label}</p>
+                      <p className="mt-1 text-sm leading-6 text-[#5a7a6e]">{vehicle.detail}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           )}
 
           {step === 5 && (
-            <div className="grid gap-5 md:grid-cols-2">
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Full name</Label>
+                  <Label className="text-[#5a7a6e]">Full name required</Label>
                   <Input
+                    id="checkout-name"
+                    name="name"
+                    autoComplete="name"
                     value={customerName}
-                    onChange={(event) => setCustomerName(event.target.value)}
-                    className="h-14 rounded-2xl border-white/10 bg-black/35 px-4 text-base text-white"
+                    onChange={(event) => {
+                      setCustomerName(event.target.value);
+                      clearCheckoutError("customerName");
+                    }}
+                    onBlur={() => validateCheckoutFields({ showToast: false })}
+                    className={cn(
+                      "h-14 rounded-2xl bg-white px-4 text-base text-[#1a3d34]",
+                      checkoutErrors.customerName
+                        ? "border-rose-300 focus-visible:ring-rose-200"
+                        : "border-[#2d6a4f]/15",
+                    )}
                   />
+                  {checkoutErrors.customerName ? (
+                    <p className="text-sm text-rose-600">{checkoutErrors.customerName}</p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
-                  <Label>Email</Label>
+                  <Label className="text-[#5a7a6e]">Email required</Label>
                   <Input
+                    id="checkout-email"
+                    name="email"
                     type="email"
+                    autoComplete="email"
                     value={customerEmail}
-                    onChange={(event) => setCustomerEmail(event.target.value)}
-                    className="h-14 rounded-2xl border-white/10 bg-black/35 px-4 text-base text-white"
+                    onChange={(event) => {
+                      setCustomerEmail(event.target.value);
+                      clearCheckoutError("customerEmail");
+                    }}
+                    onBlur={() => validateCheckoutFields({ showToast: false })}
+                    className={cn(
+                      "h-14 rounded-2xl bg-white px-4 text-base text-[#1a3d34]",
+                      checkoutErrors.customerEmail
+                        ? "border-rose-300 focus-visible:ring-rose-200"
+                        : "border-[#2d6a4f]/15",
+                    )}
                   />
+                  {checkoutErrors.customerEmail ? (
+                    <p className="text-sm text-rose-600">{checkoutErrors.customerEmail}</p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
-                  <Label>Mobile</Label>
+                  <Label className="text-[#5a7a6e]">Mobile required</Label>
                   <Input
+                    id="checkout-phone"
+                    name="tel"
+                    autoComplete="tel"
+                    inputMode="tel"
                     value={customerPhone}
-                    onChange={(event) => setCustomerPhone(event.target.value)}
-                    className="h-14 rounded-2xl border-white/10 bg-black/35 px-4 text-base text-white"
+                    onChange={(event) => {
+                      setCustomerPhone(event.target.value);
+                      clearCheckoutError("customerPhone");
+                    }}
+                    onBlur={() => validateCheckoutFields({ showToast: false })}
+                    className={cn(
+                      "h-14 rounded-2xl bg-white px-4 text-base text-[#1a3d34]",
+                      checkoutErrors.customerPhone
+                        ? "border-rose-300 focus-visible:ring-rose-200"
+                        : "border-[#2d6a4f]/15",
+                    )}
                   />
+                  {checkoutErrors.customerPhone ? (
+                    <p className="text-sm text-rose-600">{checkoutErrors.customerPhone}</p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
-                  <Label>Trip notes</Label>
+                  <Label className="text-[#5a7a6e]">Trip notes optional</Label>
                   <Textarea
                     value={notes}
                     onChange={(event) => setNotes(event.target.value)}
-                    className="min-h-32 rounded-[1.7rem] border-white/10 bg-black/35 px-4 py-3 text-base text-white"
-                    placeholder="Flight number, client name, venue timing, or special entry notes"
+                    className="min-h-32 rounded-[1.7rem] border-[#2d6a4f]/15 bg-white px-4 py-3 text-base text-[#1a3d34]"
+                    placeholder="Client name, venue timing, gate code, or special entry notes"
                   />
                 </div>
-                <div className="space-y-3">
-                  <Label>Ride additions</Label>
-                  <div className="grid gap-3">
-                    {extrasCatalog.map((extra) => {
-                      const checked = selectedExtras.includes(extra.key);
-
-                      return (
-                        <button
-                          key={extra.key}
-                          type="button"
-                          onClick={() => toggleExtra(extra.key, !checked)}
-                          className={cn(
-                            "rounded-[1.2rem] border p-4 text-left transition",
-                            checked
-                              ? "border-primary/55 bg-primary/[0.08]"
-                              : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div>
-                              <p className="font-sans text-[0.66rem] uppercase tracking-[0.24em] text-primary/80">
-                                {formatCurrency(extra.price)}
-                              </p>
-                              <p className="mt-2 text-lg font-semibold text-white">
-                                {extra.label}
-                              </p>
-                              <p className="mt-1 text-sm leading-6 text-white/62">
-                                {extra.detail}
-                              </p>
-                            </div>
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(value) =>
-                                toggleExtra(extra.key, Boolean(value))
-                              }
-                              className="pointer-events-none mt-1 size-5 border-white/20 data-checked:bg-primary data-checked:text-[#111]"
-                            />
-                          </div>
-                        </button>
-                      );
-                    })}
+                <div className="rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-4">
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="customer-sms-opt-in"
+                      checked={customerSmsOptIn}
+                      onCheckedChange={(checked) => {
+                        setCustomerSmsOptIn(checked === true);
+                      }}
+                      className="mt-1"
+                    />
+                    <div className="space-y-1">
+                      <Label htmlFor="customer-sms-opt-in" className="cursor-pointer text-[#1a3d34]">
+                        Send text confirmations and pickup reminders
+                      </Label>
+                      <p className="text-sm leading-6 text-[#5a7a6e]">
+                        By checking this box, you agree to receive reservation updates from
+                        seatac.co at the mobile number above. Message frequency varies. Reply STOP
+                        to opt out, HELP for help. Msg & data rates may apply. See our{" "}
+                        <Link href="/privacy" className="text-[#0d5c48] underline underline-offset-4">
+                          privacy policy
+                        </Link>{" "}
+                        and{" "}
+                        <Link href="/sms-policy" className="text-[#0d5c48] underline underline-offset-4">
+                          SMS policy
+                        </Link>
+                        .
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
-              <Card className="rounded-[1.9rem] border-white/10 bg-white/[0.03]">
-                <CardContent className="space-y-5 p-6">
-                  <div>
-                    <p className="font-sans text-[0.74rem] uppercase tracking-[0.3em] text-primary/80">
-                      Reservation preview
-                    </p>
-                    <p className="mt-3 text-2xl font-semibold text-white">
-                      {selectedVehicle?.name}
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-white/62">
-                      {bookingRouteName} • {pickupDate || "Choose a date"} at{" "}
-                      {pickupTime}
-                    </p>
-                  </div>
-                  <Separator className="bg-white/8" />
-                  <div className="grid gap-3 text-sm text-white/72">
-                    <div className="flex items-center justify-between">
-                      <span>Base fare</span>
-                      <span>{formatCurrency(pricing?.baseFare ?? 0)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Route distance</span>
-                      <span>
-                        {pricing?.routeDistanceMiles
-                          ? `${pricing.routeDistanceMiles.toFixed(1)} mi`
-                          : "Flat or hourly"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Return trip</span>
-                      <span>{formatCurrency(pricing?.returnPremium ?? 0)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Extras</span>
-                      <span>{formatCurrency(pricing?.extrasTotal ?? 0)}</span>
-                    </div>
-                  </div>
-                  <Separator className="bg-white/8" />
-                  <div className="flex items-end justify-between">
-                    <div>
-                      <p className="font-sans text-[0.74rem] uppercase tracking-[0.3em] text-white/48">
-                        Estimated total
-                      </p>
-                      <p className="mt-2 font-sans text-5xl font-semibold text-white">
-                        {formatCurrency(pricing?.total ?? 0)}
-                      </p>
-                    </div>
-                    <div className="space-y-2 text-right text-sm text-white/60">
-                      <div className="flex items-center justify-end gap-2">
-                        <ShieldCheck className="size-4 text-primary" />
-                        Dispatch reviewed
-                      </div>
-                      <div className="flex items-center justify-end gap-2">
-                        <Clock3 className="size-4 text-primary" />
-                        Instant booking capture
-                      </div>
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    onClick={submitBooking}
-                    disabled={submitting}
-                    className="booking-primary-button h-14 w-full rounded-full text-lg font-semibold"
-                  >
-                    {submitting ? "Redirecting..." : "Pay now"}
-                  </Button>
-                </CardContent>
-              </Card>
+              <div className="space-y-3">
+                <Label className="text-[#5a7a6e]">Ride additions</Label>
+                <div className="grid gap-3">
+                  {extrasCatalog.map((extra) => {
+                    return (
+                      <RideAdditionCard
+                        key={extra.key}
+                        extra={extra}
+                        quantity={getExtraQuantity(extra.key)}
+                        onQuantityChange={(nextQuantity) =>
+                          setExtraQuantity(extra.key, nextQuantity)
+                        }
+                      />
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-white/8 pt-6">
-          <div className="flex items-center gap-3 text-sm text-white/58">
-            <Sparkles className="size-4 text-primary" />
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-[#2d6a4f]/10 pt-6">
+          <div className="flex items-center gap-3 text-sm text-[#5a7a6e]">
+            <Sparkles className="size-4 text-[#2d6a4f]" />
             {activeStep.eyebrow}
           </div>
           <div className="flex gap-3">
@@ -2268,124 +2992,86 @@ export function ReserveWizard({
       </div>
 
       <aside className="space-y-5 lg:sticky lg:top-28 lg:self-start">
-        <Card className="rounded-[2rem] border-white/8 bg-white/[0.03]">
+        <Card className="rounded-[2rem] border-[#2d6a4f]/10 bg-white">
           <CardContent className="space-y-5 p-6">
             <div className="flex items-end justify-between gap-4">
-              <div>
-                <p className="font-sans text-[0.74rem] uppercase tracking-[0.3em] text-primary/80">
-                  Live quote board
-                </p>
-                <p className="mt-2 text-sm leading-6 text-white/62">
-                  Built to keep the fare, route, class, and dispatch status visible while the trip is being shaped.
-                </p>
-              </div>
+              <div />
               <div className="text-right">
-                <p className="text-xs uppercase tracking-[0.24em] text-white/44">
+                <p className="text-xs uppercase tracking-[0.24em] text-[#5a7a6e]">
                   Estimated total
                 </p>
-                <p className="mt-2 font-sans text-5xl font-semibold text-white">
-                  {formatCurrency(pricing?.total ?? 0)}
+                <p className="mt-2 font-sans text-4xl font-semibold text-[#1a3d34]">
+                  {selectedVehicle ? formatCurrency(pricing?.total ?? 0) : "Choose a vehicle"}
                 </p>
               </div>
             </div>
-            <div className="rounded-[1.6rem] border border-primary/18 bg-gradient-to-br from-primary/[0.12] to-transparent p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.24em] text-white/46">Selected service</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">{serviceModeLabel}</p>
-                </div>
-                <Badge className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[0.66rem] uppercase tracking-[0.22em] text-white/72">
-                  {tripTypeLabel}
-                </Badge>
+            <div className="group border-t border-[#2d6a4f]/10 pt-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <p className="text-xs uppercase tracking-[0.24em] text-[#5a7a6e]">Route</p>
+                <button
+                  type="button"
+                  onClick={() => jumpToStep(1)}
+                  className="shrink-0 text-xs font-medium text-[#2d6a4f]/70 opacity-0 transition-opacity underline underline-offset-4 group-hover:opacity-100 focus-visible:opacity-100"
+                >
+                  Edit
+                </button>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {dispatchReadiness.map((item) => (
-                  <div
-                    key={item}
-                    className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[0.68rem] uppercase tracking-[0.22em] text-white/62"
-                  >
-                    {item}
-                  </div>
-                ))}
-              </div>
+              <RouteMapCard
+                compact
+                embedded
+                pickupAddress={pickupAddress}
+                dropoffAddress={tripType === "hourly" || tripType === "event" ? "" : dropoffAddress}
+                pickupPlace={pickupPlace}
+                dropoffPlace={dropoffPlace}
+                onRouteResolved={handleRouteResolved}
+              />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-              <div className="rounded-[1.5rem] border border-white/8 bg-black/25 p-4">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-white/46">
-                  <Users className="size-3.5 text-primary" />
-                  Party
-                </div>
-                <p className="mt-2 text-base font-semibold text-white">
-                  {passengers} passenger{passengers === "1" ? "" : "s"} • {bags} bag{bags === "1" ? "" : "s"}
-                </p>
-              </div>
-              <div className="rounded-[1.5rem] border border-white/8 bg-black/25 p-4">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-white/46">
-                  <Luggage className="size-3.5 text-primary" />
-                  Vehicle class
-                </div>
-                <p className="mt-2 text-base font-semibold text-white">
-                  {selectedVehicle?.name ?? "Select a vehicle"}
-                </p>
-              </div>
-            </div>
-            <div className="rounded-[1.6rem] border border-white/8 bg-black/30 p-4">
-              <div className="flex items-start gap-3">
-                <MapPinned className="mt-1 size-4 text-primary" />
-                <div className="text-sm leading-7 text-white/72">
-                  <div className="font-medium text-white/90">{routePreviewLabel}</div>
-                  {(tripType === "flat" || tripType === "distance") && (
-                    <div className="mt-2 text-white/52">{routeConfidenceLabel}</div>
+            <div className="space-y-0 border-t border-[#2d6a4f]/10">
+              {summaryRows
+                .filter((row) => row.label !== "Route")
+                .map((row, index) => (
+                <div
+                  key={row.label}
+                  className={cn(
+                    "group flex items-center gap-3 py-3",
+                    index > 0 && "border-t border-[#2d6a4f]/10",
                   )}
-                  {(tripType === "hourly" || tripType === "event") && (
-                    <div className="mt-2 text-white/52">{hoursRequested} requested hour{hoursRequested === "1" ? "" : "s"}</div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="grid gap-3 text-sm text-white/66">
-              <div className="flex items-center justify-between">
-                <span>Base fare</span>
-                <span>{formatCurrency(pricing?.baseFare ?? 0)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Extras selected</span>
-                <span>{extrasSelected}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Return trip premium</span>
-                <span>{formatCurrency(pricing?.returnPremium ?? 0)}</span>
-              </div>
-            </div>
-            <div className="rounded-[1.5rem] border border-white/8 bg-black/25 p-4">
-              <p className="text-xs uppercase tracking-[0.22em] text-white/46">Dispatch sequence</p>
-              <div className="mt-4 space-y-3">
-                {stepMeta.map((item) => (
-                  <div key={item.id} className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        "grid size-8 place-items-center rounded-full border text-xs font-semibold",
-                        item.id <= step
-                          ? "border-primary/60 bg-primary/18 text-white"
-                          : "border-white/10 bg-white/[0.03] text-white/40",
-                      )}
+                >
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-sm text-[#5a7a6e]">{row.label}</span>
+                    <button
+                      type="button"
+                      onClick={row.onEdit}
+                      className="text-[11px] font-medium text-[#2d6a4f]/70 opacity-0 transition-opacity underline underline-offset-4 group-hover:opacity-100 focus-visible:opacity-100"
                     >
-                      {item.id}
-                    </div>
-                    <div className="text-sm text-white/72">{item.label}</div>
+                      Edit
+                    </button>
                   </div>
-                ))}
-              </div>
+                  <div className="ml-auto min-w-0 text-right">
+                    <span className="block text-sm font-medium text-[#1a3d34]">{row.value}</span>
+                    {row.detail ? (
+                      <span className="hidden text-sm text-[#8aa398] xl:block">{row.detail}</span>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
             </div>
+            {step === 5 ? (
+              <Button
+                type="button"
+                onClick={submitBooking}
+                disabled={submitting || !checkoutReady}
+                className="booking-primary-button h-14 w-full rounded-full text-lg font-semibold"
+              >
+                {submitting
+                  ? "Redirecting..."
+                  : pricing
+                    ? `Pay ${formatCurrency(pricing.total)} now`
+                    : "Pay now"}
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
-        <RouteMapCard
-          pickupAddress={pickupAddress}
-          dropoffAddress={tripType === "hourly" || tripType === "event" ? "" : dropoffAddress}
-          pickupPlace={pickupPlace}
-          dropoffPlace={dropoffPlace}
-          onRouteResolved={handleRouteResolved}
-        />
       </aside>
     </div>
   );
