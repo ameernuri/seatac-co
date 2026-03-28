@@ -55,6 +55,8 @@ type Props = {
   vehicles: Vehicle[];
   routes: Route[];
   compact?: boolean;
+  landingOnly?: boolean;
+  showTitle?: boolean;
   initialState?: {
     serviceMode?: ServiceMode;
     tripType?: TripType;
@@ -79,7 +81,8 @@ type VehicleAvailabilityStatus = {
 type CheckoutFieldErrorKey =
   | "customerEmail"
   | "customerName"
-  | "customerPhone";
+  | "customerPhone"
+  | "customerPolicyAgreed";
 
 type CheckoutFieldErrors = Partial<Record<CheckoutFieldErrorKey, string>>;
 
@@ -133,7 +136,7 @@ function pricingTypeFromTripType(tripType: TripType): PricingType {
 
 function getEnabledPricingOptions(constraints: BookingConstraints) {
   return pricingTypeConfig.filter((option) => {
-    if (option.value === "flat") return constraints.enableFlatPricing;
+    if (option.value === "flat") return false;
     if (option.value === "distance") return constraints.enableDistancePricing;
     return constraints.enableHourlyPricing;
   });
@@ -499,7 +502,7 @@ function BookingTimeField({
   return (
     <div className="space-y-2">
       <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">{label}</Label>
-      <div className="flex h-12 items-center justify-between rounded-xl border border-[#2d6a4f]/15 bg-white px-3">
+      <div className="flex h-12 items-center gap-2 rounded-xl border border-[#2d6a4f]/15 bg-white p-2">
         <button
           type="button"
           onClick={() => previousValue && onChange(previousValue)}
@@ -510,7 +513,7 @@ function BookingTimeField({
           <Minus className="size-4" />
         </button>
         <Select value={currentValue} onValueChange={(next) => next && onChange(next)}>
-          <SelectTrigger className="h-10 min-w-[8.5rem] border-0 bg-transparent px-3 text-center shadow-none hover:bg-[#f8f7f4] focus:ring-0 focus:ring-offset-0">
+          <SelectTrigger className="h-10 flex-1 rounded-full border-0 bg-transparent px-4 text-center shadow-none hover:bg-transparent focus:ring-0 focus:ring-offset-0 [&>svg]:hidden">
             <span className="w-full text-base font-semibold text-[#1a3d34]">
               {formatTimeChoice(currentValue)}
             </span>
@@ -570,7 +573,7 @@ function BookingCounterField({
   return (
     <div className="space-y-2">
       <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">{label}</Label>
-      <div className="flex h-12 items-center justify-between rounded-xl border border-[#2d6a4f]/15 bg-white px-3">
+      <div className="flex h-12 items-center gap-2 rounded-xl border border-[#2d6a4f]/15 bg-white p-2">
         <button
           type="button"
           onClick={() => previousValue !== null && onChange(previousValue)}
@@ -581,7 +584,7 @@ function BookingCounterField({
           <Minus className="size-4" />
         </button>
         <Select value={String(currentValue)} onValueChange={(next) => next && onChange(Number(next))}>
-          <SelectTrigger className="h-10 min-w-[8.5rem] border-0 bg-transparent px-3 text-center shadow-none hover:bg-[#f8f7f4] focus:ring-0 focus:ring-offset-0">
+          <SelectTrigger className="h-10 flex-1 rounded-full border-0 bg-transparent px-4 text-center shadow-none hover:bg-transparent focus:ring-0 focus:ring-offset-0 [&>svg]:hidden">
             <div className="flex w-full flex-col items-center leading-none">
               <span className="text-base font-semibold text-[#1a3d34]">{currentValue}</span>
               <span className="mt-1 text-[0.68rem] uppercase tracking-[0.18em] text-[#5a7a6e]">
@@ -636,6 +639,8 @@ export function ReserveWizard({
   vehicles,
   routes,
   compact = false,
+  landingOnly = false,
+  showTitle = true,
   initialState,
 }: Props) {
   const initialPickupSlot = resolveInitialBookingSlot(bookingConstraints);
@@ -700,6 +705,7 @@ export function ReserveWizard({
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerSmsOptIn, setCustomerSmsOptIn] = useState(false);
+  const [customerPolicyAgreed, setCustomerPolicyAgreed] = useState(false);
   const [checkoutErrors, setCheckoutErrors] = useState<CheckoutFieldErrors>({});
   const [notes, setNotes] = useState(initialState?.pickupDetail ?? "");
   const [availableVehicleCounts, setAvailableVehicleCounts] = useState<Record<string, number> | null>(
@@ -849,26 +855,6 @@ export function ReserveWizard({
       ? "bags"
       : null,
   ].filter((item): item is "mileage" | "passengers" | "bags" => Boolean(item));
-  const priceTypeSummary =
-    selectedPricingType === "flat"
-      ? "Fixed pricing for preset routes."
-      : selectedPricingType === "distance"
-        ? distanceCharges.length > 0
-          ? `Vehicle base plus ${buildChargeSummary(distanceCharges, (label) => {
-              if (label === "mileage") {
-                return `${formatCurrency(bookingConstraints.perMileFee)}/mi`;
-              }
-
-              if (label === "passengers") {
-                return `${formatCurrency(bookingConstraints.perPassengerFee)}/rider`;
-              }
-
-              return `${formatCurrency(bookingConstraints.perBagFee)}/bag`;
-            })}.`
-          : "Vehicle base pricing for custom routes."
-        : bookingConstraints.hourlyServiceFee > 0
-          ? `Priced by reserved hours plus ${formatCurrency(bookingConstraints.hourlyServiceFee)} service fee.`
-          : `Priced by reserved hours with a ${bookingConstraints.hourlyMinimumHours}-hour minimum.`;
   const pickupAddressError = pickupAddress.trim() ? null : "Enter a pickup address.";
   const dropoffAddressRequired = tripType === "flat" || tripType === "distance";
   const dropoffAddressError =
@@ -998,6 +984,7 @@ export function ReserveWizard({
         bags: string;
         customerEmail: string;
         customerName: string;
+        customerPolicyAgreed: boolean;
         customerPhone: string;
         customerSmsOptIn: boolean;
         dropoffAddress: string;
@@ -1062,6 +1049,9 @@ export function ReserveWizard({
       if (typeof draft.customerSmsOptIn === "boolean") {
         setCustomerSmsOptIn(draft.customerSmsOptIn);
       }
+      if (typeof draft.customerPolicyAgreed === "boolean") {
+        setCustomerPolicyAgreed(draft.customerPolicyAgreed);
+      }
       if (typeof draft.notes === "string") setNotes(draft.notes);
     } finally {
       setDraftLoaded(true);
@@ -1073,35 +1063,12 @@ export function ReserveWizard({
       return;
     }
 
-    const draft = {
-      bags,
-      customerEmail,
-      customerName,
-      customerPhone,
-      customerSmsOptIn,
-      dropoffAddress,
-      flightNumber,
-      hoursRequested,
-      notes,
-      passengers,
-      pickupAddress,
-      pickupDate,
-      pickupTime,
-      returnDate,
-      returnTime,
-      returnTrip,
-      routeId,
-      selectedExtras,
-      selectedVehicleId,
-      step,
-      tripType,
-    };
-
-    window.sessionStorage.setItem(RESERVE_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    persistReserveDraft(step);
   }, [
     bags,
     customerEmail,
     customerName,
+    customerPolicyAgreed,
     customerPhone,
     customerSmsOptIn,
     draftLoaded,
@@ -1122,6 +1089,39 @@ export function ReserveWizard({
     step,
     tripType,
   ]);
+
+  function persistReserveDraft(nextStep: Step) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const draft = {
+      bags,
+      customerEmail,
+      customerName,
+      customerPolicyAgreed,
+      customerPhone,
+      customerSmsOptIn,
+      dropoffAddress,
+      flightNumber,
+      hoursRequested,
+      notes,
+      passengers,
+      pickupAddress,
+      pickupDate,
+      pickupTime,
+      returnDate,
+      returnTime,
+      returnTrip,
+      routeId,
+      selectedExtras,
+      selectedVehicleId,
+      step: nextStep,
+      tripType,
+    };
+
+    window.sessionStorage.setItem(RESERVE_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  }
 
   useEffect(() => {
     if (pickupTimeOptions.length === 0) {
@@ -1307,7 +1307,8 @@ export function ReserveWizard({
   const checkoutReady =
     customerName.trim().length > 0 &&
     isValidEmail(customerEmail) &&
-    isValidPhone(customerPhone);
+    isValidPhone(customerPhone) &&
+    customerPolicyAgreed;
 
   const activeStep = stepMeta.find((item) => item.id === step) ?? stepMeta[0];
   const extrasSelected = selectedExtras.length;
@@ -1583,6 +1584,10 @@ export function ReserveWizard({
       nextErrors.customerPhone = "Enter a valid mobile number.";
     }
 
+    if (!customerPolicyAgreed) {
+      nextErrors.customerPolicyAgreed = "Agree to the policy before payment.";
+    }
+
     return nextErrors;
   }
 
@@ -1783,45 +1788,6 @@ export function ReserveWizard({
   if (compact) {
     return (
       <div data-booking-theme="seatac" className="theme-seatac grid gap-6">
-        {/* Step Indicators */}
-        <div className="grid gap-3 sm:grid-cols-5">
-          {stepMeta.map((item, index) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => jumpToStep(item.id)}
-              className="group relative flex items-center gap-3 rounded-xl p-2 text-left transition hover:bg-[#2d6a4f]/[0.03] sm:flex-col sm:text-center"
-            >
-              <span
-                className={cn(
-                  "relative z-10 grid size-9 shrink-0 place-items-center rounded-full border text-sm font-semibold transition sm:mx-auto",
-                  step === item.id
-                    ? "border-[#2d6a4f] bg-[#2d6a4f] text-white"
-                    : item.id < step
-                      ? "border-[#2d6a4f]/40 bg-[#2d6a4f]/10 text-[#2d6a4f]"
-                      : "border-[#2d6a4f]/15 bg-[#f8f7f4] text-[#8aa398]",
-                )}
-              >
-                {item.id < step ? <Check className="size-4" /> : item.id}
-              </span>
-              <div className="min-w-0 flex-1 sm:mt-1">
-                <span className={cn(
-                  "block font-sans text-[0.65rem] uppercase tracking-[0.2em] transition",
-                  step === item.id ? "text-[#1a3d34]" : "text-[#8aa398]"
-                )}>
-                  {item.label}
-                </span>
-                <span className="hidden text-[0.6rem] uppercase tracking-[0.15em] text-[#8aa398]/60 sm:block">
-                  Step {item.id}
-                </span>
-              </div>
-              {index < stepMeta.length - 1 && (
-                <span className="absolute right-0 top-1/2 hidden h-px w-4 -translate-y-1/2 bg-[#2d6a4f]/10 sm:left-1/2 sm:top-8 sm:w-8 sm:-translate-x-1/2 md:block" />
-              )}
-            </button>
-          ))}
-        </div>
-
         <div className="grid gap-6 lg:grid-cols-[1fr_280px] xl:grid-cols-[1fr_320px]">
           <div className="space-y-5">
             {step === 1 && (
@@ -1829,14 +1795,13 @@ export function ReserveWizard({
                 <div className="p-1">
                   <div className="grid gap-4 sm:grid-cols-[1.1fr_0.9fr]">
                     <div className="space-y-2">
-                      <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">Pricing</Label>
                       <BadgeSwitcher
                         value={selectedPricingType}
                         onValueChange={(value) => handlePricingTypeChange(value as PricingType)}
                         options={enabledPricingOptions}
                         aria-label="Pricing type"
-                        className="w-full bg-white"
-                        itemClassName="flex-1"
+                        className="w-full rounded-full border border-[#2d6a4f]/12 bg-[#f7f8f5] p-1"
+                        itemClassName="flex-1 rounded-full"
                       />
                     </div>
                     {selectedPricingType === "flat" ? (
@@ -1865,7 +1830,6 @@ export function ReserveWizard({
                       </div>
                     ) : null}
                   </div>
-                  <p className="mt-4 text-sm leading-6 text-[#5a7a6e]">{priceTypeSummary}</p>
 
                   <div className="mt-5 space-y-4">
                     <div className="space-y-2">
@@ -1907,16 +1871,11 @@ export function ReserveWizard({
                       </>
                     )}
 
-                      <p
-                        className={cn(
-                          "text-sm",
-                          stepOneReady ? "text-[#1f5d44]" : "text-[#8a6736]",
-                        )}
-                      >
-                        {stepOneReady
-                          ? "Route looks good."
-                          : `Still needed: ${stepOneMissingItems.join(", ")}.`}
-                      </p>
+                      {!stepOneReady ? (
+                        <p className="text-sm text-[#8a6736]">
+                          {`Still needed: ${stepOneMissingItems.join(", ")}.`}
+                        </p>
+                      ) : null}
 
                       {stepOneAttempted && routeSelectionError ? (
                         <p className="text-sm font-medium text-rose-500">{routeSelectionError}</p>
@@ -2416,61 +2375,69 @@ export function ReserveWizard({
       data-booking-theme="seatac"
       className={cn(
         "theme-seatac grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_21rem]",
+        landingOnly && "lg:grid-cols-1",
         compact && "gap-5",
       )}
     >
-      <div className="p-2 lg:p-4">
-        <div className="flex flex-col gap-5 border-b border-[#2d6a4f]/10 pb-6">
-          <h1 className="max-w-2xl font-display text-4xl leading-[0.96] text-[#1a3d34] md:text-5xl">
-            Reserve your ride.
-          </h1>
-          <div className="grid gap-3 md:grid-cols-5">
-            {stepMeta.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => jumpToStep(item.id)}
-                className="group text-left"
-              >
-                <div className="rounded-[1.3rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] px-4 py-3 transition group-hover:border-[#2d6a4f]/20">
-                  <div className="flex items-center gap-4">
-                    <div
+      {!landingOnly ? (
+        <div className={cn("min-w-0 lg:col-span-2", showTitle ? "space-y-5" : "space-y-0")}>
+          {showTitle ? (
+            <h1 className="max-w-2xl font-display text-4xl leading-[0.96] text-[#1a3d34] md:text-5xl">
+              Reserve your ride.
+            </h1>
+          ) : null}
+          <div className="hidden min-w-0 px-2 lg:block">
+            <div className="overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="relative flex min-w-max items-start gap-6 lg:grid lg:min-w-0 lg:grid-cols-5 lg:gap-4">
+                <div className="absolute left-10 right-10 top-[3.1rem] hidden h-px bg-[#2d6a4f]/12 lg:block" />
+                {stepMeta.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => jumpToStep(item.id)}
+                    className="group flex min-w-[88px] flex-col items-center gap-2 text-center lg:min-w-0"
+                  >
+                    <span
                       className={cn(
-                        "grid size-10 place-items-center rounded-full border text-sm font-semibold transition",
+                        "text-sm font-medium tracking-[-0.01em] transition",
+                        step === item.id || item.id < step ? "text-[#1a3d34]" : "text-[#8aa398]",
+                      )}
+                    >
+                      {item.label}
+                    </span>
+                    <span
+                      className={cn(
+                        "relative z-10 grid size-11 place-items-center rounded-full border bg-white text-sm font-semibold transition",
                         step === item.id
-                          ? "border-[#2d6a4f] bg-[#2d6a4f] text-white"
+                          ? "border-[#2d6a4f] bg-[#2d6a4f] text-white shadow-[0_8px_22px_rgba(45,106,79,0.2)]"
                           : item.id < step
-                            ? "border-[#2d6a4f]/40 bg-[#2d6a4f]/10 text-[#1a3d34]"
-                            : "border-[#2d6a4f]/15 bg-white text-[#5a7a6e] group-hover:border-[#2d6a4f]/30",
+                            ? "border-[#2d6a4f]/28 text-[#2d6a4f]"
+                            : "border-[#2d6a4f]/15 text-[#8aa398]",
                       )}
                     >
                       {item.id < step ? <Check className="size-4" /> : item.id}
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-[#1a3d34]">
-                        {item.label}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </button>
-            ))}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
+      ) : null}
 
-        <div className="grid gap-5 pt-7">
-          {step === 1 && (
+      <div className="min-w-0 rounded-[2rem] border border-[#2d6a4f]/10 bg-white p-6 lg:p-8">
+        <div className="grid gap-5">
+          {(step === 1 || landingOnly) && (
             <div className="p-1">
               <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
                 <div className="space-y-2">
-                  <Label className="text-[#5a7a6e]">Pricing</Label>
                   <BadgeSwitcher
                     value={selectedPricingType}
                     onValueChange={(value) => handlePricingTypeChange(value as PricingType)}
                     options={enabledPricingOptions}
                     aria-label="Pricing type"
-                    className="w-full bg-white"
-                    itemClassName="flex-1"
+                    className="w-full rounded-full border border-[#2d6a4f]/12 bg-[#f7f8f5] p-1"
+                    itemClassName="flex-1 rounded-full"
                   />
                 </div>
               </div>
@@ -2502,8 +2469,6 @@ export function ReserveWizard({
                   </div>
                 ) : null}
               </div>
-              <p className="mt-4 text-sm leading-6 text-[#5a7a6e]">{priceTypeSummary}</p>
-
               <div className="mt-6 grid gap-4">
                 <div className="space-y-2">
                   <Label className="text-[#5a7a6e]">Pick up address</Label>
@@ -2537,23 +2502,18 @@ export function ReserveWizard({
                 )}
               </div>
 
-              <p
-                className={cn(
-                  "mt-5 text-sm",
-                  stepOneReady ? "text-[#1f5d44]" : "text-[#8a6736]",
-                )}
-              >
-                {stepOneReady
-                  ? "Route looks good."
-                  : `Still needed: ${stepOneMissingItems.join(", ")}.`}
-              </p>
+              {!stepOneReady ? (
+                <p className="mt-5 text-sm text-[#8a6736]">
+                  {`Still needed: ${stepOneMissingItems.join(", ")}.`}
+                </p>
+              ) : null}
               {stepOneAttempted && routeSelectionError ? (
                 <p className="mt-3 text-sm font-medium text-rose-500">{routeSelectionError}</p>
               ) : null}
             </div>
           )}
 
-          {step === 2 && (
+          {!landingOnly && step === 2 && (
             <div className="p-1">
               <div className="max-w-2xl">
                 <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-[#2d6a4f]/80">
@@ -2644,9 +2604,9 @@ export function ReserveWizard({
             </div>
           )}
 
-          {step === 4 && (
+          {!landingOnly && step === 4 && (
             <div className="grid gap-4">
-              <div className="grid items-start gap-4 pt-2 xl:grid-cols-3">
+              <div className="grid items-start gap-3 pt-2 md:grid-cols-3 md:gap-4">
               {vehicleOptionSummaries.map(
                 ({
                   availableUnits,
@@ -2666,61 +2626,117 @@ export function ReserveWizard({
                     "relative self-start overflow-hidden rounded-[1.7rem] border text-left transition",
                     isAvailable
                       ? selectedVehicle?.id === vehicle.id
-                        ? "-mt-4 pb-4 border-[#2d6a4f]/40 bg-[#2d6a4f]/8"
-                        : "mt-4 border-[#2d6a4f]/10 bg-white hover:border-[#2d6a4f]/20 hover:bg-[#f8f7f4]"
+                        ? "border-[#2d6a4f] bg-[#eef7f2] shadow-[0_20px_42px_rgba(45,106,79,0.24)] ring-2 ring-[#2d6a4f]/22 md:pb-4"
+                        : "border-[#2d6a4f]/10 bg-white hover:border-[#2d6a4f]/20 hover:bg-[#f8f7f4] md:mt-4"
                       : "border-[#2d6a4f]/10 bg-[#f8f7f4]/50 opacity-80",
                   )}
                 >
-                  <div
-                    className={cn("h-44 bg-cover bg-center", !isAvailable && "grayscale")}
-                    style={{
-                      backgroundImage: `url(${vehicle.image})`,
-                      backgroundPosition: getVehicleImagePosition(vehicle.name),
-                    }}
-                  />
                   {selectedVehicle?.id === vehicle.id && isAvailable && (
-                    <span className="absolute right-4 top-4 z-10 inline-flex items-center gap-2 rounded-full border border-[#2d6a4f]/16 bg-white/96 px-3 py-1 text-xs uppercase tracking-[0.15em] text-[#2d6a4f] shadow-[0_1px_2px_rgba(13,92,72,0.06)]">
-                      <span className="grid size-4 place-items-center rounded-full bg-[#2d6a4f] text-white">
+                    <span className="absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full border border-white/65 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#1f5d44] shadow-[0_8px_22px_rgba(13,92,72,0.18)] lg:right-4 lg:top-4 lg:gap-2 lg:px-3 lg:text-xs lg:tracking-[0.15em]">
+                      <span className="grid size-4 place-items-center rounded-full bg-[#2d6a4f] text-white shadow-[0_2px_8px_rgba(45,106,79,0.28)]">
                         <Check className="size-3" />
                       </span>
-                      Selected
+                      <span>Selected</span>
                     </span>
                   )}
-                  <div className="space-y-4 p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="font-sans text-3xl font-semibold text-[#1a3d34]">
-                          {getVehicleDisplayName(vehicle.name)}
-                        </p>
-                        <p className="mt-2 text-sm leading-6 text-[#5a7a6e]">
-                          {vehicle.summary}
-                        </p>
-                      </div>
-                      {!isAvailable && (
-                        <Badge className="rounded-full border border-[#2d6a4f]/10 bg-[#f8f7f4] px-3 py-1 text-[0.68rem] uppercase tracking-[0.2em] text-[#8aa398]">
-                          Unavailable
-                        </Badge>
+                  <div
+                    className={cn(
+                      "relative h-[12.75rem] overflow-hidden rounded-[inherit] sm:h-[13.5rem] md:h-auto md:overflow-visible",
+                      !isAvailable && "grayscale",
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "absolute inset-0 bg-cover md:relative md:h-44",
+                        selectedVehicle?.id === vehicle.id
+                          ? ""
+                          : "sepia-[0.18] saturate-[0.82] brightness-[0.9]",
                       )}
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.2em] text-[#5a7a6e]">
-                      <Badge className="rounded-full bg-[#f8f7f4] px-3 py-1 text-[0.68rem] text-[#5a7a6e]">
-                        {vehicle.passengersMax} pax
-                      </Badge>
-                      <Badge className="rounded-full bg-[#f8f7f4] px-3 py-1 text-[0.68rem] text-[#5a7a6e]">
-                        {vehicle.bagsMax} bags
-                      </Badge>
-                    </div>
-                    <div className="border-t border-[#2d6a4f]/10 pt-4">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-[#5a7a6e]">Base price</span>
-                        <span className="font-medium text-[#1a3d34]">
-                          {formatCurrency(quotePreview.baseFare)}
-                        </span>
+                      style={{
+                        backgroundImage: `url(${vehicle.image})`,
+                        backgroundPosition: "center center",
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#10281f]/78 via-[#10281f]/26 to-transparent md:hidden" />
+                    <div
+                      className={cn(
+                        "absolute inset-x-0 bottom-0 z-10 space-y-1.5 p-3 text-white sm:p-3.5 md:static md:space-y-4 md:bg-transparent md:p-5 md:text-inherit",
+                        selectedVehicle?.id === vehicle.id ? "text-white" : "text-white/88 md:text-[#1a3d34]/88",
+                      )}
+                    >
+                      <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/82 md:text-[#5a7a6e]">
+                        <Badge className="rounded-full bg-black/24 px-2 py-1 text-[0.58rem] text-white backdrop-blur-sm md:bg-[#f8f7f4] md:px-3 md:text-[0.68rem] md:text-[#5a7a6e]">
+                          {vehicle.passengersMax} pax
+                        </Badge>
+                        <Badge className="rounded-full bg-black/24 px-2 py-1 text-[0.58rem] text-white backdrop-blur-sm md:bg-[#f8f7f4] md:px-3 md:text-[0.68rem] md:text-[#5a7a6e]">
+                          {vehicle.bagsMax} bags
+                        </Badge>
+                        {!isAvailable && (
+                          <Badge className="rounded-full border border-white/16 bg-white/10 px-2 py-1 text-[0.58rem] uppercase tracking-[0.12em] text-white/85 backdrop-blur-sm md:border-[#2d6a4f]/10 md:bg-[#f8f7f4] md:px-3 md:text-[0.68rem] md:tracking-[0.2em] md:text-[#8aa398]">
+                            Unavailable
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="font-sans text-[1.45rem] font-semibold leading-[0.95] text-white sm:text-[1.6rem] md:text-3xl md:text-[#1a3d34]">
+                            {getVehicleDisplayName(vehicle.name)}
+                          </p>
+                          <p
+                            className={cn(
+                              "mt-2 hidden text-sm leading-5 md:block md:leading-6",
+                              selectedVehicle?.id === vehicle.id
+                                ? "text-white/82 md:text-[#5a7a6e]"
+                                : "text-white/70 md:text-[#5a7a6e]/78",
+                            )}
+                          >
+                            {vehicle.summary}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="hidden border-t border-[#2d6a4f]/10 pt-4 md:block">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-[#5a7a6e]">Base price</span>
+                          <span className="font-medium text-[#1a3d34]">
+                            {formatCurrency(quotePreview.baseFare)}
+                          </span>
+                        </div>
+                      </div>
+                      <div
+                        className={cn(
+                          "text-sm md:border-t md:border-[#2d6a4f]/10 md:pt-4",
+                          selectedVehicle?.id === vehicle.id
+                            ? "text-white/80 md:text-[#5a7a6e]"
+                            : "text-white/70 md:text-[#5a7a6e]/78",
+                        )}
+                      >
+                        {getVehicleUseCase(vehicle.passengersMax)}
                       </div>
                     </div>
-                    <div className="border-t border-[#2d6a4f]/10 pt-4 text-sm text-[#5a7a6e]">
-                      {getVehicleUseCase(vehicle.passengersMax)}
+                  </div>
+                  {!isAvailable ? (
+                    <div className="space-y-3 px-4 pb-4 md:hidden">
+                      <div
+                        className={cn(
+                          "border-t px-0 pt-4 text-sm",
+                          status?.reasonType === "schedule"
+                            ? "border-amber-500/20 text-amber-800"
+                            : "border-[#2d6a4f]/10 text-[#5a7a6e]",
+                        )}
+                      >
+                        <p className="font-medium">{reasonLabel}</p>
+                        {status?.reason ? (
+                          <p className="mt-2 text-sm leading-6 text-current/80">{status.reason}</p>
+                        ) : null}
+                        {nextAvailableLabel ? (
+                          <p className="mt-2 text-sm text-current/90">
+                            Next opening: {nextAvailableLabel}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
+                  ) : null}
+                  <div className="hidden space-y-4 p-5 md:block">
                     {!isAvailable && (
                       <div
                         className={cn(
@@ -2749,7 +2765,7 @@ export function ReserveWizard({
             </div>
           )}
 
-          {step === 3 && (
+          {!landingOnly && step === 3 && (
             <div className="p-1">
               <div className="max-w-2xl">
                 <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-[#2d6a4f]/80">
@@ -2803,7 +2819,7 @@ export function ReserveWizard({
             </div>
           )}
 
-          {step === 5 && (
+          {!landingOnly && step === 5 && (
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
               <div className="space-y-4">
                 <div className="space-y-2">
@@ -2886,36 +2902,6 @@ export function ReserveWizard({
                     placeholder="Client name, venue timing, gate code, or special entry notes"
                   />
                 </div>
-                <div className="rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-4">
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      id="customer-sms-opt-in"
-                      checked={customerSmsOptIn}
-                      onCheckedChange={(checked) => {
-                        setCustomerSmsOptIn(checked === true);
-                      }}
-                      className="mt-1"
-                    />
-                    <div className="space-y-1">
-                      <Label htmlFor="customer-sms-opt-in" className="cursor-pointer text-[#1a3d34]">
-                        Send text confirmations and pickup reminders
-                      </Label>
-                      <p className="text-sm leading-6 text-[#5a7a6e]">
-                        By checking this box, you agree to receive reservation updates from
-                        seatac.co at the mobile number above. Message frequency varies. Reply STOP
-                        to opt out, HELP for help. Msg & data rates may apply. See our{" "}
-                        <Link href="/privacy" className="text-[#0d5c48] underline underline-offset-4">
-                          privacy policy
-                        </Link>{" "}
-                        and{" "}
-                        <Link href="/sms-policy" className="text-[#0d5c48] underline underline-offset-4">
-                          SMS policy
-                        </Link>
-                        .
-                      </p>
-                    </div>
-                  </div>
-                </div>
               </div>
               <div className="space-y-3">
                 <Label className="text-[#5a7a6e]">Ride additions</Label>
@@ -2940,7 +2926,7 @@ export function ReserveWizard({
 
         <div className="mt-8 flex flex-wrap items-center justify-end gap-4 border-t border-[#2d6a4f]/10 pt-6">
           <div className="flex gap-3">
-            {step > 1 && (
+            {!landingOnly && step > 1 && (
               <Button
                 type="button"
                 variant="outline"
@@ -2950,7 +2936,22 @@ export function ReserveWizard({
                 Back
               </Button>
             )}
-            {step < 5 && (
+            {landingOnly ? (
+              <Button
+                type="button"
+                disabled={!stepOneReady}
+                onClick={() => {
+                  if (!validateStep(1)) {
+                    return;
+                  }
+                  persistReserveDraft(2);
+                  window.location.assign("/reserve?resume=1");
+                }}
+                className="booking-primary-button h-12 rounded-full px-6"
+              >
+                Continue to schedule <ChevronRight className="size-4" />
+              </Button>
+            ) : step < 5 && (
               <Button
                 type="button"
                 disabled={nextStepDisabled}
@@ -2970,8 +2971,9 @@ export function ReserveWizard({
         </div>
       </div>
 
+      {!landingOnly ? (
       <aside className="space-y-5 lg:sticky lg:top-28 lg:self-start">
-        <div className="space-y-5 rounded-[2rem] border border-[#2d6a4f]/10 bg-white p-6">
+        <div className="space-y-4 rounded-[2rem] border border-[#2d6a4f]/10 bg-white p-5">
             <div className="flex items-end justify-between gap-4">
               <div />
               <div className="text-right">
@@ -2983,17 +2985,7 @@ export function ReserveWizard({
                 </p>
               </div>
             </div>
-            <div className="group border-t border-[#2d6a4f]/10 pt-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <p className="text-xs uppercase tracking-[0.24em] text-[#5a7a6e]">Route</p>
-                <button
-                  type="button"
-                  onClick={() => jumpToStep(1)}
-                  className="shrink-0 text-xs font-medium text-[#2d6a4f]/70 opacity-0 transition-opacity underline underline-offset-4 group-hover:opacity-100 focus-visible:opacity-100"
-                >
-                  Edit
-                </button>
-              </div>
+            <div className="group">
               <RouteMapCard
                 compact
                 embedded
@@ -3004,15 +2996,14 @@ export function ReserveWizard({
                 onRouteResolved={handleRouteResolved}
               />
             </div>
-            <div className="space-y-0 border-t border-[#2d6a4f]/10">
+            <div className="space-y-0">
               {summaryRows
                 .filter((row) => row.label !== "Route")
                 .map((row, index) => (
                 <div
                   key={row.label}
                   className={cn(
-                    "group flex items-center gap-3 py-3",
-                    index > 0 && "border-t border-[#2d6a4f]/10",
+                    "group flex items-start gap-3 py-2.5",
                   )}
                 >
                   <div className="flex shrink-0 items-center gap-2">
@@ -3020,7 +3011,7 @@ export function ReserveWizard({
                     <button
                       type="button"
                       onClick={row.onEdit}
-                      className="text-[11px] font-medium text-[#2d6a4f]/70 opacity-0 transition-opacity underline underline-offset-4 group-hover:opacity-100 focus-visible:opacity-100"
+                      className="text-[11px] font-medium text-[#2d6a4f]/65 opacity-0 transition-opacity underline underline-offset-4 group-hover:opacity-100 focus-visible:opacity-100"
                     >
                       Edit
                     </button>
@@ -3035,21 +3026,96 @@ export function ReserveWizard({
               ))}
             </div>
             {step === 5 ? (
-              <Button
-                type="button"
-                onClick={submitBooking}
-                disabled={submitting || !checkoutReady}
-                className="booking-primary-button h-14 w-full rounded-full text-lg font-semibold"
-              >
-                {submitting
-                  ? "Redirecting..."
-                  : pricing
-                    ? `Pay ${formatCurrency(pricing.total)} now`
-                    : "Pay now"}
-              </Button>
+              <div className="space-y-3 pt-2">
+                <label
+                  htmlFor="customer-sms-opt-in"
+                  className="flex cursor-pointer items-start gap-3 py-1"
+                >
+                  <Checkbox
+                    id="customer-sms-opt-in"
+                    checked={customerSmsOptIn}
+                    onCheckedChange={(checked) => {
+                      setCustomerSmsOptIn(checked === true);
+                    }}
+                    className="mt-0.5 size-5 rounded-md border-[#2d6a4f]/35 bg-white shadow-[0_2px_10px_rgba(45,106,79,0.08)] data-checked:border-[#2d6a4f] data-checked:bg-[#2d6a4f] [&_[data-slot=checkbox-indicator]>svg]:size-4"
+                  />
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium text-[#1a3d34]">
+                      Text me confirmations and pickup reminders.
+                    </div>
+                    <div className="text-sm text-[#5a7a6e]">
+                      Optional reservation updates. Reply STOP to opt out.{" "}
+                      <Link
+                        href="/sms-policy"
+                        className="text-[#0d5c48] underline underline-offset-4"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        SMS policy
+                      </Link>
+                      .
+                    </div>
+                  </div>
+                </label>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="customer-policy-agreed"
+                    className="flex cursor-pointer items-start gap-3 py-1"
+                  >
+                    <Checkbox
+                      id="customer-policy-agreed"
+                      checked={customerPolicyAgreed}
+                      onCheckedChange={(checked) => {
+                        setCustomerPolicyAgreed(checked === true);
+                        clearCheckoutError("customerPolicyAgreed");
+                      }}
+                      className="mt-0.5 size-5 rounded-md border-[#2d6a4f]/35 bg-white shadow-[0_2px_10px_rgba(45,106,79,0.08)] data-checked:border-[#2d6a4f] data-checked:bg-[#2d6a4f] [&_[data-slot=checkbox-indicator]>svg]:size-4"
+                    />
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium text-[#1a3d34]">
+                        I agree to the booking policies.
+                      </div>
+                      <div className="text-sm text-[#5a7a6e]">
+                        Review the{" "}
+                        <Link
+                          href="/terms"
+                          className="text-[#0d5c48] underline underline-offset-4"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          terms
+                        </Link>{" "}
+                        and{" "}
+                        <Link
+                          href="/privacy"
+                          className="text-[#0d5c48] underline underline-offset-4"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          privacy policy
+                        </Link>
+                        .
+                      </div>
+                    </div>
+                  </label>
+                  {checkoutErrors.customerPolicyAgreed ? (
+                    <p className="text-sm text-rose-600">{checkoutErrors.customerPolicyAgreed}</p>
+                  ) : null}
+                </div>
+                <Button
+                  type="button"
+                  onClick={submitBooking}
+                  disabled={submitting || !checkoutReady}
+                  className="booking-primary-button h-14 w-full rounded-full text-lg font-semibold"
+                >
+                  {submitting
+                    ? "Redirecting..."
+                    : pricing
+                      ? `Pay ${formatCurrency(pricing.total)} now`
+                      : "Pay now"}
+                </Button>
+              </div>
             ) : null}
         </div>
       </aside>
+      ) : null}
     </div>
   );
 }

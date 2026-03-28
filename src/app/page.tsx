@@ -159,12 +159,6 @@ export default async function Home() {
   ] as const;
 
   const coverageLinks = getCoverageLinks(coverageAreas);
-  const bookingCategories = [
-    { label: "Sea-Tac car service", href: "/seatac-airport-car-service" },
-    { label: "Sea-Tac hotels", href: "/seatac-airport-hotels" },
-    { label: "Sea-Tac to Pier 66", href: "/seatac-to-pier-66" },
-    { label: "Sea-Tac to Bellevue", href: "/seatac-to-bellevue" },
-  ] as const;
   const keywordHubLinks = [
     { label: "Sea-Tac arrivals", href: "/arrivals" },
     { label: "Sea-Tac departures", href: "/departures" },
@@ -177,14 +171,6 @@ export default async function Home() {
     { label: "Sea-Tac to Pier 91", href: "/seatac-to-pier-91" },
     { label: "Sea-Tac to Hyatt Regency Bellevue", href: "/seatac-to/hyatt-regency-bellevue" },
   ] as const;
-  const heroConfidencePoints = [
-    startingFare ? `Flat-rate routes from ${formatCurrency(startingFare)}` : "Flat-rate airport routes",
-    `Reserve at least ${leadHours} hours ahead for pickups between ${formatOperatingTime(
-      bookingConstraints.operatingHoursStart,
-    )} and ${formatOperatingTime(bookingConstraints.operatingHoursEnd)}.`,
-    `Call dispatch at ${theme.footer.contactPhone}`,
-  ] as const;
-
   return (
     <div className="site-shell min-h-screen">
       <SiteHeader />
@@ -200,7 +186,7 @@ export default async function Home() {
               <div className="hero-copy font-sans">
                 <span className="eyebrow">Sea-Tac travel planning and private rides</span>
                 <h1 className="display-title">
-                  Flat-rate Sea-Tac rides for hotels, cruise terminals, and Seattle arrivals.
+                  Sea-Tac rides for hotels, cruise connections, and much more.
                 </h1>
                 <p>
                   Compare airport routes, review nearby hotel areas, confirm the booking window,
@@ -223,49 +209,15 @@ export default async function Home() {
                   ))}
                 </div>
               </div>
-                <div className="rounded-[2rem] border border-[#2d6a4f]/10 bg-white p-6 shadow-[0_8px_30px_rgba(45,106,79,0.08)] lg:p-7">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-sans text-[0.72rem] uppercase tracking-[0.28em] text-[#4a9b7f]">
-                        Before you reserve
-                      </p>
-                      <h2 className="mt-3 max-w-sm text-[2rem] leading-[0.98] tracking-[-0.03em] text-[#1a3d34]">
-                        Check pricing, pickup hours, and contact details before you book.
-                      </h2>
-                    </div>
-                  {startingFare ? (
-                    <div className="rounded-full border border-[#2d6a4f]/10 bg-[#f8f7f4] px-4 py-2 text-right">
-                      <div className="text-[0.68rem] uppercase tracking-[0.2em] text-[#6b857b]">
-                        Starting fare
-                      </div>
-                      <div className="text-xl font-semibold text-[#1a3d34]">
-                        {formatCurrency(startingFare)}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="mt-5 space-y-3">
-                  {heroConfidencePoints.map((item) => (
-                    <div
-                      key={item}
-                      className="rounded-[1.25rem] border border-[#2d6a4f]/8 bg-[#f8f7f4] px-4 py-3 text-sm leading-6 text-[#36584d]"
-                    >
-                      {item}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-5 rounded-[1.4rem] border border-[#2d6a4f]/10 bg-[#1a3d34] px-5 py-4 text-[#f5efe5]">
-                  <div className="text-[0.7rem] uppercase tracking-[0.22em] text-[#9fd5bd]">
-                    Private transportation
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-[#ecdfcb]">
-                    Direct pickup and drop-off service for airport, hotel, and cruise trips with no
-                    shared shuttle stops.
-                  </p>
-                </div>
+                <ReserveWizard
+                  bookingConstraints={bookingConstraints}
+                  vehicles={vehicles}
+                  routes={routes}
+                  landingOnly
+                  showTitle={false}
+                />
               </div>
             </div>
-          </div>
           <div className="section-inner mt-8">
             <div className="grid gap-6 md:grid-cols-2" aria-label="Service highlights">
               <div className="grid gap-3">
@@ -413,34 +365,6 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="section footer-cta" id="booking">
-          <div className="section-inner">
-            <div className="booking-intro">
-              <div className="booking-intro-copy">
-                <span className="section-kicker">Reserve your ride</span>
-                <h2 className="section-title">Reserve from the homepage.</h2>
-              </div>
-              <div className="booking-intro-actions">
-                <div className="booking-service-pills" aria-label="Reservation categories">
-                  {bookingCategories.map((category) => (
-                    <Link key={category.label} href={category.href} className="hero-tag">
-                      {category.label}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="booking-shell font-sans">
-              <div className="booking-panel font-sans">
-                <ReserveWizard
-                  bookingConstraints={bookingConstraints}
-                  vehicles={vehicles}
-                  routes={routes}
-                />
-              </div>
-            </div>
-          </div>
-        </section>
       </main>
       <SiteFooter />
     </div>
