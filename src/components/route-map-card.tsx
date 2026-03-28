@@ -220,26 +220,26 @@ export function RouteMapCard({
                 ? "space-y-2 border-t border-[#0d5c48]/10 pt-4 text-sm text-[#5a7a70]"
                 : "space-y-2 border-t border-[#0d5c48]/10 pt-5 text-sm text-[#5a7a70]"
               : compact
-                ? "grid grid-cols-2 gap-3"
-                : "grid gap-3 md:grid-cols-2"
+                ? "grid grid-cols-2 gap-3 border-t border-[#0d5c48]/10 pt-4 text-sm text-[#5a7a70]"
+                : "grid gap-3 border-t border-[#0d5c48]/10 pt-5 text-sm text-[#5a7a70] md:grid-cols-2"
           }
         >
           <div
             className={
               embedded
                 ? ""
-                : compact
-                  ? "rounded-[1.2rem] border border-[#0d5c48]/10 bg-[#f8faf9] p-3.5"
-                  : "rounded-[1.4rem] border border-[#0d5c48]/10 bg-[#f8faf9] p-4"
+                : ""
             }
           >
             {embedded ? (
-              <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-                <span>Distance</span>
-                <span className="text-right font-medium text-[#1a3d34]">
-                  {summary ? `${summary.distanceMiles.toFixed(1)} mi` : "Waiting"}
-                </span>
-              </div>
+              summary ? (
+                <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+                  <span>Distance</span>
+                  <span className="text-right font-medium text-[#1a3d34]">
+                    {`${summary.distanceMiles.toFixed(1)} mi`}
+                  </span>
+                </div>
+              ) : null
             ) : (
               <>
                 <div className="flex items-center gap-2 text-sm uppercase tracking-[0.2em] text-[#5a7a70]">
@@ -260,18 +260,18 @@ export function RouteMapCard({
             className={
               embedded
                 ? ""
-                : compact
-                  ? "rounded-[1.2rem] border border-[#0d5c48]/10 bg-[#f8faf9] p-3.5"
-                  : "rounded-[1.4rem] border border-[#0d5c48]/10 bg-[#f8faf9] p-4"
+                : ""
             }
           >
             {embedded ? (
-              <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-                <span>Drive time</span>
-                <span className="text-right font-medium text-[#1a3d34]">
-                  {summary ? `${summary.durationMinutes} min` : "Waiting"}
-                </span>
-              </div>
+              summary ? (
+                <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+                  <span>Drive time</span>
+                  <span className="text-right font-medium text-[#1a3d34]">
+                    {`${summary.durationMinutes} min`}
+                  </span>
+                </div>
+              ) : null
             ) : (
               <>
                 <div className="flex items-center gap-2 text-sm uppercase tracking-[0.2em] text-[#5a7a70]">
@@ -296,30 +296,26 @@ export function RouteMapCard({
                 ? "space-y-2 border-t border-[#0d5c48]/10 pt-4 text-sm text-[#5a7a70]"
                 : "space-y-2 border-t border-[#0d5c48]/10 pt-5 text-sm text-[#5a7a70]"
               : compact
-                ? "rounded-[1.2rem] border border-[#0d5c48]/10 bg-[#f8faf9] p-3.5 text-sm leading-6 text-[#5a7a70]"
-                : "rounded-[1.4rem] border border-[#0d5c48]/10 bg-[#f8faf9] p-4 text-sm leading-7 text-[#5a7a70]"
+                ? "space-y-2 border-t border-[#0d5c48]/10 pt-4 text-sm leading-6 text-[#5a7a70]"
+                : "space-y-2 border-t border-[#0d5c48]/10 pt-5 text-sm leading-7 text-[#5a7a70]"
           }
         >
           {embedded ? (
-            summary ? (
-              <>
-                <div className="flex items-start gap-3">
-                  <span className="shrink-0 whitespace-nowrap">Pickup</span>
-                  <span className="ml-auto max-w-[16rem] text-right text-[#1a3d34]">
-                    {summary.startAddress}
-                  </span>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="shrink-0 whitespace-nowrap">Drop-off</span>
-                  <span className="ml-auto max-w-[16rem] text-right text-[#1a3d34]">
-                    {summary.endAddress}
-                  </span>
-                </div>
-                {error ? <div className="text-[#8aa89e]">{error}</div> : null}
-              </>
-            ) : (
-              <div className="text-[#8aa89e]">Choose pickup and drop-off addresses to render the live map route.</div>
-            )
+            <>
+              <div className="flex items-start gap-3">
+                <span className="shrink-0 whitespace-nowrap">Pickup</span>
+                <span className="ml-auto max-w-[16rem] text-right text-[#1a3d34]">
+                  {summary?.startAddress || pickupAddress || "—"}
+                </span>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="shrink-0 whitespace-nowrap">Drop-off</span>
+                <span className="ml-auto max-w-[16rem] text-right text-[#1a3d34]">
+                  {summary?.endAddress || dropoffAddress || "—"}
+                </span>
+              </div>
+              {error ? <div className="text-[#8aa89e]">{error}</div> : null}
+            </>
           ) : (
             <div className="flex items-start gap-3">
               <MapPinned className="mt-1 size-4 text-[#0d5c48]" />

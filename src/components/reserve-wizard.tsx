@@ -12,7 +12,6 @@ import {
   Minus,
   Plus,
   ShieldCheck,
-  Sparkles,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,7 +23,6 @@ import { BadgeSwitcher } from "@/components/ui/badge-switcher";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -97,31 +95,26 @@ const stepMeta = [
   {
     id: 1 as Step,
     label: "Route",
-    eyebrow: "Route details",
     cta: "Continue to schedule",
   },
   {
     id: 2 as Step,
     label: "Time",
-    eyebrow: "Schedule",
     cta: "Continue to fit",
   },
   {
     id: 3 as Step,
     label: "Fit",
-    eyebrow: "Party fit",
     cta: "See vehicles",
   },
   {
     id: 4 as Step,
     label: "Vehicle",
-    eyebrow: "Vehicle choice",
     cta: "Continue to checkout",
   },
   {
     id: 5 as Step,
     label: "Checkout",
-    eyebrow: "Checkout",
     cta: "Continue to payment",
   },
 ] as const;
@@ -1833,7 +1826,7 @@ export function ReserveWizard({
           <div className="space-y-5">
             {step === 1 && (
               <div className="space-y-5">
-                <div className="rounded-2xl border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5 lg:p-6">
+                <div className="p-1">
                   <div className="grid gap-4 sm:grid-cols-[1.1fr_0.9fr]">
                     <div className="space-y-2">
                       <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">Pricing</Label>
@@ -1914,18 +1907,16 @@ export function ReserveWizard({
                       </>
                     )}
 
-                      <div
+                      <p
                         className={cn(
-                          "rounded-xl border px-4 py-3 text-sm",
-                          stepOneReady
-                            ? "border-[#2d6a4f]/12 bg-[#eef7f1] text-[#1f5d44]"
-                            : "border-[#d4b88a]/30 bg-[#fff6ea] text-[#8a6736]",
+                          "text-sm",
+                          stepOneReady ? "text-[#1f5d44]" : "text-[#8a6736]",
                         )}
                       >
                         {stepOneReady
-                          ? "Route ready. Continue to schedule to choose the pickup time."
+                          ? "Route looks good."
                           : `Still needed: ${stepOneMissingItems.join(", ")}.`}
-                      </div>
+                      </p>
 
                       {stepOneAttempted && routeSelectionError ? (
                         <p className="text-sm font-medium text-rose-500">{routeSelectionError}</p>
@@ -1937,7 +1928,7 @@ export function ReserveWizard({
 
             {step === 2 && (
               <div className="grid gap-4">
-                <div className="rounded-2xl border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5 lg:p-6">
+                <div className="p-1">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <BookingDateField
                       label="Pick up date"
@@ -2020,7 +2011,7 @@ export function ReserveWizard({
 
             {step === 3 && (
               <div className="grid gap-4">
-                <div className="rounded-2xl border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5 lg:p-6">
+                <div className="p-1">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <BookingCounterField
                       label="Passengers"
@@ -2039,7 +2030,7 @@ export function ReserveWizard({
                     />
                   </div>
 
-                  <div className="mt-5 rounded-xl border border-[#2d6a4f]/10 bg-white px-4 py-4">
+                  <div className="mt-5 px-1 py-1">
                     <p className="text-sm text-[#1a3d34]">{fitReadout}</p>
                     <p className="mt-2 text-sm leading-6 text-[#5a7a6e]">
                       Luggage means full-size checked bags. Carry-ons and personal items are usually easier to fit than this count suggests.
@@ -2048,10 +2039,7 @@ export function ReserveWizard({
                   {fitVehiclePreview.length > 0 ? (
                     <div className="mt-4 grid gap-3 sm:grid-cols-3">
                       {fitVehiclePreview.map((vehicle) => (
-                        <div
-                          key={vehicle.id}
-                          className="rounded-xl border border-[#2d6a4f]/10 bg-white px-4 py-4"
-                        >
+                        <div key={vehicle.id} className="border-l-2 border-[#2d6a4f]/15 pl-4 py-1">
                           <p className="text-sm font-medium text-[#1a3d34]">{vehicle.label}</p>
                           <p className="mt-1 text-sm text-[#5a7a6e]">{vehicle.detail}</p>
                         </div>
@@ -2358,10 +2346,7 @@ export function ReserveWizard({
               </div>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#2d6a4f]/10 pt-5">
-              <div className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
-                {activeStep.eyebrow}
-              </div>
+            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#2d6a4f]/10 pt-5">
               <div className="flex gap-3">
                 {step > 1 && (
                   <Button
@@ -2434,7 +2419,7 @@ export function ReserveWizard({
         compact && "gap-5",
       )}
     >
-      <div className="rounded-[2rem] border border-[#2d6a4f]/10 bg-white p-6 shadow-[0_4px_30px_rgba(45,106,79,0.1)] lg:p-8">
+      <div className="p-2 lg:p-4">
         <div className="flex flex-col gap-5 border-b border-[#2d6a4f]/10 pb-6">
           <h1 className="max-w-2xl font-display text-4xl leading-[0.96] text-[#1a3d34] md:text-5xl">
             Reserve your ride.
@@ -2475,7 +2460,7 @@ export function ReserveWizard({
 
         <div className="grid gap-5 pt-7">
           {step === 1 && (
-            <div className="rounded-[1.8rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5 lg:p-6">
+            <div className="p-1">
               <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
                 <div className="space-y-2">
                   <Label className="text-[#5a7a6e]">Pricing</Label>
@@ -2552,18 +2537,16 @@ export function ReserveWizard({
                 )}
               </div>
 
-              <div
+              <p
                 className={cn(
-                  "mt-5 rounded-xl border px-4 py-3 text-sm",
-                  stepOneReady
-                    ? "border-[#2d6a4f]/12 bg-[#eef7f1] text-[#1f5d44]"
-                    : "border-[#d4b88a]/30 bg-[#fff6ea] text-[#8a6736]",
+                  "mt-5 text-sm",
+                  stepOneReady ? "text-[#1f5d44]" : "text-[#8a6736]",
                 )}
               >
                 {stepOneReady
                   ? "Route looks good."
                   : `Still needed: ${stepOneMissingItems.join(", ")}.`}
-              </div>
+              </p>
               {stepOneAttempted && routeSelectionError ? (
                 <p className="mt-3 text-sm font-medium text-rose-500">{routeSelectionError}</p>
               ) : null}
@@ -2571,7 +2554,7 @@ export function ReserveWizard({
           )}
 
           {step === 2 && (
-            <div className="rounded-[1.8rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5 lg:p-6">
+            <div className="p-1">
               <div className="max-w-2xl">
                 <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-[#2d6a4f]/80">
                   Schedule
@@ -2767,7 +2750,7 @@ export function ReserveWizard({
           )}
 
           {step === 3 && (
-            <div className="rounded-[1.8rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5 lg:p-6">
+            <div className="p-1">
               <div className="max-w-2xl">
                 <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-[#2d6a4f]/80">
                   Fit
@@ -2955,11 +2938,7 @@ export function ReserveWizard({
           )}
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-[#2d6a4f]/10 pt-6">
-          <div className="flex items-center gap-3 text-sm text-[#5a7a6e]">
-            <Sparkles className="size-4 text-[#2d6a4f]" />
-            {activeStep.eyebrow}
-          </div>
+        <div className="mt-8 flex flex-wrap items-center justify-end gap-4 border-t border-[#2d6a4f]/10 pt-6">
           <div className="flex gap-3">
             {step > 1 && (
               <Button
@@ -2992,8 +2971,7 @@ export function ReserveWizard({
       </div>
 
       <aside className="space-y-5 lg:sticky lg:top-28 lg:self-start">
-        <Card className="rounded-[2rem] border-[#2d6a4f]/10 bg-white">
-          <CardContent className="space-y-5 p-6">
+        <div className="space-y-5 rounded-[2rem] border border-[#2d6a4f]/10 bg-white p-6">
             <div className="flex items-end justify-between gap-4">
               <div />
               <div className="text-right">
@@ -3070,8 +3048,7 @@ export function ReserveWizard({
                     : "Pay now"}
               </Button>
             ) : null}
-          </CardContent>
-        </Card>
+        </div>
       </aside>
     </div>
   );
