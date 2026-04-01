@@ -9,7 +9,7 @@ export function SiteHeader() {
       <div className="site-topbar">
         <div className="site-topbar-inner">
           <span>{siteChrome.topbarText}</span>
-          <Link href={siteChrome.reservationPhoneHref} className="hidden whitespace-nowrap md:inline hover:text-[#0d5c48] transition-colors">
+          <Link href={siteChrome.reservationPhoneHref} className="hidden whitespace-nowrap md:inline hover:text-emerald-700 transition-colors">
             {siteChrome.reservationPhoneLabel}
           </Link>
         </div>
@@ -18,7 +18,7 @@ export function SiteHeader() {
         <SiteBrand />
         <nav className="site-header-nav">
           {siteChrome.navLinks.map((link) => (
-            <Link key={link.href} href={link.href} className="hover:text-[#0d5c48] transition-colors">
+            <Link key={link.href} href={link.href} className="hover:text-emerald-700 transition-colors">
               {link.label}
             </Link>
           ))}
