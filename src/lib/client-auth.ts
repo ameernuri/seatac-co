@@ -64,7 +64,10 @@ export async function createPhoneVerificationChallenge(input: {
       purpose: input.purpose,
       phoneNormalized,
       codeHash: hashVerificationCode(code),
+      attempts: 0,
       expiresAt,
+      verifiedAt: null,
+      consumedAt: null,
       createdAt: now,
       updatedAt: now,
     })
