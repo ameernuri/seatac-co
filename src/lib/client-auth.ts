@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomInt } from "node:crypto";
+import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import { and, eq, isNull, or } from "drizzle-orm";
 
 import { db } from "@/db/client";
@@ -55,14 +55,18 @@ export async function createPhoneVerificationChallenge(input: {
 
   const code = generateVerificationCode();
   const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MINUTES * 60 * 1000);
+  const now = new Date();
 
   const [challenge] = await db
     .insert(clientPhoneVerificationChallenges)
     .values({
+      id: randomUUID(),
       purpose: input.purpose,
       phoneNormalized,
       codeHash: hashVerificationCode(code),
       expiresAt,
+      createdAt: now,
+      updatedAt: now,
     })
     .returning();
 
