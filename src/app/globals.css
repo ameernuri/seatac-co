@@ -2145,13 +2145,15 @@
     margin: 0.45rem 0 0.7rem;
     font-size: 1.7rem;
     line-height: 1.08;
-    color: #1a3d34;
+    color: #ffffff;
+    text-shadow: 0 8px 24px rgba(9, 10, 13, 0.34);
   }
 
   .route-scene-copy p {
     max-width: 24rem;
-    color: #5a7a6e;
+    color: rgba(255, 255, 255, 0.9);
     line-height: 1.55;
+    text-shadow: 0 6px 18px rgba(9, 10, 13, 0.28);
   }
 
   .route-summary-section {
@@ -2375,11 +2377,11 @@
   }
 
   .route-scene-copy h2 {
-    color: #1a3d34;
+    color: #ffffff;
   }
 
   .route-scene-copy p {
-    color: #5a7a6e;
+    color: rgba(255, 255, 255, 0.9);
   }
 
   .route-reserve-shell {

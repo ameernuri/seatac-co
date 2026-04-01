@@ -1143,6 +1143,9 @@ export const seoChangeLogs = pgTable(
     details: text("details"),
     gitRef: varchar("git_ref", { length: 64 }),
     changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     metadata: jsonb("metadata").notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -1154,6 +1157,39 @@ export const seoChangeLogs = pgTable(
       table.changedAt,
     ),
     pageChangedIdx: index("seo_change_logs_page_changed_idx").on(table.pageId, table.changedAt),
+  }),
+);
+
+export const seoChangeLogRevisions = pgTable(
+  "seo_change_log_revisions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    changeLogId: uuid("change_log_id")
+      .notNull()
+      .references(() => seoChangeLogs.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => seoProjects.id, { onDelete: "cascade" }),
+    revisionNumber: integer("revision_number").notNull(),
+    workflowStatus: varchar("workflow_status", { length: 24 }).notNull(),
+    owner: varchar("owner", { length: 120 }),
+    summary: varchar("summary", { length: 240 }).notNull(),
+    details: text("details"),
+    gitRef: varchar("git_ref", { length: 64 }),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    changeRevisionIdx: uniqueIndex("seo_change_log_revisions_change_revision_idx").on(
+      table.changeLogId,
+      table.revisionNumber,
+    ),
+    projectCreatedIdx: index("seo_change_log_revisions_project_created_idx").on(
+      table.projectId,
+      table.createdAt,
+    ),
   }),
 );
 
@@ -1190,6 +1226,40 @@ export const seoExperiments = pgTable(
     projectStatusIdx: index("seo_experiments_project_status_idx").on(
       table.projectId,
       table.status,
+    ),
+  }),
+);
+
+export const seoExperimentRevisions = pgTable(
+  "seo_experiment_revisions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    experimentId: uuid("experiment_id")
+      .notNull()
+      .references(() => seoExperiments.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => seoProjects.id, { onDelete: "cascade" }),
+    revisionNumber: integer("revision_number").notNull(),
+    status: varchar("status", { length: 24 }).notNull(),
+    owner: varchar("owner", { length: 120 }),
+    name: varchar("name", { length: 160 }).notNull(),
+    slug: varchar("slug", { length: 64 }).notNull(),
+    hypothesis: text("hypothesis").notNull(),
+    successMetric: varchar("success_metric", { length: 160 }),
+    notes: jsonb("notes").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    experimentRevisionIdx: uniqueIndex("seo_experiment_revisions_experiment_revision_idx").on(
+      table.experimentId,
+      table.revisionNumber,
+    ),
+    projectCreatedIdx: index("seo_experiment_revisions_project_created_idx").on(
+      table.projectId,
+      table.createdAt,
     ),
   }),
 );
@@ -1267,7 +1337,9 @@ export const schema = {
   seoKeywordRankSnapshots,
   seoSearchConsoleSnapshots,
   seoChangeLogs,
+  seoChangeLogRevisions,
   seoExperiments,
+  seoExperimentRevisions,
   seoLoopRuns,
 };
 

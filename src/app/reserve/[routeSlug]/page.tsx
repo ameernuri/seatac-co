@@ -9,8 +9,6 @@ import { getActiveRoutes, getActiveVehicles, getHotelBySlug, getSettingsMap } fr
 import { env } from "@/env";
 import { deriveHotelReservationDefaults, getHotelRouteName } from "@/lib/hotels";
 import {
-  deriveHotelFacts,
-  deriveRouteFacts,
   deriveRouteReservationDefaults,
   getRouteReserveHref,
 } from "@/lib/route-booking";
@@ -86,47 +84,24 @@ export default async function ReserveRoutePage({ params, searchParams }: Reserve
   const initialState = hotel
     ? deriveHotelReservationDefaults(hotel, route)
     : deriveRouteReservationDefaults(route);
-  const routeFacts = hotel
-    ? deriveHotelFacts(hotel, route, vehicles, initialState) ?? []
-    : deriveRouteFacts(route, vehicles, initialState) ?? [];
   const title = hotel ? getHotelRouteName(hotel) : route.name;
-  const description = hotel
-    ? `Reserve your ride from Sea-Tac Airport to ${hotel.name}. Review the route facts, then confirm the trip online.`
-    : `Reserve your ride from ${route.origin} to ${route.destination}. Review the route facts, then confirm the trip online.`;
 
   return (
     <div className="site-shell min-h-screen">
       <SiteHeader />
-      <main className="mx-auto max-w-7xl px-6 py-14 lg:px-10 lg:py-18">
-        <div className="mb-10 max-w-5xl">
-          <p className="font-sans text-[0.76rem] uppercase tracking-[0.36em] text-primary/80">
-            Route reservation
-          </p>
-          <h1 className="mt-4 max-w-5xl font-display text-[3.6rem] leading-[0.92] text-foreground md:text-[5rem]">
-            Reserve <span className="text-primary">{title}</span>
+      <main className="mx-auto max-w-7xl px-6 py-12 lg:px-10 lg:py-16">
+        <div className="mb-6 max-w-4xl">
+          <h1 className="font-display text-4xl leading-[0.94] text-[#1a3d34] md:text-5xl">
+            Reserve {title}
           </h1>
-          <p className="mt-5 max-w-3xl text-xl leading-9 text-muted-foreground">{description}</p>
         </div>
 
-        {routeFacts.length > 0 ? (
-          <div className="mb-8 grid gap-4 md:grid-cols-4">
-            {routeFacts.map((item) => (
-              <article
-                key={item.label}
-                className="rounded-[1.4rem] border border-primary/12 bg-[color:var(--card)] px-5 py-4 shadow-[0_8px_28px_rgba(45,106,79,0.08)]"
-              >
-                <p className="text-[0.72rem] uppercase tracking-[0.24em] text-muted-foreground">
-                  {item.label}
-                </p>
-                <p className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-foreground">
-                  {item.value}
-                </p>
-              </article>
-            ))}
-          </div>
-        ) : null}
-
         <ReserveWizard
+          showTitle={false}
+          startStep={2}
+          minStep={2}
+          routeLocked
+          lockedPricingType={initialState.tripType === "flat" ? "flat" : undefined}
           allowFlatRate={initialState.tripType === "flat"}
           bookingConstraints={bookingConstraints}
           vehicles={vehicles}

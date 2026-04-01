@@ -1,10 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import {
-  HomeGradientMetricCard,
-  HomeSurfaceNoteCard,
-} from "@/components/home-gradient-cards";
+import { HomeGradientMetricCard, HomeSurfaceNoteCard } from "@/components/home-gradient-cards";
 import { JsonLd } from "@/components/json-ld";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -20,16 +17,12 @@ export type RouteFacts = {
 export function RouteLandingPage({
   page,
   reservationPanel,
-  facts,
   reserveHref,
 }: {
   page: RoutePage;
   reservationPanel?: ReactNode;
-  facts?: RouteFacts;
   reserveHref?: string;
 }) {
-  const highlightItems = facts && facts.length > 0 ? facts : page.highlights;
-
   return (
     <div className="site-shell min-h-screen">
       <SiteHeader />
@@ -47,7 +40,7 @@ export function RouteLandingPage({
               <div
                 className="route-scene-art"
                 style={{
-                  backgroundImage: `linear-gradient(180deg, rgba(9,10,13,0.08) 0%, rgba(9,10,13,0.55) 65%, rgba(9,10,13,0.92) 100%), url(${page.art})`,
+                  backgroundImage: `linear-gradient(180deg, rgba(9,10,13,0.03) 0%, rgba(9,10,13,0.18) 58%, rgba(9,10,13,0.48) 100%), url(${page.art})`,
                 }}
               />
               <div className="route-scene-copy">
@@ -85,32 +78,10 @@ export function RouteLandingPage({
           </div>
         </section>
 
-        <section className="section route-summary-section">
-          <div className="section-inner route-summary-grid">
-            {highlightItems.map((item) => (
-              <HomeGradientMetricCard
-                key={item.label}
-                eyebrow={item.label}
-                title={item.value}
-              />
-            ))}
-          </div>
-        </section>
-
         {reservationPanel ? (
           <section className="section route-reserve-section" id="reserve-form">
             <div className="section-inner">
-              <div className="route-reserve-shell">
-                <div className="route-reserve-copy">
-                  <span className="section-kicker">Reserve this ride</span>
-                  <h2 className="section-title">Send your route, timing, and pickup details directly from this page.</h2>
-                  <p className="section-copy">
-                    Choose the date, route, and trip details below, then finish
-                    the reservation without leaving this page.
-                  </p>
-                </div>
-                <div className="booking-panel font-sans">{reservationPanel}</div>
-              </div>
+              <div className="booking-panel font-sans">{reservationPanel}</div>
             </div>
           </section>
         ) : null}

@@ -3,7 +3,7 @@ import { normalizeBookingConstraints } from "@/lib/booking-constraints";
 import { getActiveRoutes, getActiveVehicles, getSettingsMap } from "@/lib/data";
 import { env } from "@/env";
 import { getRoutePage } from "@/lib/route-pages";
-import { deriveRouteFacts, getRouteReserveHref } from "@/lib/route-booking";
+import { getRouteReserveHref } from "@/lib/route-booking";
 
 import { RouteLandingPage } from "./route-landing-page";
 
@@ -20,12 +20,9 @@ export async function RoutePageScreen({ slug }: { slug: string }) {
       ? routes.find((route) => route.slug === page.reservationDefaults?.routeSlug) ?? null
       : null;
 
-  const routeFacts = deriveRouteFacts(resolvedRoute, vehicles, page.reservationDefaults);
-
   return (
     <RouteLandingPage
       page={page}
-      facts={routeFacts}
       reserveHref={
         page.reservationDefaults?.routeSlug
           ? getRouteReserveHref(page.reservationDefaults.routeSlug)
@@ -36,7 +33,12 @@ export async function RoutePageScreen({ slug }: { slug: string }) {
           bookingConstraints={bookingConstraints}
           vehicles={vehicles}
           routes={routes}
-          compact
+          showTitle={false}
+          startStep={2}
+          minStep={2}
+          routeLocked
+          lockedPricingType={page.reservationDefaults?.tripType === "flat" ? "flat" : undefined}
+          allowFlatRate={page.reservationDefaults?.tripType === "flat"}
           initialState={page.reservationDefaults}
         />
       }

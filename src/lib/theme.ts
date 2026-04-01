@@ -144,12 +144,7 @@ export const siteThemes: Record<string, SiteThemeContent> = {
       "Sea-Tac airport planning, hotel guides, route pages, and private ride reservations in one local resource.",
     reservationPhoneLabel: "Reservations: (206) 737-0808",
     reservationPhoneHref: "tel:+12067370808",
-    navLinks: [
-      { href: "/#routes", label: "Routes" },
-      { href: "/#planning", label: "Planning" },
-      { href: "/#coverage", label: "Coverage" },
-      { href: "/#booking", label: "Book" },
-    ],
+    navLinks: [],
     footer: {
       eyebrow: "Seatac Connection",
       title: "Plan the airport stay, compare the route options, and reserve when you are ready.",
