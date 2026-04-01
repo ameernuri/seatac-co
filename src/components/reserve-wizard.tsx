@@ -62,6 +62,10 @@ type Props = {
   landingOnly?: boolean;
   showTitle?: boolean;
   allowFlatRate?: boolean;
+  startStep?: Step;
+  minStep?: Step;
+  routeLocked?: boolean;
+  lockedPricingType?: PricingType;
   initialClientAccount?: ClientAccountSnapshot | null;
   initialState?: {
     serviceMode?: ServiceMode;
@@ -674,16 +678,23 @@ export function ReserveWizard({
   landingOnly = false,
   showTitle = true,
   allowFlatRate = false,
+  startStep = 1,
+  minStep = 1,
+  routeLocked = false,
+  lockedPricingType,
   initialClientAccount = null,
   initialState,
 }: Props) {
+  const minimumStep = Math.min(Math.max(minStep, 1), 5) as Step;
+  const initialStep = Math.min(Math.max(startStep, minimumStep), 5) as Step;
   const initialPickupSlot = resolveInitialBookingSlot(bookingConstraints);
   const initialRoute =
     initialState?.routeSlug
       ? routes.find((route) => route.slug === initialState.routeSlug) ?? null
       : null;
   const requestedInitialPricingType = pricingTypeFromTripType(
-    (initialState?.tripType === "event" ? "hourly" : initialState?.tripType) ??
+    lockedPricingType ??
+      (initialState?.tripType === "event" ? "hourly" : initialState?.tripType) ??
       (initialRoute
         ? bookingConstraints.presetRouteDefaultPricing
         : bookingConstraints.customTripDefaultPricing),
@@ -703,7 +714,7 @@ export function ReserveWizard({
       : initialPricingType === "hourly"
         ? defaultRouteForPricingType(routes, "hourly")
         : null;
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] = useState<Step>(initialStep);
   const [tripType, setTripType] = useState<TripType>(initialTripType);
   const [routeId, setRouteId] = useState<string>(initialModeRoute?.id ?? "");
   const [pickupAddress, setPickupAddress] = useState(
@@ -767,8 +778,15 @@ export function ReserveWizard({
   const customerName = combineCustomerName(customerFirstName, customerLastName);
   const selectedPricingType = pricingTypeFromTripType(tripType);
   const enabledPricingOptions = useMemo(
-    () => getEnabledPricingOptions(bookingConstraints, { allowFlatRate }),
-    [allowFlatRate, bookingConstraints],
+    () =>
+      lockedPricingType
+        ? pricingTypeConfig.filter((option) => option.value === lockedPricingType)
+        : getEnabledPricingOptions(bookingConstraints, { allowFlatRate }),
+    [allowFlatRate, bookingConstraints, lockedPricingType],
+  );
+  const visibleStepMeta = useMemo(
+    () => stepMeta.filter((item) => item.id >= minimumStep),
+    [minimumStep],
   );
 
   const filteredRoutes = useMemo(
@@ -1064,7 +1082,7 @@ export function ReserveWizard({
         setTripType(restoredPricingType === "hourly" ? "hourly" : restoredPricingType);
       }
       if (typeof draft.step === "number") {
-        setStep(Math.min(Math.max(draft.step, 1), 5) as Step);
+        setStep(Math.min(Math.max(draft.step, minimumStep), 5) as Step);
       }
       if (typeof draft.routeId === "string") setRouteId(draft.routeId);
       if (typeof draft.pickupAddress === "string" && draft.pickupAddress.trim()) {
@@ -1117,7 +1135,7 @@ export function ReserveWizard({
     } finally {
       setDraftLoaded(true);
     }
-  }, [allowFlatRate, bookingConstraints]);
+  }, [allowFlatRate, bookingConstraints, minimumStep]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !draftLoaded) {
@@ -1335,9 +1353,9 @@ export function ReserveWizard({
 
   useEffect(() => {
     const coercedPricingType = coercePricingType(
-      selectedPricingType,
+      lockedPricingType ?? selectedPricingType,
       bookingConstraints,
-      selectedPricingType === "flat",
+      (lockedPricingType ?? selectedPricingType) === "flat",
       { allowFlatRate },
     );
 
@@ -1357,7 +1375,15 @@ export function ReserveWizard({
     if (selectedPricingType !== "flat" && routeId) {
       setRouteId("");
     }
-  }, [allowFlatRate, bookingConstraints, routeId, routes, selectedPricingType, selectedRoute]);
+  }, [
+    allowFlatRate,
+    bookingConstraints,
+    lockedPricingType,
+    routeId,
+    routes,
+    selectedPricingType,
+    selectedRoute,
+  ]);
 
   const pricing = selectedVehicle
     ? quoteReservation({
@@ -1506,6 +1532,10 @@ export function ReserveWizard({
   ];
 
   function applyRoute(route: Route | null) {
+    if (routeLocked) {
+      return;
+    }
+
     if (!route) {
       return;
     }
@@ -1521,6 +1551,10 @@ export function ReserveWizard({
   }
 
   function handlePricingTypeChange(nextPricingType: PricingType) {
+    if (lockedPricingType) {
+      return;
+    }
+
     const safePricingType = coercePricingType(
       nextPricingType,
       bookingConstraints,
@@ -1735,13 +1769,15 @@ export function ReserveWizard({
   }
 
   function jumpToStep(targetStep: Step) {
-    if (targetStep <= step) {
-      setStep(targetStep);
+    const clampedTargetStep = Math.max(targetStep, minimumStep) as Step;
+
+    if (clampedTargetStep <= step) {
+      setStep(clampedTargetStep);
       return;
     }
 
     if (validateStep(step)) {
-      setStep(targetStep);
+      setStep(clampedTargetStep);
     }
   }
 
@@ -2456,11 +2492,11 @@ export function ReserveWizard({
 
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#2d6a4f]/10 pt-5">
               <div className="flex gap-3">
-                {step > 1 && (
+                {step > minimumStep && (
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setStep((step - 1) as Step)}
+                    onClick={() => setStep(Math.max(step - 1, minimumStep) as Step)}
                     className="h-11 rounded-full border-[#2d6a4f]/15 bg-[#f8f7f4] px-5 text-[#5a7a6e] shadow-none hover:bg-[#2d6a4f]/5 hover:text-[#1a3d34]"
                   >
                     Back
@@ -2539,7 +2575,7 @@ export function ReserveWizard({
             <div className="overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="relative flex min-w-max items-start gap-6 lg:grid lg:min-w-0 lg:grid-cols-5 lg:gap-4">
                 <div className="absolute left-10 right-10 top-[3.1rem] hidden h-px bg-[#2d6a4f]/12 lg:block" />
-                {stepMeta.map((item) => (
+                {visibleStepMeta.map((item) => (
                   <button
                     key={item.id}
                     type="button"
@@ -3100,11 +3136,11 @@ export function ReserveWizard({
 
         <div className="mt-8 flex flex-wrap items-center justify-end gap-4 border-t border-[#2d6a4f]/10 pt-6">
           <div className="flex gap-3">
-            {!landingOnly && step > 1 && (
+            {!landingOnly && step > minimumStep && (
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setStep((step - 1) as Step)}
+                onClick={() => setStep(Math.max(step - 1, minimumStep) as Step)}
                 className="booking-secondary-button h-12 rounded-full px-5"
               >
                 Back
