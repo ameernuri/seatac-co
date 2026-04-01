@@ -289,6 +289,8 @@ export function ClientAccountForm(props: Props) {
       return;
     }
 
+    setChallengeId(typeof data.challengeId === "string" ? data.challengeId : challengeId);
+
     if (isCheckout) {
       try {
         const account = (await syncProfile()) ?? (await fetchAccountSnapshot());
