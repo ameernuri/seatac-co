@@ -6,11 +6,10 @@ import {
   randomUUID,
   timingSafeEqual,
 } from "node:crypto";
-import { and, eq, isNull, or } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import {
-  clientPhoneVerificationChallenges,
   clientProfiles,
   users,
 } from "@/db/schema";
@@ -31,9 +30,9 @@ export type ClientVerificationPurpose = (typeof clientVerificationPurposes)[numb
 
 const VERIFICATION_CODE_LENGTH = 6;
 const VERIFICATION_TTL_MINUTES = 10;
-const MAX_VERIFICATION_ATTEMPTS = 5;
 
 type SignedVerificationPayload = {
+  codeHash: string | null;
   expiresAt: string;
   nonce: string;
   phoneNormalized: string;
@@ -90,6 +89,7 @@ function readVerificationPayload(token: string) {
   ) as SignedVerificationPayload;
 
   return {
+    id: token,
     ...payload,
     expiresAt: new Date(payload.expiresAt),
     verifiedAt: payload.verifiedAt ? new Date(payload.verifiedAt) : null,
@@ -109,50 +109,11 @@ export async function createPhoneVerificationChallenge(input: {
   const code = generateVerificationCode();
   const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MINUTES * 60 * 1000);
   const now = new Date();
+  const useTwilioVerify = isTwilioVerifyConfigured();
 
-  if (isTwilioVerifyConfigured()) {
+  if (useTwilioVerify) {
     await sendPhoneVerificationCode(phoneNormalized);
-
-    return {
-      challenge: {
-        id: signVerificationPayload({
-          expiresAt: expiresAt.toISOString(),
-          nonce: randomUUID(),
-          phoneNormalized,
-          purpose: input.purpose,
-          verifiedAt: null,
-        }),
-        purpose: input.purpose,
-        phoneNormalized,
-        codeHash: "",
-        attempts: 0,
-        expiresAt,
-        verifiedAt: null,
-        consumedAt: null,
-        createdAt: now,
-        updatedAt: now,
-      },
-      developmentCode: undefined,
-    };
-  }
-
-  const [challenge] = await db
-    .insert(clientPhoneVerificationChallenges)
-    .values({
-      id: randomUUID(),
-      purpose: input.purpose,
-      phoneNormalized,
-      codeHash: hashVerificationCode(code),
-      attempts: 0,
-      expiresAt,
-      verifiedAt: null,
-      consumedAt: null,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .returning();
-
-  if (getOtpSmsSenderConfig().value) {
+  } else if (getOtpSmsSenderConfig().value) {
     await sendTextMessage({
       to: phoneNormalized,
       sender: getOtpSmsSenderConfig(),
@@ -164,6 +125,26 @@ export async function createPhoneVerificationChallenge(input: {
       body: `seatac.co verification code: ${code}. This code expires in ${VERIFICATION_TTL_MINUTES} minutes.`,
     });
   }
+
+  const challenge = {
+    id: signVerificationPayload({
+      codeHash: useTwilioVerify ? null : hashVerificationCode(code),
+      expiresAt: expiresAt.toISOString(),
+      nonce: randomUUID(),
+      phoneNormalized,
+      purpose: input.purpose,
+      verifiedAt: null,
+    }),
+    purpose: input.purpose,
+    phoneNormalized,
+    codeHash: useTwilioVerify ? "" : hashVerificationCode(code),
+    attempts: 0,
+    expiresAt,
+    verifiedAt: null,
+    consumedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  };
 
   return {
     challenge,
@@ -188,20 +169,28 @@ export async function verifyPhoneVerificationChallenge(input: {
     throw new Error("Enter a valid mobile number.");
   }
 
-  if (isTwilioVerifyConfigured()) {
-    const challenge = readVerificationPayload(input.challengeId);
+  const challenge = readVerificationPayload(input.challengeId);
 
-    if (
-      challenge.phoneNormalized !== phoneNormalized ||
-      challenge.purpose !== input.purpose
-    ) {
-      throw new Error("Verification session could not be found.");
+  if (
+    challenge.phoneNormalized !== phoneNormalized ||
+    challenge.purpose !== input.purpose
+  ) {
+    throw new Error("Verification session could not be found.");
+  }
+
+  if (challenge.verifiedAt) {
+    return challenge;
+  }
+
+  if (challenge.expiresAt <= new Date()) {
+    throw new Error("That code has expired. Request a new one.");
+  }
+
+  if (challenge.codeHash) {
+    if (challenge.codeHash !== hashVerificationCode(input.code)) {
+      throw new Error("That code is not correct.");
     }
-
-    if (challenge.expiresAt <= new Date()) {
-      throw new Error("That code has expired. Request a new one.");
-    }
-
+  } else {
     const result = await checkPhoneVerificationCode({
       code: input.code,
       to: phoneNormalized,
@@ -210,94 +199,26 @@ export async function verifyPhoneVerificationChallenge(input: {
     if (result.status !== "approved") {
       throw new Error("That code is not correct.");
     }
-
-    const verifiedAt = new Date();
-
-    return {
-      ...challenge,
-      id: signVerificationPayload({
-        expiresAt: challenge.expiresAt.toISOString(),
-        nonce: challenge.nonce,
-        phoneNormalized: challenge.phoneNormalized,
-        purpose: challenge.purpose,
-        verifiedAt: verifiedAt.toISOString(),
-      }),
-      verifiedAt,
-      updatedAt: verifiedAt,
-      createdAt: verifiedAt,
-      codeHash: "",
-      attempts: 1,
-      consumedAt: null,
-    };
   }
 
-  const [challenge] = await db
-    .select()
-    .from(clientPhoneVerificationChallenges)
-    .where(
-      and(
-        eq(clientPhoneVerificationChallenges.id, input.challengeId),
-        eq(clientPhoneVerificationChallenges.phoneNormalized, phoneNormalized),
-        eq(clientPhoneVerificationChallenges.purpose, input.purpose),
-        isNull(clientPhoneVerificationChallenges.consumedAt),
-      ),
-    )
-    .limit(1);
+  const verifiedAt = new Date();
 
-  if (!challenge) {
-    throw new Error("Verification session could not be found.");
-  }
-
-  if (challenge.verifiedAt) {
-    return challenge;
-  }
-
-  if (challenge.attempts >= MAX_VERIFICATION_ATTEMPTS) {
-    throw new Error("Too many attempts. Request a new code.");
-  }
-
-  if (challenge.expiresAt <= new Date()) {
-    throw new Error("That code has expired. Request a new one.");
-  }
-
-  const localCodeMatches = challenge.codeHash === hashVerificationCode(input.code);
-  const usesDirectOtpSender = Boolean(getOtpSmsSenderConfig().value);
-
-  if (usesDirectOtpSender) {
-    if (!localCodeMatches) {
-      await db
-        .update(clientPhoneVerificationChallenges)
-        .set({
-          attempts: challenge.attempts + 1,
-          updatedAt: new Date(),
-        })
-        .where(eq(clientPhoneVerificationChallenges.id, challenge.id));
-
-      throw new Error("That code is not correct.");
-    }
-  } else if (!localCodeMatches) {
-    await db
-      .update(clientPhoneVerificationChallenges)
-      .set({
-        attempts: challenge.attempts + 1,
-        updatedAt: new Date(),
-      })
-      .where(eq(clientPhoneVerificationChallenges.id, challenge.id));
-
-    throw new Error("That code is not correct.");
-  }
-
-  const [verified] = await db
-    .update(clientPhoneVerificationChallenges)
-    .set({
-      attempts: challenge.attempts + 1,
-      verifiedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(clientPhoneVerificationChallenges.id, challenge.id))
-    .returning();
-
-  return verified;
+  return {
+    ...challenge,
+    id: signVerificationPayload({
+      codeHash: challenge.codeHash,
+      expiresAt: challenge.expiresAt.toISOString(),
+      nonce: challenge.nonce,
+      phoneNormalized: challenge.phoneNormalized,
+      purpose: challenge.purpose,
+      verifiedAt: verifiedAt.toISOString(),
+    }),
+    verifiedAt,
+    updatedAt: verifiedAt,
+    createdAt: verifiedAt,
+    attempts: 1,
+    consumedAt: null,
+  };
 }
 
 export async function ensureClientUserAccount(input: {
@@ -415,55 +336,22 @@ export async function consumeVerifiedChallenge(input: {
     throw new Error("Enter a valid mobile number.");
   }
 
-  if (isTwilioVerifyConfigured()) {
-    const challenge = readVerificationPayload(input.challengeId);
+  const challenge = readVerificationPayload(input.challengeId);
 
-    if (
-      challenge.phoneNormalized !== phoneNormalized ||
-      challenge.purpose !== input.purpose
-    ) {
-      throw new Error("Verification session could not be found.");
-    }
-
-    if (!challenge.verifiedAt) {
-      throw new Error("Phone verification is incomplete.");
-    }
-
-    if (challenge.expiresAt <= new Date()) {
-      throw new Error("The verified code has expired. Verify again.");
-    }
-
-    return challenge;
+  if (
+    challenge.phoneNormalized !== phoneNormalized ||
+    challenge.purpose !== input.purpose
+  ) {
+    throw new Error("Verification session could not be found.");
   }
 
-  const [challenge] = await db
-    .select()
-    .from(clientPhoneVerificationChallenges)
-    .where(
-      and(
-        eq(clientPhoneVerificationChallenges.id, input.challengeId),
-        eq(clientPhoneVerificationChallenges.phoneNormalized, phoneNormalized),
-        eq(clientPhoneVerificationChallenges.purpose, input.purpose),
-        isNull(clientPhoneVerificationChallenges.consumedAt),
-      ),
-    )
-    .limit(1);
-
-  if (!challenge?.verifiedAt) {
+  if (!challenge.verifiedAt) {
     throw new Error("Phone verification is incomplete.");
   }
 
   if (challenge.expiresAt <= new Date()) {
     throw new Error("The verified code has expired. Verify again.");
   }
-
-  await db
-    .update(clientPhoneVerificationChallenges)
-    .set({
-      consumedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(clientPhoneVerificationChallenges.id, challenge.id));
 
   return challenge;
 }
