@@ -1,4 +1,11 @@
-import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  randomInt,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto";
 import { and, eq, isNull, or } from "drizzle-orm";
 
 import { db } from "@/db/client";
@@ -26,6 +33,14 @@ const VERIFICATION_CODE_LENGTH = 6;
 const VERIFICATION_TTL_MINUTES = 10;
 const MAX_VERIFICATION_ATTEMPTS = 5;
 
+type SignedVerificationPayload = {
+  expiresAt: string;
+  nonce: string;
+  phoneNormalized: string;
+  purpose: ClientVerificationPurpose;
+  verifiedAt: string | null;
+};
+
 export function hashVerificationCode(code: string) {
   return createHash("sha256")
     .update(`${env.betterAuthSecret}:${code}`)
@@ -43,6 +58,44 @@ export function normalizeClientPhone(input: string) {
   return normalizePhoneNumber(input);
 }
 
+function signVerificationPayload(payload: SignedVerificationPayload) {
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = createHmac("sha256", env.betterAuthSecret)
+    .update(body)
+    .digest("base64url");
+
+  return `${body}.${signature}`;
+}
+
+function readVerificationPayload(token: string) {
+  const [body, signature] = token.split(".");
+
+  if (!body || !signature) {
+    throw new Error("Verification session could not be found.");
+  }
+
+  const expectedSignature = createHmac("sha256", env.betterAuthSecret)
+    .update(body)
+    .digest("base64url");
+
+  const received = Buffer.from(signature);
+  const expected = Buffer.from(expectedSignature);
+
+  if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
+    throw new Error("Verification session could not be found.");
+  }
+
+  const payload = JSON.parse(
+    Buffer.from(body, "base64url").toString("utf8"),
+  ) as SignedVerificationPayload;
+
+  return {
+    ...payload,
+    expiresAt: new Date(payload.expiresAt),
+    verifiedAt: payload.verifiedAt ? new Date(payload.verifiedAt) : null,
+  };
+}
+
 export async function createPhoneVerificationChallenge(input: {
   phone: string;
   purpose: ClientVerificationPurpose;
@@ -56,6 +109,32 @@ export async function createPhoneVerificationChallenge(input: {
   const code = generateVerificationCode();
   const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MINUTES * 60 * 1000);
   const now = new Date();
+
+  if (isTwilioVerifyConfigured()) {
+    await sendPhoneVerificationCode(phoneNormalized);
+
+    return {
+      challenge: {
+        id: signVerificationPayload({
+          expiresAt: expiresAt.toISOString(),
+          nonce: randomUUID(),
+          phoneNormalized,
+          purpose: input.purpose,
+          verifiedAt: null,
+        }),
+        purpose: input.purpose,
+        phoneNormalized,
+        codeHash: "",
+        attempts: 0,
+        expiresAt,
+        verifiedAt: null,
+        consumedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      developmentCode: undefined,
+    };
+  }
 
   const [challenge] = await db
     .insert(clientPhoneVerificationChallenges)
@@ -79,8 +158,6 @@ export async function createPhoneVerificationChallenge(input: {
       sender: getOtpSmsSenderConfig(),
       body: `seatac.co verification code: ${code}. This code expires in ${VERIFICATION_TTL_MINUTES} minutes.`,
     });
-  } else if (isTwilioVerifyConfigured()) {
-    await sendPhoneVerificationCode(phoneNormalized);
   } else if (isSmsConfigured()) {
     await sendTextMessage({
       to: phoneNormalized,
@@ -109,6 +186,49 @@ export async function verifyPhoneVerificationChallenge(input: {
 
   if (!phoneNormalized) {
     throw new Error("Enter a valid mobile number.");
+  }
+
+  if (isTwilioVerifyConfigured()) {
+    const challenge = readVerificationPayload(input.challengeId);
+
+    if (
+      challenge.phoneNormalized !== phoneNormalized ||
+      challenge.purpose !== input.purpose
+    ) {
+      throw new Error("Verification session could not be found.");
+    }
+
+    if (challenge.expiresAt <= new Date()) {
+      throw new Error("That code has expired. Request a new one.");
+    }
+
+    const result = await checkPhoneVerificationCode({
+      code: input.code,
+      to: phoneNormalized,
+    });
+
+    if (result.status !== "approved") {
+      throw new Error("That code is not correct.");
+    }
+
+    const verifiedAt = new Date();
+
+    return {
+      ...challenge,
+      id: signVerificationPayload({
+        expiresAt: challenge.expiresAt.toISOString(),
+        nonce: challenge.nonce,
+        phoneNormalized: challenge.phoneNormalized,
+        purpose: challenge.purpose,
+        verifiedAt: verifiedAt.toISOString(),
+      }),
+      verifiedAt,
+      updatedAt: verifiedAt,
+      createdAt: verifiedAt,
+      codeHash: "",
+      attempts: 1,
+      consumedAt: null,
+    };
   }
 
   const [challenge] = await db
@@ -145,23 +265,6 @@ export async function verifyPhoneVerificationChallenge(input: {
 
   if (usesDirectOtpSender) {
     if (!localCodeMatches) {
-      await db
-        .update(clientPhoneVerificationChallenges)
-        .set({
-          attempts: challenge.attempts + 1,
-          updatedAt: new Date(),
-        })
-        .where(eq(clientPhoneVerificationChallenges.id, challenge.id));
-
-      throw new Error("That code is not correct.");
-    }
-  } else if (isTwilioVerifyConfigured()) {
-    const result = await checkPhoneVerificationCode({
-      code: input.code,
-      to: phoneNormalized,
-    });
-
-    if (result.status !== "approved") {
       await db
         .update(clientPhoneVerificationChallenges)
         .set({
@@ -310,6 +413,27 @@ export async function consumeVerifiedChallenge(input: {
 
   if (!phoneNormalized) {
     throw new Error("Enter a valid mobile number.");
+  }
+
+  if (isTwilioVerifyConfigured()) {
+    const challenge = readVerificationPayload(input.challengeId);
+
+    if (
+      challenge.phoneNormalized !== phoneNormalized ||
+      challenge.purpose !== input.purpose
+    ) {
+      throw new Error("Verification session could not be found.");
+    }
+
+    if (!challenge.verifiedAt) {
+      throw new Error("Phone verification is incomplete.");
+    }
+
+    if (challenge.expiresAt <= new Date()) {
+      throw new Error("The verified code has expired. Verify again.");
+    }
+
+    return challenge;
   }
 
   const [challenge] = await db

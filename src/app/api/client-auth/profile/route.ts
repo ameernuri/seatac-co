@@ -15,7 +15,7 @@ import { users } from "@/db/schema";
 import { getServerSession } from "@/lib/session";
 
 const postBodySchema = z.object({
-  challengeId: z.string().uuid().optional(),
+  challengeId: z.string().min(1).optional(),
   email: z.string().email(),
   name: z.string().min(2),
   phone: z.string().min(7),

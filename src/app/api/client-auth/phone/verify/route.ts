@@ -7,7 +7,7 @@ import {
 } from "@/lib/client-auth";
 
 const bodySchema = z.object({
-  challengeId: z.string().uuid(),
+  challengeId: z.string().min(1),
   code: z.string().trim().length(6),
   phone: z.string().min(7),
   purpose: z.enum(clientVerificationPurposes),
