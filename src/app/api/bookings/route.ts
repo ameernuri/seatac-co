@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { and, eq } from "drizzle-orm";
 
 import {
   BookingGuardrailError,
@@ -6,7 +7,11 @@ import {
   VehicleAvailabilityError,
 } from "@/lib/booking-payload";
 import { createBookingCheckout } from "@/lib/checkout";
+import { getServerSession } from "@/lib/session";
 import { isStripeConfigured } from "@/lib/stripe";
+import { db } from "@/db/client";
+import { users } from "@/db/schema";
+import { normalizePhoneNumber } from "@/lib/sms";
 
 export async function POST(request: Request) {
   if (!isStripeConfigured()) {
@@ -17,9 +22,32 @@ export async function POST(request: Request) {
   }
 
   const payload = bookingPayloadSchema.parse(await request.json());
+  const session = await getServerSession();
+  let customerUserId = session?.user?.id ?? null;
+
+  if (!customerUserId && payload.customerUserId) {
+    const normalizedPhone = normalizePhoneNumber(payload.customerPhone);
+
+    const [matchedUser] = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.id, payload.customerUserId),
+          eq(users.email, payload.customerEmail.trim().toLowerCase()),
+          eq(users.phoneNumber, normalizedPhone ?? payload.customerPhone),
+        ),
+      )
+      .limit(1);
+
+    customerUserId = matchedUser?.id ?? null;
+  }
 
   try {
-    const result = await createBookingCheckout({ payload });
+    const result = await createBookingCheckout({
+      payload,
+      customerUserId,
+    });
 
     return NextResponse.json({
       bookingReference: result.booking.reference,

@@ -12,13 +12,15 @@ type BookingPayload = z.infer<typeof bookingPayloadSchema>;
 type CreateBookingCheckoutInput = {
   payload: BookingPayload;
   siteSlug?: string;
+  customerUserId?: string | null;
 };
 
 export async function createBookingCheckout({
   payload,
   siteSlug,
+  customerUserId,
 }: CreateBookingCheckoutInput) {
-  const draft = await createBookingDraft(payload, siteSlug);
+  const draft = await createBookingDraft(payload, siteSlug, customerUserId);
   const { booking, vehicle } = draft;
   const site = await db.query.sites.findFirst({
     where: (table, { eq }) => eq(table.id, booking.siteId),

@@ -25,8 +25,38 @@ export function getSmsSenderConfig() {
   };
 }
 
+export function getOtpSmsSenderConfig() {
+  if (env.twilioOtpMessagingServiceSid) {
+    return {
+      mode: "messaging-service" as const,
+      value: env.twilioOtpMessagingServiceSid,
+    };
+  }
+
+  return getSmsSenderConfig();
+}
+
+export function isTwilioVerifyConfigured() {
+  return Boolean(
+    env.twilioAccountSid &&
+      (env.twilioAuthToken ||
+        (env.twilioApiKeySid && env.twilioApiKeySecret)) &&
+      env.twilioVerifyServiceSid,
+  );
+}
+
 export function getSmsStatusCallbackUrl() {
-  return new URL("/api/twilio/status", env.appUrl).toString();
+  const callbackUrl = new URL("/api/twilio/status", env.appUrl);
+
+  if (
+    callbackUrl.protocol !== "https:" ||
+    callbackUrl.hostname === "localhost" ||
+    callbackUrl.hostname === "127.0.0.1"
+  ) {
+    return null;
+  }
+
+  return callbackUrl.toString();
 }
 
 export function isSmsConfigured() {
@@ -43,6 +73,22 @@ export function isSmsConfigured() {
 function getSmsClient() {
   if (!isSmsConfigured()) {
     throw new Error("Twilio SMS is not configured.");
+  }
+
+  if (!client) {
+    client = env.twilioAuthToken
+      ? twilio(env.twilioAccountSid, env.twilioAuthToken)
+      : twilio(env.twilioApiKeySid, env.twilioApiKeySecret, {
+          accountSid: env.twilioAccountSid,
+        });
+  }
+
+  return client;
+}
+
+function getTwilioClient() {
+  if (!env.twilioAccountSid) {
+    throw new Error("Twilio account is not configured.");
   }
 
   if (!client) {
@@ -91,9 +137,11 @@ export function getDispatchSmsRecipients() {
 export async function sendTextMessage({
   body,
   to,
+  sender,
 }: {
   body: string;
   to: string;
+  sender?: ReturnType<typeof getSmsSenderConfig>;
 }) {
   const normalizedTo = normalizePhoneNumber(to);
 
@@ -103,12 +151,57 @@ export async function sendTextMessage({
 
   const smsClient = getSmsClient();
 
+  const resolvedSender = sender ?? getSmsSenderConfig();
+
   return smsClient.messages.create({
     body,
-    ...(getSmsSenderConfig().mode === "messaging-service"
-      ? { messagingServiceSid: env.twilioMessagingServiceSid }
+    ...(resolvedSender.mode === "messaging-service"
+      ? { messagingServiceSid: resolvedSender.value }
       : { from: env.twilioFromNumber }),
-    statusCallback: getSmsStatusCallbackUrl(),
+    ...(getSmsStatusCallbackUrl()
+      ? { statusCallback: getSmsStatusCallbackUrl()! }
+      : {}),
     to: normalizedTo,
   });
+}
+
+export async function sendPhoneVerificationCode(to: string) {
+  if (!isTwilioVerifyConfigured()) {
+    throw new Error("Twilio Verify is not configured.");
+  }
+
+  const normalizedTo = normalizePhoneNumber(to);
+
+  if (!normalizedTo) {
+    throw new Error(`Invalid SMS recipient: ${to}`);
+  }
+
+  return getTwilioClient()
+    .verify.v2.services(env.twilioVerifyServiceSid)
+    .verifications.create({
+      channel: "sms",
+      to: normalizedTo,
+    });
+}
+
+export async function checkPhoneVerificationCode(input: {
+  code: string;
+  to: string;
+}) {
+  if (!isTwilioVerifyConfigured()) {
+    throw new Error("Twilio Verify is not configured.");
+  }
+
+  const normalizedTo = normalizePhoneNumber(input.to);
+
+  if (!normalizedTo) {
+    throw new Error(`Invalid SMS recipient: ${input.to}`);
+  }
+
+  return getTwilioClient()
+    .verify.v2.services(env.twilioVerifyServiceSid)
+    .verificationChecks.create({
+      code: input.code,
+      to: normalizedTo,
+    });
 }

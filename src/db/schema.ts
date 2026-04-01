@@ -18,6 +18,8 @@ export const users = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
+  phoneNumber: text("phone_number").unique(),
+  phoneNumberVerified: boolean("phone_number_verified").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 });
@@ -338,6 +340,9 @@ export const bookings = pgTable("bookings", {
   passengers: integer("passengers").notNull(),
   bags: integer("bags").notNull(),
   hoursRequested: integer("hours_requested"),
+  customerUserId: text("customer_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   customerName: varchar("customer_name", { length: 160 }).notNull(),
   customerEmail: varchar("customer_email", { length: 160 }).notNull(),
   customerPhone: varchar("customer_phone", { length: 64 }).notNull(),
@@ -387,6 +392,59 @@ export const bookings = pgTable("bookings", {
     .notNull()
     .defaultNow(),
 });
+
+export const clientProfiles = pgTable(
+  "client_profiles",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    phone: varchar("phone", { length: 64 }).notNull(),
+    phoneNormalized: varchar("phone_normalized", { length: 32 }).notNull(),
+    phoneVerifiedAt: timestamp("phone_verified_at", { withTimezone: true }),
+    smsOptIn: boolean("sms_opt_in").notNull().default(false),
+    smsOptInAt: timestamp("sms_opt_in_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    phoneNormalizedIdx: uniqueIndex("client_profiles_phone_normalized_idx").on(
+      table.phoneNormalized,
+    ),
+  }),
+);
+
+export const clientPhoneVerificationChallenges = pgTable(
+  "client_phone_verification_challenges",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    purpose: varchar("purpose", { length: 32 }).notNull(),
+    phoneNormalized: varchar("phone_normalized", { length: 32 }).notNull(),
+    codeHash: text("code_hash").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    phonePurposeIdx: index("client_phone_verification_phone_purpose_idx").on(
+      table.phoneNormalized,
+      table.purpose,
+      table.createdAt,
+    ),
+    expiresIdx: index("client_phone_verification_expires_idx").on(table.expiresAt),
+  }),
+);
 
 export const vehicleBlocks = pgTable(
   "vehicle_blocks",
@@ -1186,6 +1244,8 @@ export const schema = {
   chauffeurs,
   routes,
   bookings,
+  clientProfiles,
+  clientPhoneVerificationChallenges,
   vehicleBlocks,
   callLogs,
   siteSettings,
@@ -1223,6 +1283,9 @@ export type Chauffeur = typeof chauffeurs.$inferSelect;
 export type Route = typeof routes.$inferSelect;
 export type Hotel = typeof hotels.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
+export type ClientProfile = typeof clientProfiles.$inferSelect;
+export type ClientPhoneVerificationChallenge =
+  typeof clientPhoneVerificationChallenges.$inferSelect;
 export type VehicleBlock = typeof vehicleBlocks.$inferSelect;
 export type CallLog = typeof callLogs.$inferSelect;
 export type ProofPersona = typeof proofPersonas.$inferSelect;

@@ -16,6 +16,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  ClientAccountForm,
+  type ClientAccountSnapshot,
+} from "@/components/client-account-form";
 import { GoogleAddressInput } from "@/components/google-address-input";
 import { RouteMapCard, type RouteSummary } from "@/components/route-map-card";
 import { AddressSwapButton } from "@/components/ui/address-swap-button";
@@ -57,6 +61,8 @@ type Props = {
   compact?: boolean;
   landingOnly?: boolean;
   showTitle?: boolean;
+  allowFlatRate?: boolean;
+  initialClientAccount?: ClientAccountSnapshot | null;
   initialState?: {
     serviceMode?: ServiceMode;
     tripType?: TripType;
@@ -67,7 +73,7 @@ type Props = {
   };
 };
 
-const RESERVE_DRAFT_STORAGE_KEY = "seatac-reserve-draft-v1";
+const RESERVE_DRAFT_STORAGE_KEY = "seatac-reserve-draft-v2";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 type TripType = "flat" | "distance" | "hourly" | "event";
@@ -80,8 +86,10 @@ type VehicleAvailabilityStatus = {
 
 type CheckoutFieldErrorKey =
   | "customerEmail"
-  | "customerName"
+  | "customerFirstName"
+  | "customerLastName"
   | "customerPhone"
+  | "customerPhoneVerified"
   | "customerPolicyAgreed";
 
 type CheckoutFieldErrors = Partial<Record<CheckoutFieldErrorKey, string>>;
@@ -134,9 +142,14 @@ function pricingTypeFromTripType(tripType: TripType): PricingType {
   return "flat";
 }
 
-function getEnabledPricingOptions(constraints: BookingConstraints) {
+function getEnabledPricingOptions(
+  constraints: BookingConstraints,
+  options?: { allowFlatRate?: boolean },
+) {
   return pricingTypeConfig.filter((option) => {
-    if (option.value === "flat") return false;
+    if (option.value === "flat") {
+      return Boolean(options?.allowFlatRate && constraints.enableFlatPricing);
+    }
     if (option.value === "distance") return constraints.enableDistancePricing;
     return constraints.enableHourlyPricing;
   });
@@ -146,8 +159,9 @@ function coercePricingType(
   requested: PricingType,
   constraints: BookingConstraints,
   prefersPresetRoute: boolean,
+  options?: { allowFlatRate?: boolean },
 ): PricingType {
-  const enabledOptions = getEnabledPricingOptions(constraints);
+  const enabledOptions = getEnabledPricingOptions(constraints, options);
 
   if (enabledOptions.some((option) => option.value === requested)) {
     return requested;
@@ -363,6 +377,24 @@ function isValidEmail(value: string) {
 function isValidPhone(value: string) {
   const digits = value.replace(/\D/g, "");
   return digits.length >= 10;
+}
+
+function splitCustomerName(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return { firstName: "", lastName: "" };
+  }
+
+  const parts = trimmed.split(/\s+/);
+  return {
+    firstName: parts[0] ?? "",
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+function combineCustomerName(firstName: string, lastName: string) {
+  return [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
 }
 
 function formatAddressPreview(value?: string | null) {
@@ -641,6 +673,8 @@ export function ReserveWizard({
   compact = false,
   landingOnly = false,
   showTitle = true,
+  allowFlatRate = false,
+  initialClientAccount = null,
   initialState,
 }: Props) {
   const initialPickupSlot = resolveInitialBookingSlot(bookingConstraints);
@@ -658,6 +692,7 @@ export function ReserveWizard({
     requestedInitialPricingType,
     bookingConstraints,
     Boolean(initialRoute),
+    { allowFlatRate },
   );
   const initialTripType: TripType =
     initialPricingType === "hourly" ? "hourly" : initialPricingType;
@@ -701,11 +736,22 @@ export function ReserveWizard({
   );
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
   const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
-  const [customerName, setCustomerName] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [customerSmsOptIn, setCustomerSmsOptIn] = useState(false);
+  const initialCustomerNameParts = splitCustomerName(initialClientAccount?.name ?? "");
+  const [customerFirstName, setCustomerFirstName] = useState(
+    initialCustomerNameParts.firstName,
+  );
+  const [customerLastName, setCustomerLastName] = useState(
+    initialCustomerNameParts.lastName,
+  );
+  const [customerEmail, setCustomerEmail] = useState(initialClientAccount?.email ?? "");
+  const [customerPhone, setCustomerPhone] = useState(initialClientAccount?.phone ?? "");
+  const [customerSmsOptIn, setCustomerSmsOptIn] = useState(
+    Boolean(initialClientAccount?.smsOptIn),
+  );
   const [customerPolicyAgreed, setCustomerPolicyAgreed] = useState(false);
+  const [clientAccount, setClientAccount] = useState<ClientAccountSnapshot | null>(
+    initialClientAccount,
+  );
   const [checkoutErrors, setCheckoutErrors] = useState<CheckoutFieldErrors>({});
   const [notes, setNotes] = useState(initialState?.pickupDetail ?? "");
   const [availableVehicleCounts, setAvailableVehicleCounts] = useState<Record<string, number> | null>(
@@ -718,10 +764,11 @@ export function ReserveWizard({
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
+  const customerName = combineCustomerName(customerFirstName, customerLastName);
   const selectedPricingType = pricingTypeFromTripType(tripType);
   const enabledPricingOptions = useMemo(
-    () => getEnabledPricingOptions(bookingConstraints),
-    [bookingConstraints],
+    () => getEnabledPricingOptions(bookingConstraints, { allowFlatRate }),
+    [allowFlatRate, bookingConstraints],
   );
 
   const filteredRoutes = useMemo(
@@ -983,6 +1030,8 @@ export function ReserveWizard({
       const draft = JSON.parse(raw) as Partial<{
         bags: string;
         customerEmail: string;
+        customerFirstName: string;
+        customerLastName: string;
         customerName: string;
         customerPolicyAgreed: boolean;
         customerPhone: string;
@@ -1010,10 +1059,13 @@ export function ReserveWizard({
           pricingTypeFromTripType(draft.tripType === "event" ? "hourly" : draft.tripType),
           bookingConstraints,
           typeof draft.routeId === "string" && Boolean(draft.routeId),
+          { allowFlatRate },
         );
         setTripType(restoredPricingType === "hourly" ? "hourly" : restoredPricingType);
       }
-      if (typeof draft.step === "number") setStep(draft.step);
+      if (typeof draft.step === "number") {
+        setStep(Math.min(Math.max(draft.step, 1), 5) as Step);
+      }
       if (typeof draft.routeId === "string") setRouteId(draft.routeId);
       if (typeof draft.pickupAddress === "string" && draft.pickupAddress.trim()) {
         setPickupAddress(draft.pickupAddress);
@@ -1043,7 +1095,16 @@ export function ReserveWizard({
         setSelectedVehicleId(draft.selectedVehicleId);
       }
       if (Array.isArray(draft.selectedExtras)) setSelectedExtras(draft.selectedExtras);
-      if (typeof draft.customerName === "string") setCustomerName(draft.customerName);
+      if (typeof draft.customerFirstName === "string") {
+        setCustomerFirstName(draft.customerFirstName);
+      }
+      if (typeof draft.customerLastName === "string") {
+        setCustomerLastName(draft.customerLastName);
+      } else if (typeof draft.customerName === "string") {
+        const parsedName = splitCustomerName(draft.customerName);
+        setCustomerFirstName(parsedName.firstName);
+        setCustomerLastName(parsedName.lastName);
+      }
       if (typeof draft.customerEmail === "string") setCustomerEmail(draft.customerEmail);
       if (typeof draft.customerPhone === "string") setCustomerPhone(draft.customerPhone);
       if (typeof draft.customerSmsOptIn === "boolean") {
@@ -1056,7 +1117,7 @@ export function ReserveWizard({
     } finally {
       setDraftLoaded(true);
     }
-  }, []);
+  }, [allowFlatRate, bookingConstraints]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !draftLoaded) {
@@ -1067,6 +1128,8 @@ export function ReserveWizard({
   }, [
     bags,
     customerEmail,
+    customerFirstName,
+    customerLastName,
     customerName,
     customerPolicyAgreed,
     customerPhone,
@@ -1090,6 +1153,33 @@ export function ReserveWizard({
     tripType,
   ]);
 
+  useEffect(() => {
+    if (!draftLoaded || !clientAccount) {
+      return;
+    }
+
+    setCustomerFirstName((current) => current || splitCustomerName(clientAccount.name || "").firstName);
+    setCustomerLastName((current) => current || splitCustomerName(clientAccount.name || "").lastName);
+    setCustomerEmail((current) => current || clientAccount.email || "");
+    setCustomerPhone((current) => current || clientAccount.phone || "");
+    setCustomerSmsOptIn((current) => current || Boolean(clientAccount.smsOptIn));
+  }, [clientAccount, draftLoaded]);
+
+  useEffect(() => {
+    if (!clientAccount) {
+      return;
+    }
+
+    if (!customerPhone.trim()) {
+      setClientAccount(null);
+      return;
+    }
+
+    if ((clientAccount.phone ?? "").trim() !== customerPhone.trim()) {
+      setClientAccount(null);
+    }
+  }, [clientAccount, customerPhone]);
+
   function persistReserveDraft(nextStep: Step) {
     if (typeof window === "undefined") {
       return;
@@ -1098,6 +1188,8 @@ export function ReserveWizard({
     const draft = {
       bags,
       customerEmail,
+      customerFirstName,
+      customerLastName,
       customerName,
       customerPolicyAgreed,
       customerPhone,
@@ -1246,6 +1338,7 @@ export function ReserveWizard({
       selectedPricingType,
       bookingConstraints,
       selectedPricingType === "flat",
+      { allowFlatRate },
     );
 
     if (coercedPricingType !== selectedPricingType) {
@@ -1264,7 +1357,7 @@ export function ReserveWizard({
     if (selectedPricingType !== "flat" && routeId) {
       setRouteId("");
     }
-  }, [bookingConstraints, routeId, routes, selectedPricingType, selectedRoute]);
+  }, [allowFlatRate, bookingConstraints, routeId, routes, selectedPricingType, selectedRoute]);
 
   const pricing = selectedVehicle
     ? quoteReservation({
@@ -1308,7 +1401,9 @@ export function ReserveWizard({
     customerName.trim().length > 0 &&
     isValidEmail(customerEmail) &&
     isValidPhone(customerPhone) &&
-    customerPolicyAgreed;
+    Boolean(clientAccount) &&
+    customerPolicyAgreed &&
+    true;
 
   const activeStep = stepMeta.find((item) => item.id === step) ?? stepMeta[0];
   const extrasSelected = selectedExtras.length;
@@ -1430,6 +1525,7 @@ export function ReserveWizard({
       nextPricingType,
       bookingConstraints,
       nextPricingType === "flat",
+      { allowFlatRate },
     );
     const nextTripType = safePricingType === "hourly" ? "hourly" : safePricingType;
     setTripType(nextTripType);
@@ -1514,6 +1610,7 @@ export function ReserveWizard({
         bookingConstraints.customTripDefaultPricing,
         bookingConstraints,
         false,
+        { allowFlatRate },
       );
       setTripType(fallbackPricingType === "hourly" ? "hourly" : fallbackPricingType);
       setRouteId("");
@@ -1534,6 +1631,7 @@ export function ReserveWizard({
         bookingConstraints.customTripDefaultPricing,
         bookingConstraints,
         false,
+        { allowFlatRate },
       );
       setTripType(fallbackPricingType === "hourly" ? "hourly" : fallbackPricingType);
       setRouteId("");
@@ -1568,8 +1666,12 @@ export function ReserveWizard({
   function buildCheckoutErrors() {
     const nextErrors: CheckoutFieldErrors = {};
 
-    if (!customerName.trim()) {
-      nextErrors.customerName = "Enter the rider's full name.";
+    if (!customerFirstName.trim()) {
+      nextErrors.customerFirstName = "Enter the rider's first name.";
+    }
+
+    if (!customerLastName.trim()) {
+      nextErrors.customerLastName = "Enter the rider's last name.";
     }
 
     if (!customerEmail.trim()) {
@@ -1582,6 +1684,8 @@ export function ReserveWizard({
       nextErrors.customerPhone = "Enter a mobile number for dispatch updates.";
     } else if (!isValidPhone(customerPhone)) {
       nextErrors.customerPhone = "Enter a valid mobile number.";
+    } else if (!clientAccount) {
+      nextErrors.customerPhoneVerified = "Verify your mobile number before payment.";
     }
 
     if (!customerPolicyAgreed) {
@@ -1616,6 +1720,18 @@ export function ReserveWizard({
       delete next[key];
       return next;
     });
+  }
+
+  function handleClientAccountSuccess(account: ClientAccountSnapshot) {
+    const parsedName = splitCustomerName(account.name || "");
+    setClientAccount(account);
+    setCustomerFirstName(parsedName.firstName || customerFirstName);
+    setCustomerLastName(parsedName.lastName || customerLastName);
+    setCustomerEmail(account.email || customerEmail);
+    setCustomerPhone(account.phone || customerPhone);
+    setCustomerSmsOptIn(Boolean(account.smsOptIn));
+    clearCheckoutError("customerPhoneVerified");
+    toast.success("Account ready.");
   }
 
   function jumpToStep(targetStep: Step) {
@@ -1697,6 +1813,11 @@ export function ReserveWizard({
     }
 
     if (current === 5) {
+      if (!clientAccount) {
+        toast.error("Verify your phone to attach the booking to your account.");
+        return false;
+      }
+
       if (!validateCheckoutFields()) {
         return false;
       }
@@ -1756,6 +1877,7 @@ export function ReserveWizard({
           customerName,
           customerEmail,
           customerPhone,
+          customerUserId: clientAccount?.userId ?? null,
           customerSmsOptIn,
           specialInstructions:
             [
@@ -1794,7 +1916,7 @@ export function ReserveWizard({
               <div className="space-y-5">
                 <div className="p-1">
                   <div className="grid gap-4 sm:grid-cols-[1.1fr_0.9fr]">
-                    <div className="space-y-2">
+                    <div>
                       <BadgeSwitcher
                         value={selectedPricingType}
                         onValueChange={(value) => handlePricingTypeChange(value as PricingType)}
@@ -2105,32 +2227,64 @@ export function ReserveWizard({
 
             {step === 5 && (
               <div className="grid gap-5 lg:grid-cols-2">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
-                      Full name required
-                    </Label>
-                    <Input
-                      id="checkout-name-compact"
-                      name="name"
-                      autoComplete="name"
-                      value={customerName}
-                      onChange={(event) => {
-                        setCustomerName(event.target.value);
-                        clearCheckoutError("customerName");
-                      }}
-                      onBlur={() => validateCheckoutFields({ showToast: false })}
-                      className={cn(
-                        "h-12 rounded-xl bg-white px-4 text-base text-[#1a3d34] placeholder:text-[#8aa398]",
-                        checkoutErrors.customerName
-                          ? "border-rose-300 focus-visible:ring-rose-200"
-                          : "border-[#2d6a4f]/15",
-                      )}
-                      placeholder="Enter your full name"
-                    />
-                    {checkoutErrors.customerName ? (
-                      <p className="text-sm text-rose-600">{checkoutErrors.customerName}</p>
-                    ) : null}
+              <div className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
+                        First name required
+                      </Label>
+                      <Input
+                        id="checkout-first-name-compact"
+                        name="given-name"
+                        autoComplete="given-name"
+                        value={customerFirstName}
+                        onChange={(event) => {
+                          setCustomerFirstName(event.target.value);
+                          clearCheckoutError("customerFirstName");
+                        }}
+                        onBlur={() => validateCheckoutFields({ showToast: false })}
+                        className={cn(
+                          "h-12 rounded-xl bg-white px-4 text-base text-[#1a3d34] placeholder:text-[#8aa398]",
+                          checkoutErrors.customerFirstName
+                            ? "border-rose-300 focus-visible:ring-rose-200"
+                            : "border-[#2d6a4f]/15",
+                        )}
+                        placeholder="First name"
+                      />
+                      {checkoutErrors.customerFirstName ? (
+                        <p className="text-sm text-rose-600">
+                          {checkoutErrors.customerFirstName}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
+                        Last name required
+                      </Label>
+                      <Input
+                        id="checkout-last-name-compact"
+                        name="family-name"
+                        autoComplete="family-name"
+                        value={customerLastName}
+                        onChange={(event) => {
+                          setCustomerLastName(event.target.value);
+                          clearCheckoutError("customerLastName");
+                        }}
+                        onBlur={() => validateCheckoutFields({ showToast: false })}
+                        className={cn(
+                          "h-12 rounded-xl bg-white px-4 text-base text-[#1a3d34] placeholder:text-[#8aa398]",
+                          checkoutErrors.customerLastName
+                            ? "border-rose-300 focus-visible:ring-rose-200"
+                            : "border-[#2d6a4f]/15",
+                        )}
+                        placeholder="Last name"
+                      />
+                      {checkoutErrors.customerLastName ? (
+                        <p className="text-sm text-rose-600">
+                          {checkoutErrors.customerLastName}
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
@@ -2159,33 +2313,28 @@ export function ReserveWizard({
                       <p className="text-sm text-rose-600">{checkoutErrors.customerEmail}</p>
                     ) : null}
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
-                      Mobile required
-                    </Label>
-                    <Input
-                      id="checkout-phone-compact"
-                      name="tel"
-                      autoComplete="tel"
-                      inputMode="tel"
-                      value={customerPhone}
-                      onChange={(event) => {
-                        setCustomerPhone(event.target.value);
-                        clearCheckoutError("customerPhone");
-                      }}
-                      onBlur={() => validateCheckoutFields({ showToast: false })}
-                      className={cn(
-                        "h-12 rounded-xl bg-white px-4 text-base text-[#1a3d34] placeholder:text-[#8aa398]",
-                        checkoutErrors.customerPhone
-                          ? "border-rose-300 focus-visible:ring-rose-200"
-                          : "border-[#2d6a4f]/15",
-                      )}
-                      placeholder="Enter your phone number"
-                    />
-                    {checkoutErrors.customerPhone ? (
-                      <p className="text-sm text-rose-600">{checkoutErrors.customerPhone}</p>
-                    ) : null}
-                  </div>
+                  <ClientAccountForm
+                    variant="checkout"
+                    name={customerName}
+                    email={customerEmail}
+                    phone={customerPhone}
+                    onPhoneChange={(value) => {
+                      setCustomerPhone(value);
+                      clearCheckoutError("customerPhone");
+                      clearCheckoutError("customerPhoneVerified");
+                    }}
+                    smsOptIn={customerSmsOptIn}
+                    policyAgreed={customerPolicyAgreed}
+                    onSuccess={handleClientAccountSuccess}
+                  />
+                  {checkoutErrors.customerPhone ? (
+                    <p className="text-sm text-rose-600">{checkoutErrors.customerPhone}</p>
+                  ) : null}
+                  {checkoutErrors.customerPhoneVerified ? (
+                    <p className="text-sm text-rose-600">
+                      {checkoutErrors.customerPhoneVerified}
+                    </p>
+                  ) : null}
                   <div className="space-y-2">
                     <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
                       Notes optional
@@ -2430,7 +2579,7 @@ export function ReserveWizard({
           {(step === 1 || landingOnly) && (
             <div className="p-1">
               <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-                <div className="space-y-2">
+                <div>
                   <BadgeSwitcher
                     value={selectedPricingType}
                     onValueChange={(value) => handlePricingTypeChange(value as PricingType)}
@@ -2822,28 +2971,57 @@ export function ReserveWizard({
           {!landingOnly && step === 5 && (
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-[#5a7a6e]">Full name required</Label>
-                  <Input
-                    id="checkout-name"
-                    name="name"
-                    autoComplete="name"
-                    value={customerName}
-                    onChange={(event) => {
-                      setCustomerName(event.target.value);
-                      clearCheckoutError("customerName");
-                    }}
-                    onBlur={() => validateCheckoutFields({ showToast: false })}
-                    className={cn(
-                      "h-14 rounded-2xl bg-white px-4 text-base text-[#1a3d34]",
-                      checkoutErrors.customerName
-                        ? "border-rose-300 focus-visible:ring-rose-200"
-                        : "border-[#2d6a4f]/15",
-                    )}
-                  />
-                  {checkoutErrors.customerName ? (
-                    <p className="text-sm text-rose-600">{checkoutErrors.customerName}</p>
-                  ) : null}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-[#5a7a6e]">First name required</Label>
+                    <Input
+                      id="checkout-first-name"
+                      name="given-name"
+                      autoComplete="given-name"
+                      value={customerFirstName}
+                      onChange={(event) => {
+                        setCustomerFirstName(event.target.value);
+                        clearCheckoutError("customerFirstName");
+                      }}
+                      onBlur={() => validateCheckoutFields({ showToast: false })}
+                      className={cn(
+                        "h-14 rounded-2xl bg-white px-4 text-base text-[#1a3d34]",
+                        checkoutErrors.customerFirstName
+                          ? "border-rose-300 focus-visible:ring-rose-200"
+                          : "border-[#2d6a4f]/15",
+                      )}
+                    />
+                    {checkoutErrors.customerFirstName ? (
+                      <p className="text-sm text-rose-600">
+                        {checkoutErrors.customerFirstName}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[#5a7a6e]">Last name required</Label>
+                    <Input
+                      id="checkout-last-name"
+                      name="family-name"
+                      autoComplete="family-name"
+                      value={customerLastName}
+                      onChange={(event) => {
+                        setCustomerLastName(event.target.value);
+                        clearCheckoutError("customerLastName");
+                      }}
+                      onBlur={() => validateCheckoutFields({ showToast: false })}
+                      className={cn(
+                        "h-14 rounded-2xl bg-white px-4 text-base text-[#1a3d34]",
+                        checkoutErrors.customerLastName
+                          ? "border-rose-300 focus-visible:ring-rose-200"
+                          : "border-[#2d6a4f]/15",
+                      )}
+                    />
+                    {checkoutErrors.customerLastName ? (
+                      <p className="text-sm text-rose-600">
+                        {checkoutErrors.customerLastName}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[#5a7a6e]">Email required</Label>
@@ -2869,30 +3047,26 @@ export function ReserveWizard({
                     <p className="text-sm text-rose-600">{checkoutErrors.customerEmail}</p>
                   ) : null}
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-[#5a7a6e]">Mobile required</Label>
-                  <Input
-                    id="checkout-phone"
-                    name="tel"
-                    autoComplete="tel"
-                    inputMode="tel"
-                    value={customerPhone}
-                    onChange={(event) => {
-                      setCustomerPhone(event.target.value);
-                      clearCheckoutError("customerPhone");
-                    }}
-                    onBlur={() => validateCheckoutFields({ showToast: false })}
-                    className={cn(
-                      "h-14 rounded-2xl bg-white px-4 text-base text-[#1a3d34]",
-                      checkoutErrors.customerPhone
-                        ? "border-rose-300 focus-visible:ring-rose-200"
-                        : "border-[#2d6a4f]/15",
-                    )}
-                  />
-                  {checkoutErrors.customerPhone ? (
-                    <p className="text-sm text-rose-600">{checkoutErrors.customerPhone}</p>
-                  ) : null}
-                </div>
+                <ClientAccountForm
+                  variant="checkout"
+                  name={customerName}
+                  email={customerEmail}
+                  phone={customerPhone}
+                  onPhoneChange={(value) => {
+                    setCustomerPhone(value);
+                    clearCheckoutError("customerPhone");
+                    clearCheckoutError("customerPhoneVerified");
+                  }}
+                  smsOptIn={customerSmsOptIn}
+                  policyAgreed={customerPolicyAgreed}
+                  onSuccess={handleClientAccountSuccess}
+                />
+                {checkoutErrors.customerPhone ? (
+                  <p className="text-sm text-rose-600">{checkoutErrors.customerPhone}</p>
+                ) : null}
+                {checkoutErrors.customerPhoneVerified ? (
+                  <p className="text-sm text-rose-600">{checkoutErrors.customerPhoneVerified}</p>
+                ) : null}
                 <div className="space-y-2">
                   <Label className="text-[#5a7a6e]">Trip notes optional</Label>
                   <Textarea

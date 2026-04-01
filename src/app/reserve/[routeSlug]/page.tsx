@@ -127,6 +127,7 @@ export default async function ReserveRoutePage({ params, searchParams }: Reserve
         ) : null}
 
         <ReserveWizard
+          allowFlatRate={initialState.tripType === "flat"}
           bookingConstraints={bookingConstraints}
           vehicles={vehicles}
           routes={routes}

@@ -52,6 +52,7 @@ export const bookingPayloadSchema = z.object({
   customerName: z.string().min(2),
   customerEmail: z.string().email(),
   customerPhone: z.string().min(7),
+  customerUserId: z.string().optional().nullable(),
   customerSmsOptIn: z.boolean().default(false),
   specialInstructions: z.string().nullable(),
 });
@@ -199,6 +200,7 @@ async function findAvailableVehicleUnit(
 export async function createBookingDraft(
   payload: BookingPayload,
   siteSlug: string = env.siteSlug,
+  customerUserId?: string | null,
 ) {
   const site = await getRequiredSite(siteSlug);
   const pickupAt = new Date(payload.pickupAt);
@@ -369,6 +371,7 @@ export async function createBookingDraft(
         passengers: payload.passengers,
         bags: payload.bags,
         hoursRequested: payload.hoursRequested,
+        customerUserId: customerUserId ?? null,
         customerName: payload.customerName,
         customerEmail: payload.customerEmail,
         customerPhone: payload.customerPhone,

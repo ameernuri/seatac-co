@@ -43,6 +43,9 @@ export const env = {
   twilioApiKeySid: process.env.TWILIO_API_KEY_SID ?? "",
   twilioApiKeySecret: process.env.TWILIO_API_KEY_SECRET ?? "",
   twilioMessagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID ?? "",
+  twilioOtpMessagingServiceSid:
+    process.env.TWILIO_OTP_MESSAGING_SERVICE_SID ?? "",
+  twilioVerifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID ?? "",
   twilioFromNumber: process.env.TWILIO_FROM_NUMBER ?? "",
   twilioDispatchSmsTo: process.env.TWILIO_DISPATCH_SMS_TO ?? "",
   twilioReminderLeadHours: Number.parseInt(

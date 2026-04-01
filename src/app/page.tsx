@@ -209,15 +209,15 @@ export default async function Home() {
                   ))}
                 </div>
               </div>
-                <ReserveWizard
-                  bookingConstraints={bookingConstraints}
-                  vehicles={vehicles}
-                  routes={routes}
-                  landingOnly
-                  showTitle={false}
-                />
-              </div>
+              <ReserveWizard
+                bookingConstraints={bookingConstraints}
+                vehicles={vehicles}
+                routes={routes}
+                landingOnly
+                showTitle={false}
+              />
             </div>
+          </div>
           <div className="section-inner mt-8">
             <div className="grid gap-6 md:grid-cols-2" aria-label="Service highlights">
               <div className="grid gap-3">
