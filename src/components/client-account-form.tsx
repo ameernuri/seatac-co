@@ -214,7 +214,10 @@ export function ClientAccountForm(props: Props) {
       throw new Error(data.error ?? "Account details could not be saved.");
     }
 
-    return data.account as ClientAccountSnapshot | null;
+    return {
+      account: (data.account ?? null) as ClientAccountSnapshot | null,
+      existed: data.existed === true,
+    };
   }
 
   async function handleSendCode() {
@@ -293,10 +296,11 @@ export function ClientAccountForm(props: Props) {
 
     if (isCheckout) {
       try {
-        const account = (await syncProfile()) ?? (await fetchAccountSnapshot());
+        const result = await syncProfile();
+        const account = result.account ?? (await fetchAccountSnapshot());
         setVerifiedPhone(resolvedPhone);
         setVerifyLoading(false);
-        toast.success("Account ready.");
+        toast.success(result.existed ? "Signed in to your existing account." : "Account ready.");
 
         if (account && props.onSuccess) {
           props.onSuccess(account);
@@ -339,9 +343,10 @@ export function ClientAccountForm(props: Props) {
     setSignUpLoading(true);
 
     try {
-      const account = (await syncProfile()) ?? (await fetchAccountSnapshot());
+      const result = await syncProfile();
+      const account = result.account ?? (await fetchAccountSnapshot());
       setSignUpLoading(false);
-      toast.success("Account created.");
+      toast.success(result.existed ? "Signed in to your existing account." : "Account created.");
 
       if (account && props.onSuccess) {
         props.onSuccess(account);

@@ -50,8 +50,15 @@ export default async function SignUpPage({ searchParams }: Props) {
               </div>
             </div>
           ) : (
-            <div className="rounded-[2rem] border border-[#2d6a4f]/10 bg-white p-8">
+            <div className="space-y-4 rounded-[2rem] border border-[#2d6a4f]/10 bg-white p-8">
               <ClientAccountForm compact returnTo={returnTo} />
+              <div className="text-sm text-[#5a7a6e]">
+                Already have an account?{" "}
+                <Link href={`/sign-in?returnTo=${encodeURIComponent(returnTo)}`} className="text-[#0d5c48] underline underline-offset-4">
+                  Sign in
+                </Link>
+                .
+              </div>
             </div>
           )}
         </div>

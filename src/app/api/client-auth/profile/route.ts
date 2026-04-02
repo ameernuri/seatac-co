@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import {
   clientVerificationPurposes,
   consumeVerifiedChallenge,
+  createClientSession,
   ensureClientUserAccount,
   getClientAccountSnapshot,
   upsertClientProfile,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/client-auth";
 import { db } from "@/db/client";
 import { users } from "@/db/schema";
+import { env } from "@/env";
 import { getServerSession } from "@/lib/session";
 
 const postBodySchema = z.object({
@@ -60,14 +62,26 @@ export async function POST(request: Request) {
         purpose: payload.purpose,
       });
 
-      const { account, profile } = await ensureClientUserAccount({
+      const { account, profile, userId, existed } = await ensureClientUserAccount({
         email: payload.email,
         name: payload.name,
         phone: payload.phone,
         smsOptIn: payload.smsOptIn,
       });
-
-      return NextResponse.json({ account, profile });
+      const clientSession = await createClientSession({
+        userId,
+        ipAddress: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+        userAgent: request.headers.get("user-agent"),
+      });
+      const response = NextResponse.json({ account, profile, existed });
+      response.cookies.set(`${env.betterAuthCookiePrefix}.session_token`, clientSession.token, {
+        expires: clientSession.expiresAt,
+        httpOnly: true,
+        path: "/",
+        sameSite: "lax",
+        secure: env.appUrl.startsWith("https://"),
+      });
+      return response;
     }
 
     await db

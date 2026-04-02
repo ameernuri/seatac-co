@@ -10,9 +10,11 @@ import { eq, or } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   clientProfiles,
+  sessions,
   users,
 } from "@/db/schema";
 import { env } from "@/env";
+import { isEmailConfigured, sendEmail } from "@/lib/email";
 import {
   checkPhoneVerificationCode,
   getOtpSmsSenderConfig,
@@ -23,17 +25,23 @@ import {
   sendTextMessage,
 } from "@/lib/sms";
 
-export const clientVerificationPurposes = ["sign-up", "reserve-account"] as const;
+export const clientVerificationPurposes = [
+  "sign-up",
+  "reserve-account",
+  "sign-in",
+] as const;
 export type ClientVerificationPurpose = (typeof clientVerificationPurposes)[number];
 
 const VERIFICATION_CODE_LENGTH = 6;
 const VERIFICATION_TTL_MINUTES = 10;
 
 type SignedVerificationPayload = {
+  channel: "email" | "phone";
   codeHash: string | null;
+  email: string | null;
   expiresAt: string;
   nonce: string;
-  phoneNormalized: string;
+  phoneNormalized: string | null;
   purpose: ClientVerificationPurpose;
   verifiedAt: string | null;
 };
@@ -126,7 +134,9 @@ export async function createPhoneVerificationChallenge(input: {
 
   const challenge = {
     id: signVerificationPayload({
+      channel: "phone",
       codeHash: useTwilioVerify ? null : hashVerificationCode(code),
+      email: null,
       expiresAt: expiresAt.toISOString(),
       nonce: randomUUID(),
       phoneNormalized,
@@ -170,6 +180,7 @@ export async function verifyPhoneVerificationChallenge(input: {
   const challenge = readVerificationPayload(input.challengeId);
 
   if (
+    challenge.channel !== "phone" ||
     challenge.phoneNormalized !== phoneNormalized ||
     challenge.purpose !== input.purpose
   ) {
@@ -204,7 +215,126 @@ export async function verifyPhoneVerificationChallenge(input: {
   return {
     ...challenge,
     id: signVerificationPayload({
+      channel: "phone",
       codeHash: challenge.codeHash,
+      email: challenge.email,
+      expiresAt: challenge.expiresAt.toISOString(),
+      nonce: challenge.nonce,
+      phoneNormalized: challenge.phoneNormalized,
+      purpose: challenge.purpose,
+      verifiedAt: verifiedAt.toISOString(),
+    }),
+    verifiedAt,
+    updatedAt: verifiedAt,
+    createdAt: verifiedAt,
+    attempts: 1,
+    consumedAt: null,
+  };
+}
+
+function normalizeClientEmail(input: string) {
+  const email = input.trim().toLowerCase();
+  return /\S+@\S+\.\S+/.test(email) ? email : "";
+}
+
+export async function createEmailVerificationChallenge(input: {
+  email: string;
+  purpose: ClientVerificationPurpose;
+}) {
+  const email = normalizeClientEmail(input.email);
+
+  if (!email) {
+    throw new Error("Enter a valid email.");
+  }
+
+  const code = generateVerificationCode();
+  const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MINUTES * 60 * 1000);
+  const now = new Date();
+
+  if (isEmailConfigured()) {
+    const text = `Your seatac.co verification code is ${code}. This code expires in ${VERIFICATION_TTL_MINUTES} minutes.`;
+    await sendEmail({
+      to: email,
+      subject: "Your seatac.co verification code",
+      text,
+      html: `<p>Your seatac.co verification code is <strong>${code}</strong>.</p><p>This code expires in ${VERIFICATION_TTL_MINUTES} minutes.</p>`,
+    });
+  } else if (process.env.NODE_ENV === "production") {
+    throw new Error("Email sign-in is unavailable right now.");
+  }
+
+  const codeHash = hashVerificationCode(code);
+  const challenge = {
+    id: signVerificationPayload({
+      channel: "email",
+      codeHash,
+      email,
+      expiresAt: expiresAt.toISOString(),
+      nonce: randomUUID(),
+      phoneNormalized: null,
+      purpose: input.purpose,
+      verifiedAt: null,
+    }),
+    purpose: input.purpose,
+    phoneNormalized: "",
+    codeHash,
+    attempts: 0,
+    expiresAt,
+    verifiedAt: null,
+    consumedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  return {
+    challenge,
+    developmentCode:
+      process.env.NODE_ENV === "production" || isEmailConfigured() ? undefined : code,
+  };
+}
+
+export async function verifyEmailVerificationChallenge(input: {
+  challengeId: string;
+  code: string;
+  email: string;
+  purpose: ClientVerificationPurpose;
+}) {
+  const email = normalizeClientEmail(input.email);
+
+  if (!email) {
+    throw new Error("Enter a valid email.");
+  }
+
+  const challenge = readVerificationPayload(input.challengeId);
+
+  if (
+    challenge.channel !== "email" ||
+    challenge.email !== email ||
+    challenge.purpose !== input.purpose
+  ) {
+    throw new Error("Verification session could not be found.");
+  }
+
+  if (challenge.verifiedAt) {
+    return challenge;
+  }
+
+  if (challenge.expiresAt <= new Date()) {
+    throw new Error("That code has expired. Request a new one.");
+  }
+
+  if (!challenge.codeHash || challenge.codeHash !== hashVerificationCode(input.code)) {
+    throw new Error("That code is not correct.");
+  }
+
+  const verifiedAt = new Date();
+
+  return {
+    ...challenge,
+    id: signVerificationPayload({
+      channel: "email",
+      codeHash: challenge.codeHash,
+      email: challenge.email,
       expiresAt: challenge.expiresAt.toISOString(),
       nonce: challenge.nonce,
       phoneNormalized: challenge.phoneNormalized,
@@ -275,7 +405,8 @@ export async function ensureClientUserAccount(input: {
     );
   }
 
-  let user = existingByPhone ?? existingByEmail ?? null;
+  const existingUser = existingByPhone ?? existingByEmail ?? null;
+  let user = existingUser;
 
   if (!user) {
     const [createdUser] = await db
@@ -324,7 +455,111 @@ export async function ensureClientUserAccount(input: {
     account,
     profile,
     userId: user.id,
+    existed: Boolean(existingUser),
   };
+}
+
+export async function findClientAccountByIdentifier(input: { identifier: string }) {
+  const identifier = input.identifier.trim();
+
+  if (!identifier) {
+    throw new Error("Enter your email or mobile number.");
+  }
+
+  if (identifier.includes("@")) {
+    const email = identifier.toLowerCase();
+    const [row] = await db
+      .select({
+        userId: users.id,
+        name: users.name,
+        email: users.email,
+        emailVerified: users.emailVerified,
+        phone: clientProfiles.phone,
+        phoneNormalized: clientProfiles.phoneNormalized,
+        phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+        smsOptIn: clientProfiles.smsOptIn,
+      })
+      .from(users)
+      .leftJoin(clientProfiles, eq(clientProfiles.userId, users.id))
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (!row) {
+      throw new Error("No account was found for that email.");
+    }
+
+    if (!row.emailVerified) {
+      throw new Error(
+        "That email address is not verified. Sign in with your verified mobile number instead.",
+      );
+    }
+
+    return {
+      ...row,
+      signInChannel: "email" as const,
+    };
+  }
+
+  const phoneNormalized = normalizeClientPhone(identifier);
+
+  if (!phoneNormalized) {
+    throw new Error("Enter a valid email or mobile number.");
+  }
+
+  const [row] = await db
+    .select({
+      userId: users.id,
+      name: users.name,
+      email: users.email,
+      emailVerified: users.emailVerified,
+      phone: clientProfiles.phone,
+      phoneNormalized: clientProfiles.phoneNormalized,
+      phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+      smsOptIn: clientProfiles.smsOptIn,
+    })
+    .from(clientProfiles)
+    .innerJoin(users, eq(clientProfiles.userId, users.id))
+    .where(eq(clientProfiles.phoneNormalized, phoneNormalized))
+    .limit(1);
+
+  if (!row) {
+    throw new Error("No account was found for that mobile number.");
+  }
+
+  return {
+    ...row,
+    signInChannel: "phone" as const,
+  };
+}
+
+export async function createClientSession(input: {
+  userId: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}) {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 30);
+  const token = randomUUID();
+
+  const [session] = await db
+    .insert(sessions)
+    .values({
+      id: randomUUID(),
+      userId: input.userId,
+      token,
+      expiresAt,
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+
+  if (!session) {
+    throw new Error("Session could not be created.");
+  }
+
+  return session;
 }
 
 export async function consumeVerifiedChallenge(input: {

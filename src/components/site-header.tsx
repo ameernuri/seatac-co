@@ -1,17 +1,37 @@
 import Link from "next/link";
+import { PhoneCall } from "lucide-react";
 
+import { HeaderAccountMenu } from "@/components/header-account-menu";
 import { siteChrome } from "@/lib/site-content";
 import { SiteBrand } from "@/components/site-brand";
+import { getServerSession } from "@/lib/session";
 
-export function SiteHeader() {
+export async function SiteHeader() {
+  const session = await getServerSession();
+  const userLabel = session?.user?.name?.trim().split(/\s+/)[0] || session?.user?.email || null;
+
   return (
     <header className="site-main-header">
       <div className="site-topbar">
         <div className="site-topbar-inner">
-          <span>{siteChrome.topbarText}</span>
-          <Link href={siteChrome.reservationPhoneHref} className="hidden whitespace-nowrap md:inline hover:text-emerald-700 transition-colors">
-            {siteChrome.reservationPhoneLabel}
+          <Link href={siteChrome.reservationPhoneHref} className="site-topbar-call-link md:hidden">
+            <PhoneCall className="size-3.5" />
+            <span>{siteChrome.reservationPhoneLabel.replace("Reservations: ", "")}</span>
           </Link>
+          <div className="site-topbar-account-links">
+            {userLabel ? (
+              <HeaderAccountMenu label={userLabel} />
+            ) : (
+              <>
+                <Link href="/sign-in" className="hover:text-emerald-700 transition-colors">
+                  Sign in
+                </Link>
+                <Link href="/sign-up" className="hover:text-emerald-700 transition-colors">
+                  Create account
+                </Link>
+              </>
+            )}
+          </div>
         </div>
       </div>
       <div className="site-header-inner">
@@ -25,10 +45,11 @@ export function SiteHeader() {
         </nav>
         <div className="flex items-center gap-3">
           <Link href={siteChrome.reservationPhoneHref} className="site-header-utility hidden md:inline-flex">
-            Call
+            <PhoneCall className="size-4" />
+            <span>{siteChrome.reservationPhoneLabel.replace("Reservations: ", "")}</span>
           </Link>
           <Link href="/reserve" className="site-header-book-link">
-            Reserve
+            Book ride
           </Link>
         </div>
       </div>
