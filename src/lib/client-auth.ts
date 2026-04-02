@@ -1,7 +1,6 @@
 import {
   createHash,
   createHmac,
-  randomBytes,
   randomInt,
   randomUUID,
   timingSafeEqual,
@@ -14,7 +13,6 @@ import {
   users,
 } from "@/db/schema";
 import { env } from "@/env";
-import { auth } from "@/lib/auth";
 import {
   checkPhoneVerificationCode,
   getOtpSmsSenderConfig,
@@ -244,14 +242,27 @@ export async function ensureClientUserAccount(input: {
   }
 
   const [existingByEmail] = await db
-    .select()
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+    })
     .from(users)
     .where(eq(users.email, email))
     .limit(1);
   const [existingByPhone] = await db
-    .select()
-    .from(users)
-    .where(eq(users.phoneNumber, phoneNormalized))
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+    })
+    .from(clientProfiles)
+    .innerJoin(users, eq(clientProfiles.userId, users.id))
+    .where(eq(clientProfiles.phoneNormalized, phoneNormalized))
     .limit(1);
 
   if (
@@ -267,48 +278,39 @@ export async function ensureClientUserAccount(input: {
   let user = existingByPhone ?? existingByEmail ?? null;
 
   if (!user) {
-    const generatedPassword = `${randomBytes(16).toString("hex")}Aa1!`;
-
-    try {
-      await auth.api.signUpEmail({
-        body: {
-          email,
-          name,
-          password: generatedPassword,
-        },
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Account could not be created.";
-
-      if (!/already exists/i.test(message)) {
-        throw error;
-      }
-    }
-
     const [createdUser] = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
+      .insert(users)
+      .values({
+        id: randomUUID(),
+        name,
+        email,
+        image: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      });
 
     user = createdUser ?? null;
 
     if (!user) {
       throw new Error("Account could not be created.");
     }
+  } else {
+    await db
+      .update(users)
+      .set({
+        email,
+        name,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, user.id));
   }
-
-  await db
-    .update(users)
-    .set({
-      email,
-      name,
-      phoneNumber: phoneNormalized,
-      phoneNumberVerified: true,
-      updatedAt: new Date(),
-    })
-    .where(eq(users.id, user.id));
 
   const profile = await upsertClientProfile({
     userId: user.id,
@@ -410,8 +412,6 @@ export async function getClientAccountSnapshot(userId: string) {
       phone: clientProfiles.phone,
       phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
       smsOptIn: clientProfiles.smsOptIn,
-      userPhone: users.phoneNumber,
-      userPhoneVerified: users.phoneNumberVerified,
     })
     .from(users)
     .leftJoin(clientProfiles, eq(clientProfiles.userId, users.id))
@@ -425,9 +425,8 @@ export async function getClientAccountSnapshot(userId: string) {
   return {
     email: row.email,
     name: row.name,
-    phone: row.phone ?? row.userPhone ?? null,
-    phoneVerifiedAt:
-      row.phoneVerifiedAt ?? (row.userPhoneVerified ? new Date(0).toISOString() : null),
+    phone: row.phone ?? null,
+    phoneVerifiedAt: row.phoneVerifiedAt,
     smsOptIn: row.smsOptIn,
     userId: row.userId,
   };

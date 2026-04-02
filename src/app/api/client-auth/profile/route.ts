@@ -74,10 +74,7 @@ export async function POST(request: Request) {
       .update(users)
       .set({
         email: payload.email,
-        emailVerified: false,
         name: payload.name,
-        phoneNumber: normalizedPhone,
-        phoneNumberVerified: true,
         updatedAt: new Date(),
       })
       .where(eq(users.id, session.user.id));

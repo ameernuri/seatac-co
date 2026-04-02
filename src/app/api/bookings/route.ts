@@ -10,7 +10,7 @@ import { createBookingCheckout } from "@/lib/checkout";
 import { getServerSession } from "@/lib/session";
 import { isStripeConfigured } from "@/lib/stripe";
 import { db } from "@/db/client";
-import { users } from "@/db/schema";
+import { clientProfiles, users } from "@/db/schema";
 import { normalizePhoneNumber } from "@/lib/sms";
 
 export async function POST(request: Request) {
@@ -29,13 +29,14 @@ export async function POST(request: Request) {
     const normalizedPhone = normalizePhoneNumber(payload.customerPhone);
 
     const [matchedUser] = await db
-      .select()
+      .select({ id: users.id })
       .from(users)
+      .leftJoin(clientProfiles, eq(clientProfiles.userId, users.id))
       .where(
         and(
           eq(users.id, payload.customerUserId),
           eq(users.email, payload.customerEmail.trim().toLowerCase()),
-          eq(users.phoneNumber, normalizedPhone ?? payload.customerPhone),
+          eq(clientProfiles.phoneNormalized, normalizedPhone ?? payload.customerPhone),
         ),
       )
       .limit(1);
