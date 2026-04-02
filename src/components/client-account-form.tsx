@@ -578,10 +578,16 @@ export function ClientAccountForm(props: Props) {
         />
         <div className="space-y-1">
           <div className="text-sm font-medium text-[#1a3d34]">
-            Text me confirmations and pickup reminders.
+            Send text confirmations and pickup reminders
           </div>
           <div className="text-sm text-[#5a7a6e]">
-            Optional reservation updates. Reply STOP to opt out.{" "}
+            By checking this box, you agree to receive reservation updates from seatac.co at the
+            mobile number above. Message frequency varies. Reply STOP to opt out, HELP for help.
+            Msg &amp; data rates may apply. See our{" "}
+            <Link href="/privacy" className="text-[#0d5c48] underline underline-offset-4">
+              privacy policy
+            </Link>{" "}
+            and{" "}
             <Link href="/sms-policy" className="text-[#0d5c48] underline underline-offset-4">
               SMS policy
             </Link>

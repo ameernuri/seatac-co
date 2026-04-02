@@ -98,8 +98,8 @@ export default async function ReserveRoutePage({ params, searchParams }: Reserve
 
         <ReserveWizard
           showTitle={false}
-          startStep={2}
-          minStep={2}
+          startStep={1}
+          minStep={1}
           routeLocked
           lockedPricingType={initialState.tripType === "flat" ? "flat" : undefined}
           allowFlatRate={initialState.tripType === "flat"}

@@ -34,8 +34,8 @@ export async function RoutePageScreen({ slug }: { slug: string }) {
           vehicles={vehicles}
           routes={routes}
           showTitle={false}
-          startStep={2}
-          minStep={2}
+          startStep={1}
+          minStep={1}
           routeLocked
           lockedPricingType={page.reservationDefaults?.tripType === "flat" ? "flat" : undefined}
           allowFlatRate={page.reservationDefaults?.tripType === "flat"}

@@ -107,53 +107,43 @@ export async function HotelPageScreen({
         ) : null}
         {faqs.length ? <JsonLd data={buildFaqJsonLd(faqs)} /> : null}
 
-        <section className="route-hero">
-          <div className="section-inner route-hero-grid">
-            <aside className="route-scene-card">
+        <section className="pt-24 pb-16 px-6 lg:px-8 text-center bg-white flex flex-col items-center">
+          <div className="max-w-4xl mx-auto space-y-6 pt-12 pb-16">
+            <span className="text-xs font-bold tracking-[0.25em] uppercase text-slate-500">
+              Hotel transfer
+            </span>
+            <h1 className="text-5xl md:text-7xl font-extrabold text-slate-950 leading-[1.05] tracking-tight text-balance">
+              {getHotelRouteName(hotel)} car service for direct airport arrivals.
+            </h1>
+            <p className="text-lg md:text-xl text-slate-500 leading-relaxed max-w-2xl mx-auto text-balance">
+              {getHotelPageDescription(hotel)}
+            </p>
+            <p className="text-base text-slate-400 leading-relaxed max-w-xl mx-auto font-medium">
+              Use this page to compare the Sea-Tac transfer, typical stay range, and live room-rate window for {hotel.name} before you reserve the ride.
+            </p>
+            <div className="flex justify-center pt-6 pb-2">
+              <Link
+                href={reserveHref}
+                className="rounded-full bg-slate-900 text-white px-8 py-3.5 text-sm font-bold shadow-[0_0_40px_-10px_rgba(0,0,0,0.3)] hover:bg-slate-800 hover:scale-105 transition-all duration-300"
+              >
+                Reserve this hotel transfer
+              </Link>
+            </div>
+          </div>
+          <div className="w-full max-w-7xl mx-auto px-4 md:px-0">
+            <div className="h-[400px] md:h-[600px] w-full rounded-[2rem] overflow-hidden relative shadow-2xl shadow-slate-900/10">
               <div
-                className="route-scene-art"
+                className="absolute inset-0 bg-cover bg-center"
                 style={{
-                  backgroundImage: `linear-gradient(180deg, rgba(9,10,13,0.08) 0%, rgba(9,10,13,0.55) 65%, rgba(9,10,13,0.92) 100%), url(${getHotelArt(hotel.area)})`,
+                  backgroundImage: `url(${getHotelArt(hotel.area)})`,
                 }}
               />
-              <div className="route-scene-copy">
-                <span className="section-kicker">{getHotelAreaLabel(hotel.area)}</span>
-                <h2>{hotel.name}</h2>
-                <p>{hotel.summary}</p>
-              </div>
-            </aside>
-            <div className="route-hero-copy">
-              <span className="eyebrow">Hotel transfer</span>
-              <h1 className="display-title route-display-title">
-                {getHotelRouteName(hotel)} car service for direct airport arrivals.
-              </h1>
-              <p>{getHotelPageDescription(hotel)}</p>
-              <p className="mt-4 max-w-[52rem] text-base leading-7 text-[#45675d]">
-                Use this page to compare the Sea-Tac transfer, typical stay range, and live room-rate window for {hotel.name} before you reserve the ride.
-              </p>
-              <div className="hero-actions">
-                <Link href={reserveHref} className="button-link primary">
-                  Reserve this hotel transfer
-                </Link>
-                <Link href="#reserve-form" className="button-link secondary">
-                  See booking details
-                </Link>
-              </div>
-              <div className="route-mini-pills">
-                {[hotel.neighborhood, getHotelAreaLabel(hotel.area), `${hotel.durationMinutes} min from Sea-Tac`].map(
-                  (item) => (
-                    <span key={item} className="hero-tag">
-                      {item}
-                    </span>
-                  ),
-                )}
-              </div>
             </div>
           </div>
         </section>
 
-        <section className="section route-summary-section">
-          <div className="section-inner route-summary-grid">
+        <section className="py-12 px-6 lg:px-8 border-y border-slate-100 bg-slate-50">
+          <div className="mx-auto max-w-7xl grid gap-4 grid-cols-2 lg:grid-cols-4">
             {liveStayRate ? (
               <HomeGradientMetricCard
                 eyebrow="Live stay rate"
@@ -174,15 +164,13 @@ export async function HotelPageScreen({
           </div>
         </section>
 
-        <section className="section">
-          <div className="section-inner">
-            <div className="section-heading section-heading-tight">
-              <div>
-                <span className="section-kicker">Stay snapshot</span>
-                <h2 className="section-title">A quick read on the hotel itself.</h2>
-              </div>
+        <section className="py-24 px-6 lg:px-8 bg-white">
+          <div className="mx-auto max-w-7xl">
+            <div className="mb-12">
+              <span className="text-sm font-bold tracking-[0.25em] uppercase text-emerald-600 block mb-3">Stay snapshot</span>
+              <h2 className="text-3xl md:text-4xl font-extrabold text-emerald-950">A quick read on the hotel itself.</h2>
             </div>
-            <div className="route-reason-grid">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
               <HomeSurfaceNoteCard title="Stay style" body={staySnapshot.styleLabel} />
               <HomeSurfaceNoteCard
                 title="Typical nightly range"
@@ -197,69 +185,65 @@ export async function HotelPageScreen({
           </div>
         </section>
 
-        <section className="section">
-          <div className="section-inner">
-            <div className="section-heading section-heading-tight">
-              <div>
-                <span className="section-kicker">Hotel rates</span>
-                <h2 className="section-title">Check a live room-rate window before you book.</h2>
-              </div>
+        <section className="py-24 px-6 lg:px-8 bg-slate-50 border-t border-slate-100">
+          <div className="mx-auto max-w-7xl">
+            <div className="mb-12">
+              <span className="text-sm font-bold tracking-[0.25em] uppercase text-emerald-600 block mb-3">Hotel rates</span>
+              <h2 className="text-3xl md:text-4xl font-extrabold text-emerald-950">Check a live room-rate window before you book.</h2>
             </div>
-            <div className="route-reserve-shell">
-              <div className="route-reserve-copy">
-                <span className="section-kicker">Stay dates</span>
-                <h3 className="section-title text-[1.7rem]">Look up a sample stay at {hotel.name}.</h3>
-                <p className="section-copy">
+            <div className="grid lg:grid-cols-[1fr_400px] gap-8 lg:gap-12 items-start">
+              <div className="space-y-6">
+                <span className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-600">Stay dates</span>
+                <h3 className="text-2xl font-extrabold text-emerald-950">Look up a sample stay at {hotel.name}.</h3>
+                <p className="text-lg text-slate-600 leading-relaxed">
                   Use a quick date check to compare the hotel stay itself with the airport transfer.
                 </p>
-                <form className="mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                <form className="mt-8 grid gap-4 grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end">
                   <label className="grid gap-2">
-                    <span className="text-[0.72rem] uppercase tracking-[0.22em] text-[#5a7a6e]">
+                    <span className="text-[0.65rem] font-bold uppercase tracking-widest text-emerald-800">
                       Check-in
                     </span>
                     <input
                       type="date"
                       name="checkin"
                       defaultValue={stayWindow.checkin}
-                      className="h-14 rounded-[1.1rem] border border-[#2d6a4f]/20 bg-white px-4 text-base text-[#1a3d34] outline-none transition focus:border-[#2d6a4f]/45"
+                      className="h-14 rounded-2xl border border-slate-200 bg-white px-4 text-base text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-sm"
                     />
                   </label>
                   <label className="grid gap-2">
-                    <span className="text-[0.72rem] uppercase tracking-[0.22em] text-[#5a7a6e]">
+                    <span className="text-[0.65rem] font-bold uppercase tracking-widest text-emerald-800">
                       Checkout
                     </span>
                     <input
                       type="date"
                       name="checkout"
                       defaultValue={stayWindow.checkout}
-                      className="h-14 rounded-[1.1rem] border border-[#2d6a4f]/20 bg-white px-4 text-base text-[#1a3d34] outline-none transition focus:border-[#2d6a4f]/45"
+                      className="h-14 rounded-2xl border border-slate-200 bg-white px-4 text-base text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-sm"
                     />
                   </label>
-                  <div className="flex items-end">
-                    <button type="submit" className="button-link primary">
-                      Check rates
-                    </button>
-                  </div>
+                  <button type="submit" className="h-14 mb-0 sm:mb-0 rounded-2xl bg-slate-900 text-white px-8 text-sm font-bold shadow-md hover:bg-slate-800 transition-all">
+                    Check rates
+                  </button>
                 </form>
               </div>
-              <div className="rounded-[1.8rem] border border-[#2d6a4f]/10 bg-white p-6 shadow-[0_4px_20px_rgba(45,106,79,0.06)]">
-                <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[#5a7a6e]">
+              <div className="rounded-[2rem] bg-white p-8 border border-slate-100 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] mt-4 lg:mt-0">
+                <p className="text-[0.65rem] font-bold uppercase tracking-widest text-slate-500">
                   {formatStayWindow(stayWindow)}
                 </p>
                 {liveStayRate ? (
                   <>
-                    <h3 className="mt-3 text-[1.6rem] leading-[1.05] tracking-[-0.03em] text-[#123b33]">
+                    <h3 className="mt-4 text-3xl font-extrabold text-emerald-950">
                       {formatCurrency(liveStayRate.totalPrice)} total stay
                     </h3>
-                    <p className="mt-3 text-sm leading-7 text-[#5a7a6e]">
+                    <p className="mt-3 text-sm leading-relaxed text-slate-600">
                       About {formatCurrency(liveStayRate.nightlyRate)} per night for the selected
                       dates.
                     </p>
                     {liveStayRate.deeplinkUrl ? (
-                      <div className="mt-5">
+                      <div className="mt-8">
                         <Link
                           href={liveStayRate.deeplinkUrl}
-                          className="button-link secondary"
+                          className="rounded-full flex items-center justify-center bg-white text-emerald-700 border border-emerald-200 px-6 py-3 text-sm font-bold shadow-sm hover:bg-emerald-50 transition-all"
                           target="_blank"
                           rel="noreferrer"
                         >
@@ -270,10 +254,10 @@ export async function HotelPageScreen({
                   </>
                 ) : (
                   <>
-                    <h3 className="mt-3 text-[1.6rem] leading-[1.05] tracking-[-0.03em] text-[#123b33]">
+                    <h3 className="mt-4 text-2xl font-extrabold text-emerald-950">
                       Typical stay range: {staySnapshot.nightlyRateLabel}
                     </h3>
-                    <p className="mt-3 text-sm leading-7 text-[#5a7a6e]">
+                    <p className="mt-3 text-sm leading-relaxed text-slate-600">
                       A live room-rate match is not available for these dates right now, so use
                       the typical nightly range as your planning baseline.
                     </p>
@@ -284,39 +268,35 @@ export async function HotelPageScreen({
           </div>
         </section>
 
-        <section className="section route-reserve-section" id="reserve-form">
-          <div className="section-inner">
-            <div className="route-reserve-shell">
-              <div className="route-reserve-copy">
-                <span className="section-kicker">Reserve this hotel transfer</span>
-                <h2 className="section-title">Reserve your ride to {hotel.name} online.</h2>
-                <p className="section-copy">
-                  Your airport route is already selected. Add your flight timing, vehicle choice,
-                  and trip details to confirm the reservation.
-                </p>
-              </div>
-              <div className="booking-panel font-sans">
-                <ReserveWizard
-                  bookingConstraints={bookingConstraints}
-                  vehicles={vehicles}
-                  routes={routes}
-                  compact
-                  initialState={initialState}
-                />
-              </div>
+        <section className="py-24 px-6 lg:px-8 bg-white" id="reserve-form">
+          <div className="mx-auto max-w-5xl flex flex-col items-center">
+            <div className="mb-12 text-center">
+              <span className="text-sm font-bold tracking-[0.25em] uppercase text-emerald-600 block mb-3">Reserve this hotel transfer</span>
+              <h2 className="text-3xl md:text-5xl font-extrabold text-emerald-950 mb-4">Reserve your ride to {hotel.name} online.</h2>
+              <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+                Your airport route is already selected. Add your flight timing, vehicle choice,
+                and trip details to confirm the reservation.
+              </p>
+            </div>
+            <div className="w-full text-left">
+              <ReserveWizard
+                bookingConstraints={bookingConstraints}
+                vehicles={vehicles}
+                routes={routes}
+                compact
+                initialState={initialState}
+              />
             </div>
           </div>
         </section>
 
-        <section className="section">
-          <div className="section-inner">
-            <div className="section-heading section-heading-tight">
-              <div>
-                <span className="section-kicker">Trip details</span>
-                <h2 className="section-title">Helpful to know before you arrive.</h2>
-              </div>
+        <section className="py-24 px-6 lg:px-8 bg-slate-50 border-t border-slate-100">
+          <div className="mx-auto max-w-7xl">
+            <div className="mb-12">
+              <span className="text-sm font-bold tracking-[0.25em] uppercase text-emerald-600 block mb-3">Trip details</span>
+              <h2 className="text-3xl md:text-4xl font-extrabold text-emerald-950">Helpful to know before you arrive.</h2>
             </div>
-            <div className="route-reason-grid">
+            <div className="grid gap-6 md:grid-cols-3">
               <HomeSurfaceNoteCard
                 title="Hotel location"
                 body={`${hotel.name} is in ${hotel.neighborhood}, which can affect airport timing, late arrivals, and cruise or downtown connections.`}
@@ -330,17 +310,17 @@ export async function HotelPageScreen({
                 body="Your destination is already selected in the booking form, so you can move straight into timing and vehicle details."
               />
             </div>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link href={getHotelAreaGuideHref(hotel.area)} className="button-link secondary">
+            <div className="mt-8 flex flex-wrap gap-4">
+              <Link href={getHotelAreaGuideHref(hotel.area)} className="rounded-full px-8 py-3.5 text-sm font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition-all duration-300">
                 Browse {getHotelAreaLabel(hotel.area)}
               </Link>
               {hotel.area === "waterfront" ? (
-                <Link href="/bell-street-cruise-terminal-pier-66" className="button-link secondary">
+                <Link href="/bell-street-cruise-terminal-pier-66" className="rounded-full px-8 py-3.5 text-sm font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition-all duration-300">
                   Pier 66 guide
                 </Link>
               ) : null}
               {hotel.area === "waterfront" || hotel.area === "downtown-seattle" ? (
-                <Link href="/seatac-to-cruise-pre-stay-hotels" className="button-link secondary">
+                <Link href="/seatac-to-cruise-pre-stay-hotels" className="rounded-full px-8 py-3.5 text-sm font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition-all duration-300">
                   Cruise pre-stay hotels
                 </Link>
               ) : null}
@@ -349,15 +329,13 @@ export async function HotelPageScreen({
         </section>
 
         {faqs.length ? (
-          <section className="section">
-            <div className="section-inner">
-              <div className="section-heading section-heading-tight">
-                <div>
-                  <span className="section-kicker">FAQs</span>
-                  <h2 className="section-title">Common questions about this hotel transfer.</h2>
-                </div>
+          <section className="py-24 px-6 lg:px-8 bg-white border-t border-slate-100">
+            <div className="mx-auto max-w-7xl">
+              <div className="mb-12">
+                <span className="text-sm font-bold tracking-[0.25em] uppercase text-emerald-600 block mb-3">FAQs</span>
+                <h2 className="text-3xl md:text-4xl font-extrabold text-emerald-950">Common questions about this hotel transfer.</h2>
               </div>
-              <div className="route-faq-grid">
+              <div className="grid gap-6 md:grid-cols-2">
                 {faqs.map((faq) => (
                   <HomeSurfaceNoteCard
                     key={faq.question}

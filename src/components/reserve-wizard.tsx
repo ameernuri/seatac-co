@@ -79,7 +79,7 @@ type Props = {
 
 const RESERVE_DRAFT_STORAGE_KEY = "seatac-reserve-draft-v2";
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3;
 type TripType = "flat" | "distance" | "hourly" | "event";
 type VehicleAvailabilityStatus = {
   availableUnits: number;
@@ -109,26 +109,16 @@ const pricingTypeConfig: { label: string; value: PricingType }[] = [
 const stepMeta = [
   {
     id: 1 as Step,
-    label: "Route",
-    cta: "Book Ride",
-  },
-  {
-    id: 2 as Step,
-    label: "Time",
-    cta: "Continue to fit",
-  },
-  {
-    id: 3 as Step,
-    label: "Fit",
+    label: "Trip",
     cta: "See vehicles",
   },
   {
-    id: 4 as Step,
+    id: 2 as Step,
     label: "Vehicle",
     cta: "Continue to checkout",
   },
   {
-    id: 5 as Step,
+    id: 3 as Step,
     label: "Checkout",
     cta: "Continue to payment",
   },
@@ -685,8 +675,8 @@ export function ReserveWizard({
   initialClientAccount = null,
   initialState,
 }: Props) {
-  const minimumStep = Math.min(Math.max(minStep, 1), 5) as Step;
-  const initialStep = Math.min(Math.max(startStep, minimumStep), 5) as Step;
+  const minimumStep = Math.min(Math.max(minStep, 1), 3) as Step;
+  const initialStep = Math.min(Math.max(startStep, minimumStep), 3) as Step;
   const initialPickupSlot = resolveInitialBookingSlot(bookingConstraints);
   const initialRoute =
     initialState?.routeSlug
@@ -1082,7 +1072,7 @@ export function ReserveWizard({
         setTripType(restoredPricingType === "hourly" ? "hourly" : restoredPricingType);
       }
       if (typeof draft.step === "number") {
-        setStep(Math.min(Math.max(draft.step, minimumStep), 5) as Step);
+        setStep(Math.min(Math.max(draft.step, minimumStep), 3) as Step);
       }
       if (typeof draft.routeId === "string") setRouteId(draft.routeId);
       if (typeof draft.pickupAddress === "string" && draft.pickupAddress.trim()) {
@@ -1492,7 +1482,7 @@ export function ReserveWizard({
     };
   });
   const nextStepDisabled =
-    step === 4 &&
+    step === 2 &&
     (!selectedVehicle ||
       !selectedVehicleIsAvailable ||
       availabilityLoading ||
@@ -1515,19 +1505,19 @@ export function ReserveWizard({
       value: pickupDate ? `${pickupDate} at ${pickupTime}` : "Choose a pickup time",
       detail:
         returnTrip && returnDate ? `Return ${returnDate} at ${returnTime}` : null,
-      onEdit: () => jumpToStep(2),
+      onEdit: () => jumpToStep(1),
     },
     {
       label: "Party",
       value: `${passengers} passenger${passengers === "1" ? "" : "s"} • ${bags} bag${bags === "1" ? "" : "s"}`,
       detail: null,
-      onEdit: () => jumpToStep(3),
+      onEdit: () => jumpToStep(2),
     },
     {
       label: "Vehicle",
       value: selectedVehicle?.name ?? "Choose a vehicle",
       detail: flightNumber ? `Flight ${flightNumber}` : null,
-      onEdit: () => jumpToStep(4),
+      onEdit: () => jumpToStep(2),
     },
   ];
 
@@ -1799,9 +1789,7 @@ export function ReserveWizard({
         toast.error(dropoffAddressError);
         return false;
       }
-    }
 
-    if (current === 2) {
       if (!pickupDate) {
         toast.error("Choose a pickup date.");
         return false;
@@ -1823,12 +1811,12 @@ export function ReserveWizard({
       }
     }
 
-    if (current === 3 && compatibleVehicles.length === 0) {
-      toast.error("No vehicle fits this party size.");
-      return false;
-    }
+    if (current === 2) {
+      if (compatibleVehicles.length === 0) {
+        toast.error("No vehicle fits this party size.");
+        return false;
+      }
 
-    if (current === 4 && !selectedVehicle) {
       if (availabilityLoading) {
         toast.error("Live availability is still loading.");
         return false;
@@ -1848,7 +1836,7 @@ export function ReserveWizard({
       return false;
     }
 
-    if (current === 5) {
+    if (current === 3) {
       if (!clientAccount) {
         toast.error("Verify your phone to attach the booking to your account.");
         return false;
@@ -1872,7 +1860,7 @@ export function ReserveWizard({
       return;
     }
 
-    if (!validateStep(5) || !validateCheckoutFields()) {
+    if (!validateStep(3) || !validateCheckoutFields()) {
       return;
     }
 
@@ -2043,7 +2031,7 @@ export function ReserveWizard({
               </div>
             )}
 
-            {step === 2 && (
+            {step === 1 && (
               <div className="grid gap-4">
                 <div className="p-1">
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -2126,7 +2114,7 @@ export function ReserveWizard({
               </div>
             )}
 
-            {step === 3 && (
+            {step === 2 && (
               <div className="grid gap-4">
                 <div className="p-1">
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -2167,7 +2155,7 @@ export function ReserveWizard({
               </div>
             )}
 
-            {step === 4 && (
+            {step === 2 && (
               <div className="grid gap-4">
                 {vehicleOptionSummaries.map(
                   ({
@@ -2261,7 +2249,7 @@ export function ReserveWizard({
               </div>
             )}
 
-            {step === 5 && (
+            {step === 3 && (
               <div className="grid gap-5 lg:grid-cols-2">
               <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -2502,7 +2490,7 @@ export function ReserveWizard({
                     Back
                   </Button>
                 )}
-                {step < 5 ? (
+                {step < 3 ? (
                   <Button
                     type="button"
                     disabled={nextStepDisabled}
@@ -2698,7 +2686,7 @@ export function ReserveWizard({
             </div>
           )}
 
-          {!landingOnly && step === 2 && (
+          {!landingOnly && step === 1 && (
             <div className="p-1">
               <div className="max-w-2xl">
                 <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-[#2d6a4f]/80">
@@ -2789,168 +2777,7 @@ export function ReserveWizard({
             </div>
           )}
 
-          {!landingOnly && step === 4 && (
-            <div className="grid gap-4">
-              <div className="grid items-start gap-3 pt-2 md:grid-cols-3 md:gap-4">
-              {vehicleOptionSummaries.map(
-                ({
-                  availableUnits,
-                  isAvailable,
-                  nextAvailableLabel,
-                  quotePreview,
-                  reasonLabel,
-                  status,
-                  vehicle,
-                }) => (
-                <button
-                  key={vehicle.id}
-                  type="button"
-                  disabled={!isAvailable}
-                  onClick={() => isAvailable && setSelectedVehicleId(vehicle.id)}
-                  className={cn(
-                    "relative self-start overflow-hidden rounded-[1.7rem] border text-left transition",
-                    isAvailable
-                      ? selectedVehicle?.id === vehicle.id
-                        ? "border-[#2d6a4f] bg-[#eef7f2] shadow-[0_20px_42px_rgba(45,106,79,0.24)] ring-2 ring-[#2d6a4f]/22 md:pb-4"
-                        : "border-[#2d6a4f]/10 bg-white hover:border-[#2d6a4f]/20 hover:bg-[#f8f7f4] md:mt-4"
-                      : "border-[#2d6a4f]/10 bg-[#f8f7f4]/50 opacity-80",
-                  )}
-                >
-                  {selectedVehicle?.id === vehicle.id && isAvailable && (
-                    <span className="absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full border border-white/65 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#1f5d44] shadow-[0_8px_22px_rgba(13,92,72,0.18)] lg:right-4 lg:top-4 lg:gap-2 lg:px-3 lg:text-xs lg:tracking-[0.15em]">
-                      <span className="grid size-4 place-items-center rounded-full bg-[#2d6a4f] text-white shadow-[0_2px_8px_rgba(45,106,79,0.28)]">
-                        <Check className="size-3" />
-                      </span>
-                      <span>Selected</span>
-                    </span>
-                  )}
-                  <div
-                    className={cn(
-                      "relative h-[12.75rem] overflow-hidden rounded-[inherit] sm:h-[13.5rem] md:h-auto md:overflow-visible",
-                      !isAvailable && "grayscale",
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "absolute inset-0 bg-cover md:relative md:h-44",
-                        selectedVehicle?.id === vehicle.id
-                          ? ""
-                          : "sepia-[0.18] saturate-[0.82] brightness-[0.9]",
-                      )}
-                      style={{
-                        backgroundImage: `url(${vehicle.image})`,
-                        backgroundPosition: "center center",
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#10281f]/78 via-[#10281f]/26 to-transparent md:hidden" />
-                    <div
-                      className={cn(
-                        "absolute inset-x-0 bottom-0 z-10 space-y-1.5 p-3 text-white sm:p-3.5 md:static md:space-y-4 md:bg-transparent md:p-5 md:text-inherit",
-                        selectedVehicle?.id === vehicle.id ? "text-white" : "text-white/88 md:text-[#1a3d34]/88",
-                      )}
-                    >
-                      <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/82 md:text-[#5a7a6e]">
-                        <Badge className="rounded-full bg-black/24 px-2 py-1 text-[0.58rem] text-white backdrop-blur-sm md:bg-[#f8f7f4] md:px-3 md:text-[0.68rem] md:text-[#5a7a6e]">
-                          {vehicle.passengersMax} pax
-                        </Badge>
-                        <Badge className="rounded-full bg-black/24 px-2 py-1 text-[0.58rem] text-white backdrop-blur-sm md:bg-[#f8f7f4] md:px-3 md:text-[0.68rem] md:text-[#5a7a6e]">
-                          {vehicle.bagsMax} bags
-                        </Badge>
-                        {!isAvailable && (
-                          <Badge className="rounded-full border border-white/16 bg-white/10 px-2 py-1 text-[0.58rem] uppercase tracking-[0.12em] text-white/85 backdrop-blur-sm md:border-[#2d6a4f]/10 md:bg-[#f8f7f4] md:px-3 md:text-[0.68rem] md:tracking-[0.2em] md:text-[#8aa398]">
-                            Unavailable
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="font-sans text-[1.45rem] font-semibold leading-[0.95] text-white sm:text-[1.6rem] md:text-3xl md:text-[#1a3d34]">
-                            {getVehicleDisplayName(vehicle.name)}
-                          </p>
-                          <p
-                            className={cn(
-                              "mt-2 hidden text-sm leading-5 md:block md:leading-6",
-                              selectedVehicle?.id === vehicle.id
-                                ? "text-white/82 md:text-[#5a7a6e]"
-                                : "text-white/70 md:text-[#5a7a6e]/78",
-                            )}
-                          >
-                            {vehicle.summary}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="hidden border-t border-[#2d6a4f]/10 pt-4 md:block">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-[#5a7a6e]">Base price</span>
-                          <span className="font-medium text-[#1a3d34]">
-                            {formatCurrency(quotePreview.baseFare)}
-                          </span>
-                        </div>
-                      </div>
-                      <div
-                        className={cn(
-                          "text-sm md:border-t md:border-[#2d6a4f]/10 md:pt-4",
-                          selectedVehicle?.id === vehicle.id
-                            ? "text-white/80 md:text-[#5a7a6e]"
-                            : "text-white/70 md:text-[#5a7a6e]/78",
-                        )}
-                      >
-                        {getVehicleUseCase(vehicle.passengersMax)}
-                      </div>
-                    </div>
-                  </div>
-                  {!isAvailable ? (
-                    <div className="space-y-3 px-4 pb-4 md:hidden">
-                      <div
-                        className={cn(
-                          "border-t px-0 pt-4 text-sm",
-                          status?.reasonType === "schedule"
-                            ? "border-amber-500/20 text-amber-800"
-                            : "border-[#2d6a4f]/10 text-[#5a7a6e]",
-                        )}
-                      >
-                        <p className="font-medium">{reasonLabel}</p>
-                        {status?.reason ? (
-                          <p className="mt-2 text-sm leading-6 text-current/80">{status.reason}</p>
-                        ) : null}
-                        {nextAvailableLabel ? (
-                          <p className="mt-2 text-sm text-current/90">
-                            Next opening: {nextAvailableLabel}
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : null}
-                  <div className="hidden space-y-4 p-5 md:block">
-                    {!isAvailable && (
-                      <div
-                        className={cn(
-                          "border-t px-0 pt-4 text-sm",
-                          status?.reasonType === "schedule"
-                            ? "border-amber-500/20 text-amber-800"
-                            : "border-[#2d6a4f]/10 text-[#5a7a6e]",
-                        )}
-                      >
-                        <p className="font-medium">{reasonLabel}</p>
-                        {status?.reason ? (
-                          <p className="mt-2 text-sm leading-6 text-current/80">{status.reason}</p>
-                        ) : null}
-                        {nextAvailableLabel ? (
-                          <p className="mt-2 text-sm text-current/90">
-                            Next opening: {nextAvailableLabel}
-                          </p>
-                        ) : null}
-                      </div>
-                    )}
-                  </div>
-                </button>
-                ),
-              )}
-              </div>
-            </div>
-          )}
-
-          {!landingOnly && step === 3 && (
+          {!landingOnly && step === 2 && (
             <div className="p-1">
               <div className="max-w-2xl">
                 <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-[#2d6a4f]/80">
@@ -3001,10 +2828,173 @@ export function ReserveWizard({
                   ))}
                 </div>
               ) : null}
+
+              <div className="mt-8 grid items-start gap-3 pt-2 md:grid-cols-3 md:gap-4">
+                {vehicleOptionSummaries.map(
+                  ({
+                    availableUnits,
+                    isAvailable,
+                    nextAvailableLabel,
+                    quotePreview,
+                    reasonLabel,
+                    status,
+                    vehicle,
+                  }) => (
+                    <button
+                      key={vehicle.id}
+                      type="button"
+                      disabled={!isAvailable}
+                      onClick={() => isAvailable && setSelectedVehicleId(vehicle.id)}
+                      className={cn(
+                        "relative self-start overflow-hidden rounded-[1.7rem] border text-left transition",
+                        isAvailable
+                          ? selectedVehicle?.id === vehicle.id
+                            ? "border-[#2d6a4f] bg-[#eef7f2] shadow-[0_20px_42px_rgba(45,106,79,0.24)] ring-2 ring-[#2d6a4f]/22 md:pb-4"
+                            : "border-[#2d6a4f]/10 bg-white hover:border-[#2d6a4f]/20 hover:bg-[#f8f7f4] md:mt-4"
+                          : "border-[#2d6a4f]/10 bg-[#f8f7f4]/50 opacity-80",
+                      )}
+                    >
+                      {selectedVehicle?.id === vehicle.id && isAvailable && (
+                        <span className="absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full border border-white/65 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#1f5d44] shadow-[0_8px_22px_rgba(13,92,72,0.18)] lg:right-4 lg:top-4 lg:gap-2 lg:px-3 lg:text-xs lg:tracking-[0.15em]">
+                          <span className="grid size-4 place-items-center rounded-full bg-[#2d6a4f] text-white shadow-[0_2px_8px_rgba(45,106,79,0.28)]">
+                            <Check className="size-3" />
+                          </span>
+                          <span>Selected</span>
+                        </span>
+                      )}
+                      <div
+                        className={cn(
+                          "relative h-[12.75rem] overflow-hidden rounded-[inherit] sm:h-[13.5rem] md:h-auto md:overflow-visible",
+                          !isAvailable && "grayscale",
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "absolute inset-0 bg-cover md:relative md:h-44",
+                            selectedVehicle?.id === vehicle.id
+                              ? ""
+                              : "sepia-[0.18] saturate-[0.82] brightness-[0.9]",
+                          )}
+                          style={{
+                            backgroundImage: `url(${vehicle.image})`,
+                            backgroundPosition: "center center",
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#10281f]/78 via-[#10281f]/26 to-transparent md:hidden" />
+                        <div
+                          className={cn(
+                            "absolute inset-x-0 bottom-0 z-10 space-y-1.5 p-3 text-white sm:p-3.5 md:static md:space-y-4 md:bg-transparent md:p-5 md:text-inherit",
+                            selectedVehicle?.id === vehicle.id
+                              ? "text-white"
+                              : "text-white/88 md:text-[#1a3d34]/88",
+                          )}
+                        >
+                          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/82 md:text-[#5a7a6e]">
+                            <Badge className="rounded-full bg-black/24 px-2 py-1 text-[0.58rem] text-white backdrop-blur-sm md:bg-[#f8f7f4] md:px-3 md:text-[0.68rem] md:text-[#5a7a6e]">
+                              {vehicle.passengersMax} pax
+                            </Badge>
+                            <Badge className="rounded-full bg-black/24 px-2 py-1 text-[0.58rem] text-white backdrop-blur-sm md:bg-[#f8f7f4] md:px-3 md:text-[0.68rem] md:text-[#5a7a6e]">
+                              {vehicle.bagsMax} bags
+                            </Badge>
+                            {!isAvailable && (
+                              <Badge className="rounded-full border border-white/16 bg-white/10 px-2 py-1 text-[0.58rem] uppercase tracking-[0.12em] text-white/85 backdrop-blur-sm md:border-[#2d6a4f]/10 md:bg-[#f8f7f4] md:px-3 md:text-[0.68rem] md:tracking-[0.2em] md:text-[#8aa398]">
+                                Unavailable
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="font-sans text-[1.45rem] font-semibold leading-[0.95] text-white sm:text-[1.6rem] md:text-3xl md:text-[#1a3d34]">
+                                {getVehicleDisplayName(vehicle.name)}
+                              </p>
+                              <p
+                                className={cn(
+                                  "mt-2 hidden text-sm leading-5 md:block md:leading-6",
+                                  selectedVehicle?.id === vehicle.id
+                                    ? "text-white/82 md:text-[#5a7a6e]"
+                                    : "text-white/70 md:text-[#5a7a6e]/78",
+                                )}
+                              >
+                                {vehicle.summary}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="hidden border-t border-[#2d6a4f]/10 pt-4 md:block">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-[#5a7a6e]">Base price</span>
+                              <span className="font-medium text-[#1a3d34]">
+                                {formatCurrency(quotePreview.baseFare)}
+                              </span>
+                            </div>
+                          </div>
+                          <div
+                            className={cn(
+                              "text-sm md:border-t md:border-[#2d6a4f]/10 md:pt-4",
+                              selectedVehicle?.id === vehicle.id
+                                ? "text-white/80 md:text-[#5a7a6e]"
+                                : "text-white/70 md:text-[#5a7a6e]/78",
+                            )}
+                          >
+                            {getVehicleUseCase(vehicle.passengersMax)}
+                          </div>
+                        </div>
+                      </div>
+                      {!isAvailable ? (
+                        <div className="space-y-3 px-4 pb-4 md:hidden">
+                          <div
+                            className={cn(
+                              "border-t px-0 pt-4 text-sm",
+                              status?.reasonType === "schedule"
+                                ? "border-amber-500/20 text-amber-800"
+                                : "border-[#2d6a4f]/10 text-[#5a7a6e]",
+                            )}
+                          >
+                            <p className="font-medium">{reasonLabel}</p>
+                            {status?.reason ? (
+                              <p className="mt-2 text-sm leading-6 text-current/80">
+                                {status.reason}
+                              </p>
+                            ) : null}
+                            {nextAvailableLabel ? (
+                              <p className="mt-2 text-sm text-current/90">
+                                Next opening: {nextAvailableLabel}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+                      <div className="hidden space-y-4 p-5 md:block">
+                        {!isAvailable && (
+                          <div
+                            className={cn(
+                              "border-t px-0 pt-4 text-sm",
+                              status?.reasonType === "schedule"
+                                ? "border-amber-500/20 text-amber-800"
+                                : "border-[#2d6a4f]/10 text-[#5a7a6e]",
+                            )}
+                          >
+                            <p className="font-medium">{reasonLabel}</p>
+                            {status?.reason ? (
+                              <p className="mt-2 text-sm leading-6 text-current/80">
+                                {status.reason}
+                              </p>
+                            ) : null}
+                            {nextAvailableLabel ? (
+                              <p className="mt-2 text-sm text-current/90">
+                                Next opening: {nextAvailableLabel}
+                              </p>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  ),
+                )}
+              </div>
             </div>
           )}
 
-          {!landingOnly && step === 5 && (
+          {!landingOnly && step === 3 && (
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
               <div className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -3161,7 +3151,7 @@ export function ReserveWizard({
               >
                 Book Ride <ChevronRight className="size-4" />
               </Button>
-            ) : step < 5 && (
+            ) : step < 3 && (
               <Button
                 type="button"
                 disabled={nextStepDisabled}
@@ -3235,7 +3225,7 @@ export function ReserveWizard({
                 </div>
               ))}
             </div>
-            {step === 5 ? (
+            {step === 3 ? (
               <div className="space-y-3 pt-2">
                 <label
                   htmlFor="customer-sms-opt-in"
@@ -3251,10 +3241,21 @@ export function ReserveWizard({
                   />
                   <div className="space-y-1">
                     <div className="text-sm font-medium text-[#1a3d34]">
-                      Text me confirmations and pickup reminders.
+                      Send text confirmations and pickup reminders
                     </div>
                     <div className="text-sm text-[#5a7a6e]">
-                      Optional reservation updates. Reply STOP to opt out.{" "}
+                      By checking this box, you agree to receive reservation updates from
+                      seatac.co at the mobile number above. Message frequency varies. Reply STOP
+                      to opt out, HELP for help. Msg &amp; data rates may apply. See our privacy
+                      policy and{" "}
+                      <Link
+                        href="/privacy"
+                        className="text-[#0d5c48] underline underline-offset-4"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        privacy policy
+                      </Link>{" "}
+                      and{" "}
                       <Link
                         href="/sms-policy"
                         className="text-[#0d5c48] underline underline-offset-4"

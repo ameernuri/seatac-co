@@ -17,15 +17,19 @@ export default function SmsPolicyPage() {
       intro={
         <p>
           We use SMS for reservation-related updates only when a customer actively opts in during
-          checkout. This page explains what messages we send, how consent works, and how to opt out
-          or request help. For broader data handling, see our <Link href="/privacy" className="text-[#0d5c48] underline underline-offset-4">privacy policy</Link>.
+          sign-up or checkout. This page explains what messages we send, how consent works, and
+          how to opt out or request help. For broader data handling, see our{" "}
+          <Link href="/privacy" className="text-[#0d5c48] underline underline-offset-4">
+            privacy policy
+          </Link>
+          .
         </p>
       }
       updatedLabel="Updated March 18, 2026"
       asideTitle="At a glance"
       asideItems={[
-        "Opt-in happens through an unchecked box during checkout",
-        "Current use is transactional, not promotional",
+        "Opt-in happens through an unchecked box on sign-up or checkout",
+        "Current use is reservation-related, not promotional",
         "Reply STOP to opt out and HELP for help",
         "Message frequency varies by booking activity",
       ]}
@@ -34,9 +38,10 @@ export default function SmsPolicyPage() {
           title: "What messages we send",
           body: (
             <p>
-              Current text messages are limited to booking confirmations after payment, dispatch
-              updates related to a booked ride, and pickup reminders. We are not using the checkout
-              SMS consent for newsletters, broad promotions, or unrelated marketing.
+              Current text messages are limited to one-time verification codes, booking
+              confirmations after payment, dispatch updates related to a booked ride, and pickup
+              reminders. We do not use this consent for newsletters, broad promotions, or
+              unrelated marketing.
             </p>
           ),
         },
@@ -44,11 +49,13 @@ export default function SmsPolicyPage() {
           title: "How opt-in works",
           body: (
             <p>
-              During checkout, customers can choose to receive reservation updates by checking an
-              unchecked consent box next to the phone field. The current consent language states:
-              “By checking this box, you agree to receive reservation updates from seatac.co at the
-              mobile number above. Message frequency varies. Reply STOP to opt out, HELP for help.
-              Msg & data rates may apply.”
+              Customers can optionally agree to SMS on the sign-up page or during checkout by
+              checking an unchecked consent box next to the mobile number field. The current
+              consent language states: “I agree to receive reservation text messages from
+              seatac.co.” Supporting copy explains that messages may include one-time codes,
+              booking confirmations, pickup reminders, and trip updates, and that customers can
+              reply STOP to opt out or HELP for help. Message frequency varies. Msg &amp; data
+              rates may apply.
             </p>
           ),
         },

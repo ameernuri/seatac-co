@@ -68,7 +68,7 @@ export function SiteFooter() {
             <p>{siteChrome.footer.contactPhone}</p>
             <p>{siteChrome.footer.contactEmail}</p>
             {siteChrome.footer.operatingHours ? (
-              <p className="rounded-xl border border-emerald-100 bg-slate-50 px-3 py-2 text-slate-600">
+              <p>
                 {siteChrome.footer.operatingHours}
               </p>
             ) : null}
