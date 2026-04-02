@@ -648,18 +648,6 @@ function BookingCounterField({
   );
 }
 
-function getVehicleUseCase(passengerLimit: number) {
-  if (passengerLimit <= 3) {
-    return "Best for solo travelers, couples, and direct airport runs.";
-  }
-
-  if (passengerLimit <= 6) {
-    return "Best for families, premium airport pickups, and hotel departures.";
-  }
-
-  return "Best for larger groups, cruise departures, and multi-stop transport.";
-}
-
 export function ReserveWizard({
   bookingConstraints,
   vehicles,
@@ -822,8 +810,10 @@ export function ReserveWizard({
     return Math.min(...basePrices);
   }, [vehicles]);
 
-  const selectedVehicle =
-    compatibleVehicles.find((vehicle) => vehicle.id === selectedVehicleId) ?? null;
+  const selectedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId) ?? null;
+  const selectedVehicleMatchesFit = selectedVehicle
+    ? compatibleVehicles.some((vehicle) => vehicle.id === selectedVehicle.id)
+    : false;
   const selectedVehicleStatus = selectedVehicle
     ? vehicleStatuses?.[selectedVehicle.id] ?? null
     : null;
@@ -1423,21 +1413,6 @@ export function ReserveWizard({
 
   const activeStep = stepMeta.find((item) => item.id === step) ?? stepMeta[0];
   const extrasSelected = selectedExtras.length;
-  const fitReadout =
-    compatibleVehicles.length > 0
-      ? `${compatibleVehicles.length} vehicle class${
-          compatibleVehicles.length === 1 ? "" : "es"
-        } can handle ${passengers} passenger${
-          passengers === "1" ? "" : "s"
-        } and ${bags} bag${bags === "1" ? "" : "s"}.`
-      : `No current vehicle fits ${passengers} passenger${
-          passengers === "1" ? "" : "s"
-        } and ${bags} bag${bags === "1" ? "" : "s"}.`;
-  const fitVehiclePreview = compatibleVehicles.slice(0, 3).map((vehicle) => ({
-    id: vehicle.id,
-    label: vehicle.name,
-    detail: `${vehicle.passengersMax} passengers • ${vehicle.bagsMax} bags`,
-  }));
   const vehicleOptionSummaries = compatibleVehicles.map((vehicle) => {
     const status = vehicleStatuses?.[vehicle.id] ?? null;
     const availableUnits = status?.availableUnits ?? availableVehicleCounts?.[vehicle.id] ?? null;
@@ -1484,6 +1459,7 @@ export function ReserveWizard({
   const nextStepDisabled =
     step === 2 &&
     (!selectedVehicle ||
+      !selectedVehicleMatchesFit ||
       !selectedVehicleIsAvailable ||
       availabilityLoading ||
       Boolean(availabilityError) ||
@@ -1832,8 +1808,20 @@ export function ReserveWizard({
         return false;
       }
 
-      toast.error("Choose a vehicle.");
-      return false;
+      if (!selectedVehicle) {
+        toast.error("Choose a vehicle.");
+        return false;
+      }
+
+      if (!selectedVehicleMatchesFit) {
+        toast.error("Choose a vehicle that fits this party size.");
+        return false;
+      }
+
+      if (!selectedVehicleIsAvailable) {
+        toast.error("That vehicle is unavailable for this time.");
+        return false;
+      }
     }
 
     if (current === 3) {
@@ -2135,22 +2123,6 @@ export function ReserveWizard({
                     />
                   </div>
 
-                  <div className="mt-5 px-1 py-1">
-                    <p className="text-sm text-[#1a3d34]">{fitReadout}</p>
-                    <p className="mt-2 text-sm leading-6 text-[#5a7a6e]">
-                      Luggage means full-size checked bags. Carry-ons and personal items are usually easier to fit than this count suggests.
-                    </p>
-                  </div>
-                  {fitVehiclePreview.length > 0 ? (
-                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                      {fitVehiclePreview.map((vehicle) => (
-                        <div key={vehicle.id} className="border-l-2 border-[#2d6a4f]/15 pl-4 py-1">
-                          <p className="text-sm font-medium text-[#1a3d34]">{vehicle.label}</p>
-                          <p className="mt-1 text-sm text-[#5a7a6e]">{vehicle.detail}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
                 </div>
               </div>
             )}
@@ -2218,16 +2190,10 @@ export function ReserveWizard({
                             )}
                           >
                             {reasonLabel}
-                            {typeof availableUnits === "number" && isAvailable
-                              ? ` · ${availableUnits} unit${availableUnits === 1 ? "" : "s"} open`
-                              : ""}
                           </p>
-                          {!isAvailable && status?.reason ? (
-                            <p className="text-[#8aa398]">{status.reason}</p>
-                          ) : null}
                           {!isAvailable && nextAvailableLabel ? (
                             <p className="text-[#2d6a4f]/80">
-                              Next opening: {nextAvailableLabel}
+                              Next opening {nextAvailableLabel}
                             </p>
                           ) : null}
                         </div>
@@ -2779,17 +2745,6 @@ export function ReserveWizard({
 
           {!landingOnly && step === 2 && (
             <div className="p-1">
-              <div className="max-w-2xl">
-                <p className="font-sans text-[0.72rem] uppercase tracking-[0.3em] text-[#2d6a4f]/80">
-                  Fit
-                </p>
-                <h3 className="mt-3 font-display text-3xl leading-[0.96] text-[#1a3d34] md:text-4xl">
-                  Set the party size.
-                </h3>
-                <p className="mt-3 text-sm leading-7 text-[#5a7a6e]">
-                  Count checked bags here. Carry-ons and personal items usually fit more easily.
-                </p>
-              </div>
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">
                 <BookingCounterField
@@ -2808,26 +2763,6 @@ export function ReserveWizard({
                   onChange={(value) => handleBagsChange(String(value))}
                 />
               </div>
-
-              <div className="mt-6 border-t border-[#2d6a4f]/10 pt-5">
-                <p className="text-sm font-medium text-[#1a3d34]">{fitReadout}</p>
-                <p className="mt-2 text-sm leading-6 text-[#5a7a6e]">
-                  The next step only shows vehicles that fit this party, checked bags, and live availability.
-                </p>
-              </div>
-              {fitVehiclePreview.length > 0 ? (
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  {fitVehiclePreview.map((vehicle) => (
-                    <div
-                      key={vehicle.id}
-                      className="border-l border-[#2d6a4f]/15 pl-4 py-1"
-                    >
-                      <p className="text-sm font-medium text-[#1a3d34]">{vehicle.label}</p>
-                      <p className="mt-1 text-sm leading-6 text-[#5a7a6e]">{vehicle.detail}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
 
               <div className="mt-8 grid items-start gap-3 pt-2 md:grid-cols-3 md:gap-4">
                 {vehicleOptionSummaries.map(
@@ -2907,35 +2842,28 @@ export function ReserveWizard({
                               <p className="font-sans text-[1.45rem] font-semibold leading-[0.95] text-white sm:text-[1.6rem] md:text-3xl md:text-[#1a3d34]">
                                 {getVehicleDisplayName(vehicle.name)}
                               </p>
-                              <p
-                                className={cn(
-                                  "mt-2 hidden text-sm leading-5 md:block md:leading-6",
-                                  selectedVehicle?.id === vehicle.id
-                                    ? "text-white/82 md:text-[#5a7a6e]"
-                                    : "text-white/70 md:text-[#5a7a6e]/78",
-                                )}
-                              >
-                                {vehicle.summary}
-                              </p>
                             </div>
                           </div>
-                          <div className="hidden border-t border-[#2d6a4f]/10 pt-4 md:block">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-[#5a7a6e]">Base price</span>
-                              <span className="font-medium text-[#1a3d34]">
-                                {formatCurrency(quotePreview.baseFare)}
-                              </span>
-                            </div>
-                          </div>
-                          <div
-                            className={cn(
-                              "text-sm md:border-t md:border-[#2d6a4f]/10 md:pt-4",
-                              selectedVehicle?.id === vehicle.id
-                                ? "text-white/80 md:text-[#5a7a6e]"
-                                : "text-white/70 md:text-[#5a7a6e]/78",
-                            )}
-                          >
-                            {getVehicleUseCase(vehicle.passengersMax)}
+                          <div className="flex items-center justify-between text-sm md:border-t md:border-[#2d6a4f]/10 md:pt-4">
+                            <span
+                              className={cn(
+                                selectedVehicle?.id === vehicle.id
+                                  ? "text-white/82 md:text-[#5a7a6e]"
+                                  : "text-white/76 md:text-[#5a7a6e]/84",
+                              )}
+                            >
+                              Base
+                            </span>
+                            <span
+                              className={cn(
+                                "font-medium",
+                                selectedVehicle?.id === vehicle.id
+                                  ? "text-white md:text-[#1a3d34]"
+                                  : "text-white md:text-[#1a3d34]",
+                              )}
+                            >
+                              {formatCurrency(quotePreview.baseFare)}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -2949,17 +2877,11 @@ export function ReserveWizard({
                                 : "border-[#2d6a4f]/10 text-[#5a7a6e]",
                             )}
                           >
-                            <p className="font-medium">{reasonLabel}</p>
-                            {status?.reason ? (
-                              <p className="mt-2 text-sm leading-6 text-current/80">
-                                {status.reason}
-                              </p>
-                            ) : null}
-                            {nextAvailableLabel ? (
-                              <p className="mt-2 text-sm text-current/90">
-                                Next opening: {nextAvailableLabel}
-                              </p>
-                            ) : null}
+                            <p className="font-medium">
+                              {nextAvailableLabel
+                                ? `Unavailable until ${nextAvailableLabel}`
+                                : reasonLabel}
+                            </p>
                           </div>
                         </div>
                       ) : null}
@@ -2973,17 +2895,11 @@ export function ReserveWizard({
                                 : "border-[#2d6a4f]/10 text-[#5a7a6e]",
                             )}
                           >
-                            <p className="font-medium">{reasonLabel}</p>
-                            {status?.reason ? (
-                              <p className="mt-2 text-sm leading-6 text-current/80">
-                                {status.reason}
-                              </p>
-                            ) : null}
-                            {nextAvailableLabel ? (
-                              <p className="mt-2 text-sm text-current/90">
-                                Next opening: {nextAvailableLabel}
-                              </p>
-                            ) : null}
+                            <p className="font-medium">
+                              {nextAvailableLabel
+                                ? `Unavailable until ${nextAvailableLabel}`
+                                : reasonLabel}
+                            </p>
                           </div>
                         )}
                       </div>

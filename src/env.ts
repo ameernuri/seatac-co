@@ -56,6 +56,13 @@ export const env = {
     process.env.GOOGLE_SEARCH_CONSOLE_SITE_URL ?? "sc-domain:seatac.co",
   googleSearchConsoleClientEmail: process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL ?? "",
   googleSearchConsolePrivateKey: process.env.GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY ?? "",
+  googleAdsDeveloperToken: process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "",
+  googleAdsApiVersion: process.env.GOOGLE_ADS_API_VERSION ?? "v19",
+  googleAdsCustomerId: process.env.GOOGLE_ADS_CUSTOMER_ID ?? "",
+  googleAdsLoginCustomerId: process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID ?? "",
+  googleAdsClientId: process.env.GOOGLE_ADS_CLIENT_ID ?? "",
+  googleAdsClientSecret: process.env.GOOGLE_ADS_CLIENT_SECRET ?? "",
+  googleAdsRefreshToken: process.env.GOOGLE_ADS_REFRESH_TOKEN ?? "",
   serpProvider: process.env.SERP_PROVIDER ?? "serpapi",
   serpApiKey: process.env.SERPAPI_API_KEY ?? "",
 };

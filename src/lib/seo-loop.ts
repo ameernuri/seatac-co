@@ -167,3 +167,54 @@ export const seoExperimentsSeed = [
     targetKeywords: ["seatac airport hotels", "seatac to hyatt regency bellevue"],
   },
 ] as const;
+
+export const seoBacklogSeed = [
+  {
+    source: "content-gap",
+    itemType: "new-page",
+    title: "Sea-Tac parking guide and comparison page",
+    summary:
+      "Create a dedicated parking/planning page covering Sea-Tac parking options, park-and-fly decisions, and ride-vs-parking tradeoffs.",
+    audience: "airport travelers",
+    intent: "planning",
+    priority: 92,
+    suggestedUrl: "https://seatac.co/seatac-parking-guide",
+    targetKeyword: "seatac parking",
+  },
+  {
+    source: "content-gap",
+    itemType: "support-article",
+    title: "Park-and-fly hotel planning guide",
+    summary:
+      "Add a support article for park-and-fly stays, hotel shuttle alternatives, and transfer booking logic around Sea-Tac.",
+    audience: "airport hotel planners",
+    intent: "planning",
+    priority: 78,
+    suggestedUrl: "https://seatac.co/park-and-fly-hotels-seatac",
+    targetKeyword: "seatac park and fly hotels",
+  },
+  {
+    source: "faq-gap",
+    itemType: "faq",
+    title: "Expand arrivals and departures FAQ coverage",
+    summary:
+      "Add question-led content around pickup timing, bag claim walk times, evening congestion, and terminal meet points.",
+    audience: "airport travelers",
+    intent: "planning",
+    priority: 74,
+    suggestedUrl: null,
+    targetKeyword: "seatac arrivals questions",
+  },
+  {
+    source: "cluster-gap",
+    itemType: "comparison-page",
+    title: "Cruise transfer comparison page",
+    summary:
+      "Create a comparison page for Pier 66 vs Pier 91 transfer planning, downtown hotel staging, and luggage timing.",
+    audience: "cruise travelers",
+    intent: "planning",
+    priority: 70,
+    suggestedUrl: "https://seatac.co/pier-66-vs-pier-91-transfer-guide",
+    targetKeyword: "pier 66 vs pier 91 transfer",
+  },
+] as const;
