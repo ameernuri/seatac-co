@@ -14,6 +14,7 @@ import {
   users,
 } from "@/db/schema";
 import { env } from "@/env";
+import { normalizeClientPhone } from "@/lib/client-phone";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import {
   checkPhoneVerificationCode,
@@ -46,6 +47,23 @@ type SignedVerificationPayload = {
   verifiedAt: string | null;
 };
 
+function isMissingPolicyAgreementColumnError(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message.includes("policy_agreed_at") &&
+    error.message.toLowerCase().includes("does not exist")
+  );
+}
+
+function isMissingUserPhoneColumnsError(error: unknown) {
+  return (
+    error instanceof Error &&
+    (error.message.includes("phone_number") ||
+      error.message.includes("phone_number_verified")) &&
+    error.message.toLowerCase().includes("does not exist")
+  );
+}
+
 export function hashVerificationCode(code: string) {
   return createHash("sha256")
     .update(`${env.betterAuthSecret}:${code}`)
@@ -57,10 +75,6 @@ export function generateVerificationCode() {
     VERIFICATION_CODE_LENGTH,
     "0",
   );
-}
-
-export function normalizeClientPhone(input: string) {
-  return normalizePhoneNumber(input);
 }
 
 function signVerificationPayload(payload: SignedVerificationPayload) {
@@ -353,6 +367,7 @@ export async function ensureClientUserAccount(input: {
   email: string;
   name: string;
   phone: string;
+  policyAgreed: boolean;
   smsOptIn: boolean;
 }) {
   const email = input.email.trim().toLowerCase();
@@ -416,6 +431,8 @@ export async function ensureClientUserAccount(input: {
         name,
         email,
         image: null,
+        phoneNumber: input.phone,
+        phoneNumberVerified: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -438,12 +455,15 @@ export async function ensureClientUserAccount(input: {
       .set({
         email,
         name,
+        phoneNumber: input.phone,
+        phoneNumberVerified: true,
         updatedAt: new Date(),
       })
       .where(eq(users.id, user.id));
   }
 
   const profile = await upsertClientProfile({
+    policyAgreed: input.policyAgreed,
     userId: user.id,
     phone: input.phone,
     smsOptIn: input.smsOptIn,
@@ -468,21 +488,58 @@ export async function findClientAccountByIdentifier(input: { identifier: string 
 
   if (identifier.includes("@")) {
     const email = identifier.toLowerCase();
-    const [row] = await db
-      .select({
-        userId: users.id,
-        name: users.name,
-        email: users.email,
-        emailVerified: users.emailVerified,
-        phone: clientProfiles.phone,
-        phoneNormalized: clientProfiles.phoneNormalized,
-        phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
-        smsOptIn: clientProfiles.smsOptIn,
-      })
-      .from(users)
-      .leftJoin(clientProfiles, eq(clientProfiles.userId, users.id))
-      .where(eq(users.email, email))
-      .limit(1);
+    let row:
+      | {
+          userId: string;
+          name: string;
+          email: string;
+          emailVerified: boolean;
+          phone: string | null;
+          phoneNormalized: string | null;
+          phoneVerifiedAt: Date | null;
+          policyAgreedAt: Date | null;
+          smsOptIn: boolean | null;
+        }
+      | undefined;
+
+    try {
+      [row] = await db
+        .select({
+          userId: users.id,
+          name: users.name,
+          email: users.email,
+          emailVerified: users.emailVerified,
+          phone: clientProfiles.phone,
+          phoneNormalized: clientProfiles.phoneNormalized,
+          phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+          policyAgreedAt: clientProfiles.policyAgreedAt,
+          smsOptIn: clientProfiles.smsOptIn,
+        })
+        .from(users)
+        .leftJoin(clientProfiles, eq(clientProfiles.userId, users.id))
+        .where(eq(users.email, email))
+        .limit(1);
+    } catch (error) {
+      if (!isMissingPolicyAgreementColumnError(error)) throw error;
+
+      const [fallbackRow] = await db
+        .select({
+          userId: users.id,
+          name: users.name,
+          email: users.email,
+          emailVerified: users.emailVerified,
+          phone: clientProfiles.phone,
+          phoneNormalized: clientProfiles.phoneNormalized,
+          phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+          smsOptIn: clientProfiles.smsOptIn,
+        })
+        .from(users)
+        .leftJoin(clientProfiles, eq(clientProfiles.userId, users.id))
+        .where(eq(users.email, email))
+        .limit(1);
+
+      row = fallbackRow ? { ...fallbackRow, policyAgreedAt: null } : undefined;
+    }
 
     if (!row) {
       throw new Error("No account was found for that email.");
@@ -506,21 +563,58 @@ export async function findClientAccountByIdentifier(input: { identifier: string 
     throw new Error("Enter a valid email or mobile number.");
   }
 
-  const [row] = await db
-    .select({
-      userId: users.id,
-      name: users.name,
-      email: users.email,
-      emailVerified: users.emailVerified,
-      phone: clientProfiles.phone,
-      phoneNormalized: clientProfiles.phoneNormalized,
-      phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
-      smsOptIn: clientProfiles.smsOptIn,
-    })
-    .from(clientProfiles)
-    .innerJoin(users, eq(clientProfiles.userId, users.id))
-    .where(eq(clientProfiles.phoneNormalized, phoneNormalized))
-    .limit(1);
+  let row:
+    | {
+        userId: string;
+        name: string;
+        email: string;
+        emailVerified: boolean;
+        phone: string | null;
+        phoneNormalized: string | null;
+        phoneVerifiedAt: Date | null;
+        policyAgreedAt: Date | null;
+        smsOptIn: boolean | null;
+      }
+    | undefined;
+
+  try {
+    [row] = await db
+      .select({
+        userId: users.id,
+        name: users.name,
+        email: users.email,
+        emailVerified: users.emailVerified,
+        phone: clientProfiles.phone,
+        phoneNormalized: clientProfiles.phoneNormalized,
+        phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+        policyAgreedAt: clientProfiles.policyAgreedAt,
+        smsOptIn: clientProfiles.smsOptIn,
+      })
+      .from(clientProfiles)
+      .innerJoin(users, eq(clientProfiles.userId, users.id))
+      .where(eq(clientProfiles.phoneNormalized, phoneNormalized))
+      .limit(1);
+  } catch (error) {
+    if (!isMissingPolicyAgreementColumnError(error)) throw error;
+
+    const [fallbackRow] = await db
+      .select({
+        userId: users.id,
+        name: users.name,
+        email: users.email,
+        emailVerified: users.emailVerified,
+        phone: clientProfiles.phone,
+        phoneNormalized: clientProfiles.phoneNormalized,
+        phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+        smsOptIn: clientProfiles.smsOptIn,
+      })
+      .from(clientProfiles)
+      .innerJoin(users, eq(clientProfiles.userId, users.id))
+      .where(eq(clientProfiles.phoneNormalized, phoneNormalized))
+      .limit(1);
+
+    row = fallbackRow ? { ...fallbackRow, policyAgreedAt: null } : undefined;
+  }
 
   if (!row) {
     throw new Error("No account was found for that mobile number.");
@@ -594,6 +688,7 @@ export async function consumeVerifiedChallenge(input: {
 }
 
 export async function upsertClientProfile(input: {
+  policyAgreed: boolean;
   userId: string;
   phone: string;
   smsOptIn: boolean;
@@ -605,53 +700,256 @@ export async function upsertClientProfile(input: {
   }
 
   const now = new Date();
+  const updateSet: {
+    phone: string;
+    phoneNormalized: string;
+    phoneVerifiedAt: Date;
+    smsOptIn: boolean;
+    smsOptInAt: Date | null;
+    updatedAt: Date;
+    policyAgreedAt?: Date;
+  } = {
+    phone: input.phone,
+    phoneNormalized,
+    phoneVerifiedAt: now,
+    smsOptIn: input.smsOptIn,
+    smsOptInAt: input.smsOptIn ? now : null,
+    updatedAt: now,
+  };
 
-  await db
-    .insert(clientProfiles)
-    .values({
-      userId: input.userId,
-      phone: input.phone,
-      phoneNormalized,
-      phoneVerifiedAt: now,
-      smsOptIn: input.smsOptIn,
-      smsOptInAt: input.smsOptIn ? now : null,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: clientProfiles.userId,
-      set: {
+  if (input.policyAgreed) {
+    updateSet.policyAgreedAt = now;
+  }
+
+  try {
+    await db
+      .insert(clientProfiles)
+      .values({
+        createdAt: now,
+        policyAgreedAt: input.policyAgreed ? now : null,
+        userId: input.userId,
         phone: input.phone,
         phoneNormalized,
         phoneVerifiedAt: now,
         smsOptIn: input.smsOptIn,
         smsOptInAt: input.smsOptIn ? now : null,
         updatedAt: now,
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: clientProfiles.userId,
+        set: updateSet,
+      });
 
-  const [profile] = await db
-    .select()
-    .from(clientProfiles)
-    .where(eq(clientProfiles.userId, input.userId))
-    .limit(1);
+    const [profile] = await db
+      .select()
+      .from(clientProfiles)
+      .where(eq(clientProfiles.userId, input.userId))
+      .limit(1);
 
-  return profile ?? null;
+    return profile ?? null;
+  } catch (error) {
+    if (!isMissingPolicyAgreementColumnError(error)) throw error;
+
+    await db
+      .insert(clientProfiles)
+      .values({
+        createdAt: now,
+        userId: input.userId,
+        phone: input.phone,
+        phoneNormalized,
+        phoneVerifiedAt: now,
+        smsOptIn: input.smsOptIn,
+        smsOptInAt: input.smsOptIn ? now : null,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: clientProfiles.userId,
+        set: {
+          phone: input.phone,
+          phoneNormalized,
+          phoneVerifiedAt: now,
+          smsOptIn: input.smsOptIn,
+          smsOptInAt: input.smsOptIn ? now : null,
+          updatedAt: now,
+        },
+      });
+
+    const [fallbackProfile] = await db
+      .select({
+        userId: clientProfiles.userId,
+        phone: clientProfiles.phone,
+        phoneNormalized: clientProfiles.phoneNormalized,
+        phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+        smsOptIn: clientProfiles.smsOptIn,
+        smsOptInAt: clientProfiles.smsOptInAt,
+        createdAt: clientProfiles.createdAt,
+        updatedAt: clientProfiles.updatedAt,
+      })
+      .from(clientProfiles)
+      .where(eq(clientProfiles.userId, input.userId))
+      .limit(1);
+
+    return fallbackProfile
+      ? {
+          ...fallbackProfile,
+          policyAgreedAt: null,
+        }
+      : null;
+  }
 }
 
 export async function getClientAccountSnapshot(userId: string) {
-  const [row] = await db
-    .select({
-      userId: users.id,
-      name: users.name,
-      email: users.email,
-      phone: clientProfiles.phone,
-      phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
-      smsOptIn: clientProfiles.smsOptIn,
-    })
-    .from(users)
-    .leftJoin(clientProfiles, eq(clientProfiles.userId, users.id))
-    .where(eq(users.id, userId))
-    .limit(1);
+  let row:
+    | {
+        userId: string;
+        name: string;
+        email: string;
+        emailVerified: boolean;
+        phone: string | null;
+        phoneVerifiedAt: Date | null;
+        policyAgreedAt: Date | null;
+        smsOptIn: boolean | null;
+        fallbackPhone: string | null;
+        fallbackPhoneVerified: boolean;
+      }
+    | undefined;
+
+  try {
+    [row] = await db
+      .select({
+        userId: users.id,
+        name: users.name,
+        email: users.email,
+        emailVerified: users.emailVerified,
+        phone: clientProfiles.phone,
+        phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+        policyAgreedAt: clientProfiles.policyAgreedAt,
+        smsOptIn: clientProfiles.smsOptIn,
+        fallbackPhone: users.phoneNumber,
+        fallbackPhoneVerified: users.phoneNumberVerified,
+      })
+      .from(users)
+      .leftJoin(clientProfiles, eq(clientProfiles.userId, users.id))
+      .where(eq(users.id, userId))
+      .limit(1);
+  } catch (error) {
+    if (isMissingPolicyAgreementColumnError(error)) {
+      try {
+        const [fallbackRow] = await db
+          .select({
+            userId: users.id,
+            name: users.name,
+            email: users.email,
+            emailVerified: users.emailVerified,
+            phone: clientProfiles.phone,
+            phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+            smsOptIn: clientProfiles.smsOptIn,
+            fallbackPhone: users.phoneNumber,
+            fallbackPhoneVerified: users.phoneNumberVerified,
+          })
+          .from(users)
+          .leftJoin(clientProfiles, eq(clientProfiles.userId, users.id))
+          .where(eq(users.id, userId))
+          .limit(1);
+
+        row = fallbackRow ? { ...fallbackRow, policyAgreedAt: null } : undefined;
+      } catch (fallbackError) {
+        if (!isMissingUserPhoneColumnsError(fallbackError)) throw fallbackError;
+
+        const [legacyFallbackRow] = await db
+          .select({
+            userId: users.id,
+            name: users.name,
+            email: users.email,
+            emailVerified: users.emailVerified,
+            phone: clientProfiles.phone,
+            phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+            smsOptIn: clientProfiles.smsOptIn,
+          })
+          .from(users)
+          .leftJoin(clientProfiles, eq(clientProfiles.userId, users.id))
+          .where(eq(users.id, userId))
+          .limit(1);
+
+        row = legacyFallbackRow
+          ? {
+              ...legacyFallbackRow,
+              policyAgreedAt: null,
+              fallbackPhone: null,
+              fallbackPhoneVerified: false,
+            }
+          : undefined;
+      }
+
+      return row
+        ? {
+            email: row.email,
+            emailVerified: row.emailVerified,
+            name: row.name,
+            policyAgreedAt: row.policyAgreedAt,
+            phone: row.phone ?? row.fallbackPhone ?? null,
+            phoneVerifiedAt:
+              row.phoneVerifiedAt ?? (row.fallbackPhoneVerified ? new Date(0) : null),
+            smsOptIn: row.smsOptIn,
+            userId: row.userId,
+          }
+        : null;
+    }
+
+    if (!isMissingUserPhoneColumnsError(error)) throw error;
+
+    try {
+      const [fallbackRow] = await db
+        .select({
+          userId: users.id,
+          name: users.name,
+          email: users.email,
+          emailVerified: users.emailVerified,
+          phone: clientProfiles.phone,
+          phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+          policyAgreedAt: clientProfiles.policyAgreedAt,
+          smsOptIn: clientProfiles.smsOptIn,
+        })
+        .from(users)
+        .leftJoin(clientProfiles, eq(clientProfiles.userId, users.id))
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      row = fallbackRow
+        ? {
+            ...fallbackRow,
+            fallbackPhone: null,
+            fallbackPhoneVerified: false,
+          }
+        : undefined;
+    } catch (fallbackError) {
+      if (!isMissingPolicyAgreementColumnError(fallbackError)) throw fallbackError;
+
+      const [legacyFallbackRow] = await db
+        .select({
+          userId: users.id,
+          name: users.name,
+          email: users.email,
+          emailVerified: users.emailVerified,
+          phone: clientProfiles.phone,
+          phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+          smsOptIn: clientProfiles.smsOptIn,
+        })
+        .from(users)
+        .leftJoin(clientProfiles, eq(clientProfiles.userId, users.id))
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      row = legacyFallbackRow
+        ? {
+            ...legacyFallbackRow,
+            policyAgreedAt: null,
+            fallbackPhone: null,
+            fallbackPhoneVerified: false,
+          }
+        : undefined;
+    }
+  }
 
   if (!row) {
     return null;
@@ -659,9 +957,12 @@ export async function getClientAccountSnapshot(userId: string) {
 
   return {
     email: row.email,
+    emailVerified: row.emailVerified,
     name: row.name,
-    phone: row.phone ?? null,
-    phoneVerifiedAt: row.phoneVerifiedAt,
+    policyAgreedAt: row.policyAgreedAt,
+    phone: row.phone ?? row.fallbackPhone ?? null,
+    phoneVerifiedAt:
+      row.phoneVerifiedAt ?? (row.fallbackPhoneVerified ? new Date(0) : null),
     smsOptIn: row.smsOptIn,
     userId: row.userId,
   };
