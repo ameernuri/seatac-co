@@ -9,6 +9,15 @@ import { getClientProfileByUserId, getServerSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
+type SessionUserWithPhone = {
+  id: string;
+  name: string;
+  email: string;
+  emailVerified: boolean;
+  phoneNumber?: string | null;
+  phoneNumberVerified?: boolean | null;
+};
+
 export default async function ReservePage() {
   const session = await getServerSession();
   const [vehicles, routes, settings, accountSnapshot, clientProfile] = await Promise.all([
@@ -19,12 +28,7 @@ export default async function ReservePage() {
     session?.user ? getClientProfileByUserId(session.user.id).catch(() => null) : Promise.resolve(null),
   ]);
   const bookingConstraints = normalizeBookingConstraints(settings.bookingConstraints);
-  const sessionUser = session?.user as
-    | (typeof session.user & {
-        phoneNumber?: string | null;
-        phoneNumberVerified?: boolean | null;
-      })
-    | undefined;
+  const sessionUser = session?.user as SessionUserWithPhone | undefined;
   const initialClientAccount = session?.user
     ? {
         userId: session.user.id,
