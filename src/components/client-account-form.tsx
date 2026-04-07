@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -18,11 +18,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { normalizeClientPhone } from "@/lib/client-phone";
 
 export type ClientAccountSnapshot = {
   userId: string;
   name: string;
   email: string;
+  emailVerified?: boolean;
+  policyAgreedAt?: string | Date | null;
   phone: string | null;
   phoneVerifiedAt: string | Date | null;
   smsOptIn: boolean | null;
@@ -43,6 +46,7 @@ type FullProps = SharedProps & {
 };
 
 type CheckoutProps = SharedProps & {
+  account?: ClientAccountSnapshot | null;
   email: string;
   name: string;
   phone: string;
@@ -53,31 +57,6 @@ type CheckoutProps = SharedProps & {
 };
 
 type Props = FullProps | CheckoutProps;
-
-function normalizeClientPhone(input: string) {
-  const trimmed = input.trim();
-
-  if (!trimmed) {
-    return null;
-  }
-
-  if (trimmed.startsWith("+")) {
-    const normalized = `+${trimmed.slice(1).replace(/\D/g, "")}`;
-    return normalized.length >= 11 ? normalized : null;
-  }
-
-  const digits = trimmed.replace(/\D/g, "");
-
-  if (digits.length === 10) {
-    return `+1${digits}`;
-  }
-
-  if (digits.length === 11 && digits.startsWith("1")) {
-    return `+${digits}`;
-  }
-
-  return null;
-}
 
 function isEmail(value: string) {
   return /\S+@\S+\.\S+/.test(value.trim());
@@ -142,6 +121,7 @@ export function ClientAccountForm(props: Props) {
   const [signUpLoading, setSignUpLoading] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null);
+  const [knownVerifiedPhone, setKnownVerifiedPhone] = useState<string | null>(null);
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -152,26 +132,52 @@ export function ClientAccountForm(props: Props) {
   const resolvedPhone = checkoutVariantProps?.phone ?? phone;
   const resolvedSmsOptIn = checkoutVariantProps?.smsOptIn ?? smsOptIn;
   const verificationPurpose = isCheckout ? "reserve-account" : "sign-up";
-  const normalizedPhone = normalizeClientPhone(resolvedPhone);
-  const alreadyVerified = Boolean(verifiedPhone && verifiedPhone === resolvedPhone);
+  const normalizedPhone = normalizeClientPhone(resolvedPhone) || null;
+  const normalizedAccountPhone = useMemo(
+    () => normalizeClientPhone(checkoutVariantProps?.account?.phone ?? "") || null,
+    [checkoutVariantProps?.account?.phone],
+  );
+  const persistedVerifiedPhone = isCheckout && checkoutVariantProps?.account?.phoneVerifiedAt
+    ? normalizedAccountPhone
+    : null;
+  const alreadyVerified = Boolean(
+    normalizedPhone && knownVerifiedPhone && normalizedPhone === knownVerifiedPhone,
+  );
   const canSendCode = isPhone(resolvedPhone);
-  const showPhoneAction = alreadyVerified || codeSent || canSendCode;
   const canCompleteSignUp =
     !isCheckout &&
     resolvedName.trim().length >= 2 &&
     isEmail(resolvedEmail) &&
     isPhone(resolvedPhone) &&
     termsAgreed;
+  const verifiedBadge = alreadyVerified ? (
+    <span className="inline-flex items-center gap-1 rounded-full border border-[#2d6a4f]/12 bg-[#2d6a4f]/6 px-2.5 py-1 text-[0.7rem] font-medium text-[#2d6a4f]">
+      <Check className="size-3.5" />
+      Verified
+    </span>
+  ) : null;
 
   useEffect(() => {
-    if (verifiedPhone && verifiedPhone !== resolvedPhone) {
+    if (persistedVerifiedPhone) {
+      setKnownVerifiedPhone((current) => current ?? persistedVerifiedPhone);
+    }
+  }, [persistedVerifiedPhone]);
+
+  useEffect(() => {
+    if (verifiedPhone) {
+      setKnownVerifiedPhone(verifiedPhone);
+    }
+  }, [verifiedPhone]);
+
+  useEffect(() => {
+    if (knownVerifiedPhone && knownVerifiedPhone !== normalizedPhone) {
       setVerifiedPhone(null);
       setCodeSent(false);
       setOtpCode("");
       setChallengeId(null);
       setResendCooldown(0);
     }
-  }, [resolvedPhone, verifiedPhone]);
+  }, [knownVerifiedPhone, normalizedPhone]);
 
   useEffect(() => {
     if (resendCooldown <= 0) {
@@ -202,6 +208,7 @@ export function ClientAccountForm(props: Props) {
         challengeId,
         email: resolvedEmail,
         name: resolvedName,
+        policyAgreed: isCheckout ? checkoutVariantProps?.policyAgreed : termsAgreed,
         phone: resolvedPhone,
         purpose: verificationPurpose,
         smsOptIn: resolvedSmsOptIn,
@@ -298,7 +305,8 @@ export function ClientAccountForm(props: Props) {
       try {
         const result = await syncProfile();
         const account = result.account ?? (await fetchAccountSnapshot());
-        setVerifiedPhone(resolvedPhone);
+        setVerifiedPhone(normalizedPhone);
+        setKnownVerifiedPhone(normalizedPhone);
         setVerifyLoading(false);
         toast.success(result.existed ? "Signed in to your existing account." : "Account ready.");
 
@@ -318,7 +326,8 @@ export function ClientAccountForm(props: Props) {
       return;
     }
 
-    setVerifiedPhone(resolvedPhone);
+    setVerifiedPhone(normalizedPhone);
+    setKnownVerifiedPhone(normalizedPhone);
     setVerifyLoading(false);
     toast.success("Phone verified.");
     setVerificationDialogOpen(false);
@@ -368,6 +377,7 @@ export function ClientAccountForm(props: Props) {
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
           <Label className="text-[#5a7a6e]">Mobile number</Label>
+          {verifiedBadge}
           {codeSent && !alreadyVerified ? (
             <button
               type="button"
@@ -379,74 +389,54 @@ export function ClientAccountForm(props: Props) {
             </button>
           ) : null}
         </div>
-        {!alreadyVerified && codeSent ? (
-          <ButtonGroup className="w-full rounded-2xl">
-            <Input
-              autoComplete="tel"
-              inputMode="tel"
-              value={resolvedPhone}
-              onChange={(event) => checkoutVariantProps?.onPhoneChange(event.target.value)}
-              className="h-14 min-w-0 flex-[1.15] border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10"
-            />
-            <Input
-              value={otpCode}
-              onChange={(event) =>
-                setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-              }
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="6-digit code"
-              className="h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base font-medium tracking-[0.2em] text-[#1a3d34] placeholder:tracking-normal focus-visible:z-10"
-            />
-            <Button
-              type="button"
-              onClick={handleVerifyCode}
-              disabled={verifyLoading || otpCode.trim().length !== 6}
-              className="booking-primary-button h-14 min-w-40 px-5 shadow-none"
-            >
-              {verifyLoading ? <Loader2 className="size-4 animate-spin" /> : null}
-              Verify
-            </Button>
-          </ButtonGroup>
-        ) : showPhoneAction ? (
-          <ButtonGroup className="w-full rounded-2xl">
-            <Input
-              autoComplete="tel"
-              inputMode="tel"
-              value={resolvedPhone}
-              onChange={(event) => checkoutVariantProps?.onPhoneChange(event.target.value)}
-              className="h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10"
-            />
-            {!alreadyVerified ? (
-              <Button
-                type="button"
-                onClick={handleSendCode}
-                disabled={sendLoading || !canSendCode}
-                className="booking-primary-button h-14 min-w-40 px-5 shadow-none"
-              >
-                {sendLoading ? <Loader2 className="size-4 animate-spin" /> : null}
-                Send code
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                disabled
-                className="h-14 min-w-40 border border-[#2d6a4f]/15 bg-white px-5 text-[#2d6a4f] opacity-100 shadow-none"
-              >
-                <Check className="size-4" />
-                Verified
-              </Button>
-            )}
-          </ButtonGroup>
-        ) : (
+        <ButtonGroup className="w-full rounded-2xl">
           <Input
             autoComplete="tel"
             inputMode="tel"
             value={resolvedPhone}
             onChange={(event) => checkoutVariantProps?.onPhoneChange(event.target.value)}
-            className="h-14 rounded-2xl border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34]"
+            className={codeSent ? "h-14 min-w-0 flex-[1.15] border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10" : "h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10"}
           />
-        )}
+          {codeSent ? (
+            <>
+              <Input
+                value={otpCode}
+                onChange={(event) =>
+                  setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && otpCode.trim().length === 6 && !verifyLoading) {
+                    event.preventDefault();
+                    void handleVerifyCode();
+                  }
+                }}
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="6-digit code"
+                className="h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base font-medium tracking-[0.2em] text-[#1a3d34] placeholder:tracking-normal focus-visible:z-10"
+              />
+              <Button
+                type="button"
+                onClick={handleVerifyCode}
+                disabled={verifyLoading || otpCode.trim().length !== 6}
+                className="booking-primary-button h-14 min-w-40 px-5 shadow-none"
+              >
+                {verifyLoading ? <Loader2 className="size-4 animate-spin" /> : null}
+                Verify
+              </Button>
+            </>
+          ) : alreadyVerified ? null : canSendCode ? (
+            <Button
+              type="button"
+              onClick={handleSendCode}
+              disabled={sendLoading}
+              className="booking-primary-button h-14 min-w-40 px-5 shadow-none"
+            >
+              {sendLoading ? <Loader2 className="size-4 animate-spin" /> : null}
+              Send code
+            </Button>
+          ) : null}
+        </ButtonGroup>
       </div>
     );
   }
@@ -493,6 +483,7 @@ export function ClientAccountForm(props: Props) {
             <Label className="text-[#5a7a6e]">
               Mobile number
             </Label>
+            {verifiedBadge}
             {codeSent && !alreadyVerified ? (
               <button
                 type="button"
@@ -504,74 +495,54 @@ export function ClientAccountForm(props: Props) {
               </button>
             ) : null}
           </div>
-          {!alreadyVerified && codeSent ? (
-            <ButtonGroup className="w-full rounded-2xl">
-              <Input
-                autoComplete="tel"
-                inputMode="tel"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                className="h-14 min-w-0 flex-[1.15] border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10"
-              />
-              <Input
-                value={otpCode}
-                onChange={(event) =>
-                  setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                }
-                inputMode="numeric"
-                maxLength={6}
-                placeholder="6-digit code"
-                className="h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base font-medium tracking-[0.2em] text-[#1a3d34] placeholder:tracking-normal focus-visible:z-10"
-              />
-              <Button
-                type="button"
-                onClick={handleVerifyCode}
-                disabled={verifyLoading || otpCode.trim().length !== 6}
-                className="booking-primary-button h-14 min-w-40 px-5 shadow-none"
-              >
-                {verifyLoading ? <Loader2 className="size-4 animate-spin" /> : null}
-                Verify
-              </Button>
-            </ButtonGroup>
-          ) : showPhoneAction ? (
-            <ButtonGroup className="w-full rounded-2xl">
-              <Input
-                autoComplete="tel"
-                inputMode="tel"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                className="h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10"
-              />
-              {!alreadyVerified ? (
-                <Button
-                  type="button"
-                  onClick={handleSendCode}
-                  disabled={sendLoading || !canSendCode}
-                  className="booking-primary-button h-14 min-w-40 px-5 shadow-none"
-                >
-                  {sendLoading ? <Loader2 className="size-4 animate-spin" /> : null}
-                  Send code
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  disabled
-                  className="h-14 min-w-40 border border-[#2d6a4f]/15 bg-white px-5 text-[#2d6a4f] opacity-100 shadow-none"
-                >
-                  <Check className="size-4" />
-                  Verified
-                </Button>
-              )}
-            </ButtonGroup>
-          ) : (
+          <ButtonGroup className="w-full rounded-2xl">
             <Input
               autoComplete="tel"
               inputMode="tel"
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
-              className="h-14 rounded-2xl border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34]"
+              className={codeSent ? "h-14 min-w-0 flex-[1.15] border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10" : "h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10"}
             />
-          )}
+            {codeSent ? (
+              <>
+                <Input
+                  value={otpCode}
+                  onChange={(event) =>
+                    setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && otpCode.trim().length === 6 && !verifyLoading) {
+                      event.preventDefault();
+                      void handleVerifyCode();
+                    }
+                  }}
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="6-digit code"
+                  className="h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base font-medium tracking-[0.2em] text-[#1a3d34] placeholder:tracking-normal focus-visible:z-10"
+                />
+                <Button
+                  type="button"
+                  onClick={handleVerifyCode}
+                  disabled={verifyLoading || otpCode.trim().length !== 6}
+                  className="booking-primary-button h-14 min-w-40 px-5 shadow-none"
+                >
+                  {verifyLoading ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Verify
+                </Button>
+              </>
+            ) : alreadyVerified ? null : canSendCode ? (
+              <Button
+                type="button"
+                onClick={handleSendCode}
+                disabled={sendLoading}
+                className="booking-primary-button h-14 min-w-40 px-5 shadow-none"
+              >
+                {sendLoading ? <Loader2 className="size-4 animate-spin" /> : null}
+                Send code
+              </Button>
+            ) : null}
+          </ButtonGroup>
         </div>
       </div>
 

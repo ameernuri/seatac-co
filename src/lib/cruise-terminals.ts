@@ -72,6 +72,7 @@ export const cruiseTerminalGuides: CruiseTerminalGuide[] = [
     ],
     usefulLinks: [
       { label: "Sea-Tac to Pier 66", href: "/seatac-to-pier-66" },
+      { label: "Pier 66 vs Pier 91 transfer guide", href: "/pier-66-vs-pier-91-transfer-guide" },
       { label: "Downtown Seattle hotel transfers", href: "/seatac-to-downtown-seattle-hotels" },
       { label: "Waterfront hotel transfers", href: "/seatac-to-waterfront-hotels" },
       { label: "Sea-Tac arrivals guide", href: "/arrivals" },
@@ -128,6 +129,7 @@ export const cruiseTerminalGuides: CruiseTerminalGuide[] = [
     ],
     usefulLinks: [
       { label: "Sea-Tac to Pier 91", href: "/seatac-to-pier-91" },
+      { label: "Pier 66 vs Pier 91 transfer guide", href: "/pier-66-vs-pier-91-transfer-guide" },
       { label: "Downtown Seattle hotel transfers", href: "/seatac-to-downtown-seattle-hotels" },
       { label: "Sea-Tac arrivals guide", href: "/arrivals" },
       { label: "Sea-Tac departures guide", href: "/departures" },

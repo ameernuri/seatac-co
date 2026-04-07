@@ -404,6 +404,7 @@ export const clientProfiles = pgTable(
     phoneVerifiedAt: timestamp("phone_verified_at", { withTimezone: true }),
     smsOptIn: boolean("sms_opt_in").notNull().default(false),
     smsOptInAt: timestamp("sms_opt_in_at", { withTimezone: true }),
+    policyAgreedAt: timestamp("policy_agreed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

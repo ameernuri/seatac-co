@@ -33,6 +33,46 @@ export const env = {
   bookingDemandAffiliateId: process.env.BOOKING_DEMAND_AFFILIATE_ID ?? "",
   bookingDemandBaseUrl:
     process.env.BOOKING_DEMAND_BASE_URL ?? "https://demandapi.booking.com/3.1",
+  skyscannerApiKey: process.env.SKYSCANNER_API_KEY ?? "",
+  skyscannerAffiliateId: process.env.SKYSCANNER_AFFILIATE_ID ?? "",
+  skyscannerBaseUrl:
+    process.env.SKYSCANNER_BASE_URL ??
+    "https://partners.api.skyscanner.net/apiservices/v3",
+  skyscannerIndicativeSearchPath:
+    process.env.SKYSCANNER_INDICATIVE_SEARCH_PATH ?? "/flights/indicative/search",
+  skyscannerLiveCreatePath:
+    process.env.SKYSCANNER_LIVE_CREATE_PATH ?? "/flights/live/search/create",
+  skyscannerLivePollPath:
+    process.env.SKYSCANNER_LIVE_POLL_PATH ?? "/flights/live/search/poll",
+  expediaRapidApiKey: process.env.EXPEDIA_RAPID_API_KEY ?? "",
+  expediaRapidSharedSecret: process.env.EXPEDIA_RAPID_SHARED_SECRET ?? "",
+  expediaRapidBaseUrl: process.env.EXPEDIA_RAPID_BASE_URL ?? "https://api.ean.com/v3",
+  expediaRapidRegionsPath: process.env.EXPEDIA_RAPID_REGIONS_PATH ?? "/regions",
+  expediaRapidCustomerIp: process.env.EXPEDIA_RAPID_CUSTOMER_IP ?? "127.0.0.1",
+  expediaRapidUserAgent:
+    process.env.EXPEDIA_RAPID_USER_AGENT ?? "seatac.co/1.0 (+https://seatac.co)",
+  transferzApiKey: process.env.TRANSFERZ_API_KEY ?? process.env.TRANSFERZ_API_TOKEN ?? "",
+  transferzEmail: process.env.TRANSFERZ_EMAIL ?? "",
+  transferzPassword: process.env.TRANSFERZ_PASSWORD ?? "",
+  transferzBaseUrl:
+    process.env.TRANSFERZ_BASE_URL ?? "https://warpdrive.staging.transferz.com",
+  transferzGatewayBaseUrl:
+    process.env.TRANSFERZ_GATEWAY_BASE_URL ?? "https://gateway.staging.transferz.com",
+  transferzTokenPath: process.env.TRANSFERZ_TOKEN_PATH ?? "/auth/auth/generate-token",
+  transferzApiKeysPath: process.env.TRANSFERZ_API_KEYS_PATH ?? "/auth/api-keys/me",
+  transferzAvailabilityPath:
+    process.env.TRANSFERZ_AVAILABILITY_PATH ?? "/partners/quotes",
+  parkwhizApiKey: process.env.PARKWHIZ_API_KEY ?? "",
+  parkwhizClientId: process.env.PARKWHIZ_CLIENT_ID ?? process.env.PARKWHIZ_API_KEY ?? "",
+  parkwhizClientSecret: process.env.PARKWHIZ_CLIENT_SECRET ?? "",
+  parkwhizAffiliateId: process.env.PARKWHIZ_AFFILIATE_ID ?? "",
+  parkwhizBaseUrl: process.env.PARKWHIZ_BASE_URL ?? "https://api.parkwhiz.com/v4",
+  parkwhizSearchPath: process.env.PARKWHIZ_SEARCH_PATH ?? "/quotes/",
+  parkwhizTokenPath: process.env.PARKWHIZ_TOKEN_PATH ?? "/oauth/token",
+  vesselfinderApiKey: process.env.VESSELFINDER_API_KEY ?? "",
+  vesselfinderBaseUrl: process.env.VESSELFINDER_BASE_URL ?? "https://api.vesselfinder.com",
+  vesselfinderPortCallsPath:
+    process.env.VESSELFINDER_PORTCALLS_PATH ?? "/portcalls",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   resendFromEmail: process.env.RESEND_FROM_EMAIL ?? "",
   resendFromName: process.env.RESEND_FROM_NAME ?? "",

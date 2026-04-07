@@ -336,6 +336,11 @@ export const routePages: Record<string, RoutePage> = {
     ],
     relatedLinks: [
       { href: "/seatac-to-pier-91", label: "Other cruise terminal", title: "Sea-Tac to Pier 91" },
+      {
+        href: "/pier-66-vs-pier-91-transfer-guide",
+        label: "Terminal comparison",
+        title: "Pier 66 vs Pier 91 transfer guide",
+      },
       { href: "/seatac-to-cruise-pre-stay-hotels", label: "Cruise hotels", title: "Cruise pre-stay hotels" },
       { href: "/bell-street-cruise-terminal-pier-66", label: "Terminal guide", title: "Bell Street Cruise Terminal guide" },
     ],
@@ -402,6 +407,11 @@ export const routePages: Record<string, RoutePage> = {
     ],
     relatedLinks: [
       { href: "/seatac-to-pier-66", label: "Other cruise terminal", title: "Sea-Tac to Pier 66" },
+      {
+        href: "/pier-66-vs-pier-91-transfer-guide",
+        label: "Terminal comparison",
+        title: "Pier 66 vs Pier 91 transfer guide",
+      },
       { href: "/seatac-to-cruise-pre-stay-hotels", label: "Cruise hotels", title: "Cruise pre-stay hotels" },
       { href: "/smith-cove-cruise-terminal-pier-91", label: "Terminal guide", title: "Smith Cove Cruise Terminal guide" },
     ],

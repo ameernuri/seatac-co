@@ -1,6 +1,8 @@
 import type { Hotel } from "@/db/schema";
 import { env } from "@/env";
 import type { StayWindow } from "@/lib/stay-dates";
+import { guessSeattleHotelDestination } from "@/lib/travel/seattle";
+import type { HotelOffer, HotelSearchInput } from "@/lib/travel/types";
 
 type BookingDemandCity = {
   id: number;
@@ -16,6 +18,12 @@ type BookingDemandHotelRate = {
   checkin: string;
   checkout: string;
   deeplinkUrl: string | null;
+};
+
+type BookingDemandHotelSearchResult = {
+  enabled: boolean;
+  offers: HotelOffer[];
+  error?: string;
 };
 
 const cityIdCache = new Map<string, number | null>();
@@ -134,6 +142,22 @@ async function getBookingDemandCityId(cityName: string) {
 
   cityIdCache.set(key, match?.id ?? null);
   return match?.id ?? null;
+}
+
+async function getBookingDemandSelector(destination: string) {
+  const normalized = guessSeattleHotelDestination(destination);
+
+  if (normalized === "SeaTac") {
+    return { airport: "SEA" } satisfies Record<string, unknown>;
+  }
+
+  const cityId = await getBookingDemandCityId(normalized);
+
+  if (!cityId) {
+    return null;
+  }
+
+  return { city: cityId } satisfies Record<string, unknown>;
 }
 
 function readFirstNumber(value: unknown): number | null {
@@ -292,4 +316,89 @@ export async function getLiveHotelRate(
     checkout: stayWindow.checkout,
     deeplinkUrl: match.deeplinkUrl,
   };
+}
+
+export async function searchBookingDemandHotels(
+  input: HotelSearchInput,
+): Promise<BookingDemandHotelSearchResult> {
+  if (!hasBookingDemandCredentials()) {
+    return {
+      enabled: false,
+      offers: [],
+      error: "Booking Demand credentials are not configured yet.",
+    };
+  }
+
+  const selector = await getBookingDemandSelector(input.destination);
+
+  if (!selector) {
+    return {
+      enabled: true,
+      offers: [],
+      error: `Could not resolve ${input.destination} to a Booking.com Demand search area.`,
+    };
+  }
+
+  try {
+    const payload = await bookingDemandFetch("/accommodations/search", {
+      ...selector,
+      checkin: input.checkin,
+      checkout: input.checkout,
+      guests: {
+        number_of_adults: input.adults ?? 2,
+        number_of_rooms: input.rooms ?? 1,
+      },
+      booker: {
+        country: "us",
+        platform: "desktop",
+      },
+      currency: "USD",
+      extras: ["products"],
+      rows: 32,
+    });
+
+    const query = input.query?.trim();
+    const rows = parseAccommodationRows(payload)
+      .map((row) => ({
+        ...row,
+        score: query ? scoreHotelNameMatch(query, row.name) : 1,
+      }))
+      .filter((row) => !query || row.score > 0)
+      .sort((a, b) => b.score - a.score || a.totalPrice - b.totalPrice)
+      .slice(0, 10);
+
+    return {
+      enabled: true,
+      offers: rows.map((row) => ({
+        provider: "booking_demand",
+        name: row.name,
+        neighborhood: input.destination,
+        checkin: input.checkin,
+        checkout: input.checkout,
+        totalPrice: row.totalPrice,
+        nightlyRate: Math.round(row.totalPrice / Math.max(1, daysBetween(input.checkin, input.checkout))),
+        currency: row.currency,
+        deepLinkUrl: row.deeplinkUrl,
+        sourceId: row.id,
+      })),
+    };
+  } catch (error) {
+    return {
+      enabled: true,
+      offers: [],
+      error: error instanceof Error ? error.message : "Booking Demand hotel search failed.",
+    };
+  }
+}
+
+function daysBetween(startDate: string, endDate: string) {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return 1;
+  }
+
+  const diff = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  return diff > 0 ? diff : 1;
 }

@@ -7,10 +7,12 @@ import { SiteBrand } from "@/components/site-brand";
 export function SiteFooter() {
   const coverageLinks = getCoverageLinks(coverageAreas);
   const popularSearchLinks = [
-    { label: "Sea-Tac airport car service", href: "/seatac-airport-car-service" },
-    { label: "Sea-Tac airport hotels", href: "/seatac-airport-hotels" },
-    { label: "Sea-Tac to Bellevue car service", href: "/seatac-to-bellevue" },
-    { label: "Sea-Tac to downtown Seattle", href: "/seatac-to-downtown-seattle" },
+    { label: "Book Sea-Tac flights", href: "/flights" },
+    { label: "Book Seattle hotels", href: "/hotels" },
+    { label: "Reserve airport rides", href: "/rides" },
+    { label: "Compare Sea-Tac parking", href: "/parking" },
+    { label: "Seattle cruise schedule", href: "/cruises" },
+    { label: "Sea-Tac park-and-fly hotels", href: "/park-and-fly-hotels-seatac" },
     { label: "Sea-Tac to Pier 66", href: "/seatac-to-pier-66" },
     { label: "Sea-Tac departures", href: "/departures" },
   ] as const;

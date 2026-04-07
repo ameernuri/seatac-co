@@ -26,6 +26,7 @@ import { AddressSwapButton } from "@/components/ui/address-swap-button";
 import { BadgeSwitcher } from "@/components/ui/badge-switcher";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,7 @@ import {
   type BookingConstraints,
   validateBookingWindow,
 } from "@/lib/booking-constraints";
+import { normalizeClientPhone } from "@/lib/client-phone";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import { type GoogleAddress } from "@/lib/google-maps";
 import { quoteReservation, type ServiceMode } from "@/lib/quote";
@@ -432,6 +434,15 @@ function buildChargeSummary(
   )}`;
 }
 
+function InlineVerifiedBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-[#2d6a4f]/12 bg-[#2d6a4f]/6 px-2 py-1 text-[0.65rem] font-medium text-[#2d6a4f]">
+      <Check className="size-3" />
+      Verified
+    </span>
+  );
+}
+
 const timeOptions = Array.from({ length: 48 }, (_, index) => {
   const hours = String(Math.floor(index / 2)).padStart(2, "0");
   const minutes = index % 2 === 0 ? "00" : "30";
@@ -754,6 +765,14 @@ export function ReserveWizard({
   const [submitting, setSubmitting] = useState(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const customerName = combineCustomerName(customerFirstName, customerLastName);
+  const normalizedCustomerPhone = normalizeClientPhone(customerPhone);
+  const normalizedAccountPhone = normalizeClientPhone(clientAccount?.phone ?? "");
+  const hasPersistedVerifiedPhone =
+    Boolean(clientAccount?.phoneVerifiedAt) &&
+    Boolean(normalizedCustomerPhone) &&
+    normalizedCustomerPhone === normalizedAccountPhone;
+  const hasPersistedSmsOptIn = hasPersistedVerifiedPhone && Boolean(clientAccount?.smsOptIn);
+  const hasVerifiedEmail = Boolean(clientAccount?.emailVerified);
   const selectedPricingType = pricingTypeFromTripType(tripType);
   const enabledPricingOptions = useMemo(
     () =>
@@ -766,6 +785,7 @@ export function ReserveWizard({
     () => stepMeta.filter((item) => item.id >= minimumStep),
     [minimumStep],
   );
+  const stepRailInset = `${visibleStepMeta.length > 0 ? 50 / visibleStepMeta.length : 0}%`;
 
   const filteredRoutes = useMemo(
     () => routesForPricingType(routes, selectedPricingType),
@@ -1164,19 +1184,41 @@ export function ReserveWizard({
   }, [clientAccount, draftLoaded]);
 
   useEffect(() => {
-    if (!clientAccount) {
+    let cancelled = false;
+
+    if (typeof window === "undefined") {
       return;
     }
 
-    if (!customerPhone.trim()) {
-      setClientAccount(null);
-      return;
-    }
+    fetch("/api/client-auth/profile", {
+      credentials: "same-origin",
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          return null;
+        }
 
-    if ((clientAccount.phone ?? "").trim() !== customerPhone.trim()) {
-      setClientAccount(null);
-    }
-  }, [clientAccount, customerPhone]);
+        const data = await response.json().catch(() => ({}));
+        return (data.account ?? null) as ClientAccountSnapshot | null;
+      })
+      .then((account) => {
+        if (cancelled || !account) {
+          return;
+        }
+
+        setClientAccount(account);
+        setCustomerFirstName((current) => current || splitCustomerName(account.name || "").firstName);
+        setCustomerLastName((current) => current || splitCustomerName(account.name || "").lastName);
+        setCustomerEmail((current) => current || account.email || "");
+        setCustomerPhone((current) => current || account.phone || "");
+        setCustomerSmsOptIn((current) => current || Boolean(account.smsOptIn));
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function persistReserveDraft(nextStep: Step) {
     if (typeof window === "undefined") {
@@ -1407,7 +1449,7 @@ export function ReserveWizard({
     customerName.trim().length > 0 &&
     isValidEmail(customerEmail) &&
     isValidPhone(customerPhone) &&
-    Boolean(clientAccount) &&
+    hasPersistedVerifiedPhone &&
     customerPolicyAgreed &&
     true;
 
@@ -1684,7 +1726,7 @@ export function ReserveWizard({
       nextErrors.customerPhone = "Enter a mobile number for dispatch updates.";
     } else if (!isValidPhone(customerPhone)) {
       nextErrors.customerPhone = "Enter a valid mobile number.";
-    } else if (!clientAccount) {
+    } else if (!hasPersistedVerifiedPhone) {
       nextErrors.customerPhoneVerified = "Verify your mobile number before payment.";
     }
 
@@ -1731,6 +1773,7 @@ export function ReserveWizard({
     setCustomerPhone(account.phone || customerPhone);
     setCustomerSmsOptIn(Boolean(account.smsOptIn));
     clearCheckoutError("customerPhoneVerified");
+    clearCheckoutError("customerPolicyAgreed");
     toast.success("Account ready.");
   }
 
@@ -2277,9 +2320,12 @@ export function ReserveWizard({
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
-                      Email required
-                    </Label>
+                    <div className="flex items-center justify-between gap-3">
+                      <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
+                        Email required
+                      </Label>
+                      {hasVerifiedEmail ? <InlineVerifiedBadge /> : null}
+                    </div>
                     <Input
                       id="checkout-email-compact"
                       name="email"
@@ -2305,6 +2351,7 @@ export function ReserveWizard({
                   </div>
                   <ClientAccountForm
                     variant="checkout"
+                    account={clientAccount}
                     name={customerName}
                     email={customerEmail}
                     phone={customerPhone}
@@ -2336,39 +2383,41 @@ export function ReserveWizard({
                       placeholder="Client name, venue timing, gate code, or special entry notes"
                     />
                   </div>
-                  <div className="rounded-xl border border-[#2d6a4f]/10 bg-[#f8f7f4] p-4">
-                    <div className="flex items-start gap-3">
-                      <Checkbox
-                        id="customer-sms-opt-in-compact"
-                        checked={customerSmsOptIn}
-                        onCheckedChange={(checked) => {
-                          setCustomerSmsOptIn(checked === true);
-                        }}
-                        className="mt-1"
-                      />
-                      <div className="space-y-1">
-                        <Label
-                          htmlFor="customer-sms-opt-in-compact"
-                          className="cursor-pointer text-sm font-medium text-[#1a3d34]"
-                        >
-                          Send text confirmations and pickup reminders
-                        </Label>
-                        <p className="text-sm leading-6 text-[#5a7a6e]">
-                          By checking this box, you agree to receive reservation updates from
-                          seatac.co at the mobile number above. Message frequency varies. Reply
-                          STOP to opt out, HELP for help. Msg & data rates may apply. See our{" "}
-                          <Link href="/privacy" className="text-[#0d5c48] underline underline-offset-4">
-                            privacy policy
-                          </Link>{" "}
-                          and{" "}
-                          <Link href="/sms-policy" className="text-[#0d5c48] underline underline-offset-4">
-                            SMS policy
-                          </Link>
-                          .
-                        </p>
+                  {!hasPersistedSmsOptIn ? (
+                    <div className="rounded-xl border border-[#2d6a4f]/10 bg-[#f8f7f4] p-4">
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id="customer-sms-opt-in-compact"
+                          checked={customerSmsOptIn}
+                          onCheckedChange={(checked) => {
+                            setCustomerSmsOptIn(checked === true);
+                          }}
+                          className="mt-1"
+                        />
+                        <div className="space-y-1">
+                          <Label
+                            htmlFor="customer-sms-opt-in-compact"
+                            className="cursor-pointer text-sm font-medium text-[#1a3d34]"
+                          >
+                            Send text confirmations and pickup reminders
+                          </Label>
+                          <p className="text-sm leading-6 text-[#5a7a6e]">
+                            By checking this box, you agree to receive reservation updates from
+                            seatac.co at the mobile number above. Message frequency varies. Reply
+                            STOP to opt out, HELP for help. Msg &amp; data rates may apply. See our{" "}
+                            <Link href="/privacy" className="text-[#0d5c48] underline underline-offset-4">
+                              privacy policy
+                            </Link>{" "}
+                            and{" "}
+                            <Link href="/sms-policy" className="text-[#0d5c48] underline underline-offset-4">
+                              SMS policy
+                            </Link>
+                            .
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : null}
                 </div>
                 <div className="space-y-4">
                   <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
@@ -2527,8 +2576,15 @@ export function ReserveWizard({
           ) : null}
           <div className="hidden min-w-0 px-2 lg:block">
             <div className="overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <div className="relative flex min-w-max items-start gap-6 lg:grid lg:min-w-0 lg:grid-cols-5 lg:gap-4">
-                <div className="absolute left-10 right-10 top-[3.1rem] hidden h-px bg-[#2d6a4f]/12 lg:block" />
+              <div className="mx-auto max-w-4xl">
+                <div
+                  className="relative flex min-w-max items-start gap-6 lg:grid lg:min-w-0 lg:gap-4"
+                  style={{ gridTemplateColumns: `repeat(${visibleStepMeta.length}, minmax(0, 1fr))` }}
+                >
+                  <div
+                    className="absolute hidden h-px bg-[#2d6a4f]/12 lg:block"
+                    style={{ left: stepRailInset, right: stepRailInset, top: "3.1rem" }}
+                  />
                 {visibleStepMeta.map((item) => (
                   <button
                     key={item.id}
@@ -2558,6 +2614,7 @@ export function ReserveWizard({
                     </span>
                   </button>
                 ))}
+                </div>
               </div>
             </div>
           </div>
@@ -2609,35 +2666,89 @@ export function ReserveWizard({
                 ) : null}
               </div>
               <div className="mt-6 grid gap-4">
-                <div className="space-y-2">
-                  <Label className="text-[#5a7a6e]">Pick up address</Label>
-                  <GoogleAddressInput
-                    id="pickup-address"
-                    value={pickupAddress}
-                    onChange={handlePickupAddressChange}
-                    onResolved={setPickupPlace}
-                    placeholder="Enter pick up address"
-                    suggestions={pickupSuggestions}
-                    className="booking-control h-14 rounded-2xl px-4 text-base border-[#2d6a4f]/15 bg-white text-[#1a3d34]"
-                  />
-                </div>
-
-                {(tripType === "flat" || tripType === "distance") && (
+                {(tripType === "flat" || tripType === "distance") ? (
                   <>
-                    <AddressSwapButton onClick={handleSwapAddresses} />
-                    <div className="space-y-2">
-                      <Label className="text-[#5a7a6e]">Drop off address</Label>
-                      <GoogleAddressInput
-                        id="dropoff-address"
-                        value={dropoffAddress}
-                        onChange={handleDropoffAddressChange}
-                        onResolved={setDropoffPlace}
-                        placeholder="Enter drop off address"
-                        suggestions={dropoffSuggestions}
-                        className="booking-control h-14 rounded-2xl px-4 text-base border-[#2d6a4f]/15 bg-white text-[#1a3d34]"
-                      />
+                    <div className="grid gap-3 md:hidden">
+                      <div className="space-y-2">
+                        <Label className="text-[#5a7a6e]">Pick up address</Label>
+                        <GoogleAddressInput
+                          id="pickup-address"
+                          value={pickupAddress}
+                          onChange={handlePickupAddressChange}
+                          onResolved={setPickupPlace}
+                          placeholder="Enter pick up address"
+                          suggestions={pickupSuggestions}
+                          className="booking-control h-14 rounded-2xl px-4 text-base border-[#2d6a4f]/15 bg-white text-[#1a3d34]"
+                        />
+                      </div>
+                      <AddressSwapButton onClick={handleSwapAddresses} />
+                      <div className="space-y-2">
+                        <Label className="text-[#5a7a6e]">Drop off address</Label>
+                        <GoogleAddressInput
+                          id="dropoff-address"
+                          value={dropoffAddress}
+                          onChange={handleDropoffAddressChange}
+                          onResolved={setDropoffPlace}
+                          placeholder="Enter drop off address"
+                          suggestions={dropoffSuggestions}
+                          className="booking-control h-14 rounded-2xl px-4 text-base border-[#2d6a4f]/15 bg-white text-[#1a3d34]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="hidden gap-3 md:grid">
+                      <div className="grid grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] gap-0 px-1">
+                        <Label className="text-[#5a7a6e]">Pick up address</Label>
+                        <div />
+                        <Label className="text-[#5a7a6e]">Drop off address</Label>
+                      </div>
+                      <ButtonGroup className="w-full overflow-visible rounded-2xl border border-[#2d6a4f]/15 bg-white shadow-none">
+                        <div className="min-w-0 flex-[1_1_0%]">
+                          <GoogleAddressInput
+                            id="pickup-address-desktop"
+                            value={pickupAddress}
+                            onChange={handlePickupAddressChange}
+                            onResolved={setPickupPlace}
+                            placeholder="Enter pick up address"
+                            suggestions={pickupSuggestions}
+                            className="h-14 w-full rounded-none border-0 bg-transparent px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10"
+                          />
+                        </div>
+                        <div className="w-[72px] shrink-0">
+                          <AddressSwapButton
+                            grouped
+                            iconOnly
+                            onClick={handleSwapAddresses}
+                            className="w-full"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-[1_1_0%]">
+                          <GoogleAddressInput
+                            id="dropoff-address-desktop"
+                            value={dropoffAddress}
+                            onChange={handleDropoffAddressChange}
+                            onResolved={setDropoffPlace}
+                            placeholder="Enter drop off address"
+                            suggestions={dropoffSuggestions}
+                            className="h-14 w-full rounded-none border-0 bg-transparent px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10"
+                          />
+                        </div>
+                      </ButtonGroup>
                     </div>
                   </>
+                ) : (
+                  <div className="space-y-2">
+                    <Label className="text-[#5a7a6e]">Pick up address</Label>
+                    <GoogleAddressInput
+                      id="pickup-address"
+                      value={pickupAddress}
+                      onChange={handlePickupAddressChange}
+                      onResolved={setPickupPlace}
+                      placeholder="Enter pick up address"
+                      suggestions={pickupSuggestions}
+                      className="booking-control h-14 rounded-2xl px-4 text-base border-[#2d6a4f]/15 bg-white text-[#1a3d34]"
+                    />
+                  </div>
                 )}
               </div>
 
@@ -2648,6 +2759,38 @@ export function ReserveWizard({
               ) : null}
               {stepOneAttempted && routeSelectionError ? (
                 <p className="mt-3 text-sm font-medium text-rose-500">{routeSelectionError}</p>
+              ) : null}
+
+              {landingOnly ? (
+                <div className="mt-6 border-t border-[#2d6a4f]/10 pt-5">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <BookingDateField
+                      label="Pickup date"
+                      value={pickupDate}
+                      onChange={setPickupDate}
+                      placeholder="Select Date"
+                      disabled={pickupDateDisabled}
+                    />
+                    <BookingTimeField
+                      label="Pickup time"
+                      options={pickupTimeOptions}
+                      value={pickupTime}
+                      onChange={setPickupTime}
+                    />
+
+                    {(tripType === "hourly" || tripType === "event") && (
+                      <div className="md:col-span-2">
+                        <BookingCounterField
+                          label="Hours requested"
+                          value={Number(hoursRequested)}
+                          options={hourlyHourOptions}
+                          singularLabel="hour"
+                          onChange={(value) => setHoursRequested(String(value))}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
               ) : null}
             </div>
           )}
@@ -2966,7 +3109,10 @@ export function ReserveWizard({
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[#5a7a6e]">Email required</Label>
+                  <div className="flex items-center justify-between gap-3">
+                    <Label className="text-[#5a7a6e]">Email required</Label>
+                    {hasVerifiedEmail ? <InlineVerifiedBadge /> : null}
+                  </div>
                   <Input
                     id="checkout-email"
                     name="email"
@@ -2991,6 +3137,7 @@ export function ReserveWizard({
                 </div>
                 <ClientAccountForm
                   variant="checkout"
+                  account={clientAccount}
                   name={customerName}
                   email={customerEmail}
                   phone={customerPhone}
@@ -3143,46 +3290,48 @@ export function ReserveWizard({
             </div>
             {step === 3 ? (
               <div className="space-y-3 pt-2">
-                <label
-                  htmlFor="customer-sms-opt-in"
-                  className="flex cursor-pointer items-start gap-3 py-1"
-                >
-                  <Checkbox
-                    id="customer-sms-opt-in"
-                    checked={customerSmsOptIn}
-                    onCheckedChange={(checked) => {
-                      setCustomerSmsOptIn(checked === true);
-                    }}
-                    className="mt-0.5 size-5 rounded-md border-[#2d6a4f]/35 bg-white shadow-[0_2px_10px_rgba(45,106,79,0.08)] data-checked:border-[#2d6a4f] data-checked:bg-[#2d6a4f] [&_[data-slot=checkbox-indicator]>svg]:size-4"
-                  />
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-[#1a3d34]">
-                      Send text confirmations and pickup reminders
+                {!hasPersistedSmsOptIn ? (
+                  <label
+                    htmlFor="customer-sms-opt-in"
+                    className="flex cursor-pointer items-start gap-3 py-1"
+                  >
+                    <Checkbox
+                      id="customer-sms-opt-in"
+                      checked={customerSmsOptIn}
+                      onCheckedChange={(checked) => {
+                        setCustomerSmsOptIn(checked === true);
+                      }}
+                      className="mt-0.5 size-5 rounded-md border-[#2d6a4f]/35 bg-white shadow-[0_2px_10px_rgba(45,106,79,0.08)] data-checked:border-[#2d6a4f] data-checked:bg-[#2d6a4f] [&_[data-slot=checkbox-indicator]>svg]:size-4"
+                    />
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium text-[#1a3d34]">
+                        Send text confirmations and pickup reminders
+                      </div>
+                      <div className="text-sm text-[#5a7a6e]">
+                        By checking this box, you agree to receive reservation updates from
+                        seatac.co at the mobile number above. Message frequency varies. Reply STOP
+                        to opt out, HELP for help. Msg &amp; data rates may apply. See our privacy
+                        policy and{" "}
+                        <Link
+                          href="/privacy"
+                          className="text-[#0d5c48] underline underline-offset-4"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          privacy policy
+                        </Link>{" "}
+                        and{" "}
+                        <Link
+                          href="/sms-policy"
+                          className="text-[#0d5c48] underline underline-offset-4"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          SMS policy
+                        </Link>
+                        .
+                      </div>
                     </div>
-                    <div className="text-sm text-[#5a7a6e]">
-                      By checking this box, you agree to receive reservation updates from
-                      seatac.co at the mobile number above. Message frequency varies. Reply STOP
-                      to opt out, HELP for help. Msg &amp; data rates may apply. See our privacy
-                      policy and{" "}
-                      <Link
-                        href="/privacy"
-                        className="text-[#0d5c48] underline underline-offset-4"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        privacy policy
-                      </Link>{" "}
-                      and{" "}
-                      <Link
-                        href="/sms-policy"
-                        className="text-[#0d5c48] underline underline-offset-4"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        SMS policy
-                      </Link>
-                      .
-                    </div>
-                  </div>
-                </label>
+                  </label>
+                ) : null}
                 <div className="space-y-2">
                   <label
                     htmlFor="customer-policy-agreed"

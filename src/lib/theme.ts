@@ -144,12 +144,17 @@ export const siteThemes: Record<string, SiteThemeContent> = {
       "Sea-Tac airport planning, hotel guides, route pages, and private ride reservations in one local resource.",
     reservationPhoneLabel: "Reservations: (206) 737-0808",
     reservationPhoneHref: "tel:+12067370808",
-    navLinks: [],
+    navLinks: [
+      { href: "/flights", label: "Flights" },
+      { href: "/hotels", label: "Hotels" },
+      { href: "/parking", label: "Parking" },
+      { href: "/cruises", label: "Cruises" },
+    ],
     footer: {
       eyebrow: "Seatac Connection",
-      title: "Plan the airport stay, compare the route options, and reserve when you are ready.",
+      title: "Book the flight, lock in the hotel, reserve the ride, and sort parking in one Sea-Tac workflow.",
       body:
-        "Browse Sea-Tac hotel areas, downtown and Eastside transfer routes, and practical airport planning notes before opening a private ride reservation.",
+        "Built to connect Sea-Tac flights, Seattle hotels, airport transfers, parking options, and cruise planning without turning seatac.co into a heavy fulfillment operation.",
       contactPhone: "(206) 737-0808",
       contactEmail: "hello@seatac.co",
       operatingHours: "Live booking support available daily from 6:00 AM to 11:00 PM.",
@@ -165,29 +170,29 @@ export const siteThemes: Record<string, SiteThemeContent> = {
     ],
     serviceCards: [
       {
-        eyebrow: "Airport",
-        title: "Sea-Tac route pages and airport ride access.",
+        eyebrow: "Flights",
+        title: "Flight discovery that stays tied to Sea-Tac trip planning.",
         body:
-          "Open the airport transfer page that matches your destination, then reserve from there if you already know the trip.",
+          "Search airport pairs through partner inventory, then move directly into hotels, rides, parking, and terminal planning.",
       },
       {
         eyebrow: "Hotels",
-        title: "Hotel areas, pickup planning, and stay research.",
+        title: "Hotel areas, live rates, and stay planning around the airport and cruise terminals.",
         body:
-          "Useful for travelers deciding where to stay before an early departure, late arrival, or downtown connection.",
+          "Useful for travelers deciding where to stay before an early departure, late arrival, or cruise transfer.",
       },
       {
-        eyebrow: "Local guide",
-        title: "Local airport notes that answer the real arrival questions.",
+        eyebrow: "Ground",
+        title: "Parking, rides, and local airport notes that answer the real arrival questions.",
         body:
-          "Find neighborhood pages, hotel recommendations, transfer notes, and timing advice for flights, cruises, and Seattle arrivals.",
+          "Find parking options, transfer notes, terminal timing, and Seattle-specific travel guidance in the same platform.",
       },
     ],
-    fleetNotes: ["Airport planning", "Hotel and neighborhood coverage", "Ride pages when needed"],
+    fleetNotes: ["Flights and hotels", "Parking and cruise planning", "Ride pages when needed"],
     homepageMetrics: [
       { value: "SEA", label: "Local airport focus" },
-      { value: "Guides", label: "Hotels, routes, terminals" },
-      { value: "Rides", label: "Direct reservation access" },
+      { value: "5", label: "Core travel verticals" },
+      { value: "Live", label: "Provider-powered search" },
     ],
     extrasCatalog: [
       {

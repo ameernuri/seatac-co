@@ -54,8 +54,8 @@ export function HeaderAccountMenu({ label }: HeaderAccountMenuProps) {
         </DropdownMenuItem>
         <DropdownMenuItem
           variant="destructive"
-          className="w-full cursor-pointer"
-          render={<button type="button" disabled={isSigningOut} className="w-full" />}
+          className="w-full cursor-pointer justify-start"
+          disabled={isSigningOut}
           onClick={handleSignOut}
         >
           <LogOut className="size-4" />

@@ -45,6 +45,21 @@ export const seoTrackedPagesSeed = [
     keywordCluster: "airport-hotels",
   },
   {
+    url: "https://seatac.co/seatac-parking-guide",
+    pageType: "planning-guide",
+    keywordCluster: "airport-planning",
+  },
+  {
+    url: "https://seatac.co/pier-66-vs-pier-91-transfer-guide",
+    pageType: "comparison-guide",
+    keywordCluster: "cruise-routes",
+  },
+  {
+    url: "https://seatac.co/park-and-fly-hotels-seatac",
+    pageType: "planning-guide",
+    keywordCluster: "airport-hotels",
+  },
+  {
     url: "https://seatac.co/seatac-to/hyatt-regency-bellevue",
     pageType: "hotel-transfer",
     keywordCluster: "hotel-transfers",
@@ -102,6 +117,24 @@ export const seoTrackedKeywordsSeed = [
     cluster: "airport-hotels",
     intent: "planning",
     targetUrl: "https://seatac.co/seatac-airport-hotels",
+  },
+  {
+    keyword: "seatac parking",
+    cluster: "airport-planning",
+    intent: "planning",
+    targetUrl: "https://seatac.co/seatac-parking-guide",
+  },
+  {
+    keyword: "pier 66 vs pier 91 transfer",
+    cluster: "cruise-routes",
+    intent: "planning",
+    targetUrl: "https://seatac.co/pier-66-vs-pier-91-transfer-guide",
+  },
+  {
+    keyword: "seatac park and fly hotels",
+    cluster: "airport-hotels",
+    intent: "planning",
+    targetUrl: "https://seatac.co/park-and-fly-hotels-seatac",
   },
   {
     keyword: "seatac to hyatt regency bellevue",
