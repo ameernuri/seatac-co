@@ -765,6 +765,7 @@ export function ReserveWizard({
   const [accountSmsOptIn, setAccountSmsOptIn] = useState(
     Boolean(initialClientAccount?.smsOptIn),
   );
+  const [smsPreferenceSaving, setSmsPreferenceSaving] = useState(false);
   const [checkoutErrors, setCheckoutErrors] = useState<CheckoutFieldErrors>({});
   const [notes, setNotes] = useState(initialState?.pickupDetail ?? "");
   const [availableVehicleCounts, setAvailableVehicleCounts] = useState<Record<string, number> | null>(
@@ -787,6 +788,7 @@ export function ReserveWizard({
     Boolean(normalizedCustomerPhone) &&
     normalizedCustomerPhone === normalizedAccountPhone;
   const hasPersistedSmsOptIn = hasPersistedVerifiedPhone && Boolean(accountSmsOptIn);
+  const canManageSmsGlobally = Boolean(clientAccount) && hasPersistedVerifiedPhone;
   const hasVerifiedEmail =
     Boolean(accountVerifiedEmail) && normalizedCustomerEmail === accountVerifiedEmail;
   const selectedPricingType = pricingTypeFromTripType(tripType);
@@ -1253,6 +1255,12 @@ export function ReserveWizard({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (hasPersistedSmsOptIn) {
+      setCustomerSmsOptIn(true);
+    }
+  }, [hasPersistedSmsOptIn]);
 
   function persistReserveDraft(nextStep: Step) {
     if (typeof window === "undefined") {
@@ -1814,6 +1822,175 @@ export function ReserveWizard({
     clearCheckoutError("customerPhoneVerified");
     clearCheckoutError("customerPolicyAgreed");
     toast.success("Account ready.");
+  }
+
+  async function persistAccountSmsPreference(nextSmsOptIn: boolean) {
+    const response = await fetch("/api/client-auth/preferences", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ smsOptIn: nextSmsOptIn }),
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        typeof data.error === "string"
+          ? data.error
+          : "SMS preference could not be updated.",
+      );
+    }
+  }
+
+  function handleCheckoutSmsOptInChange(nextChecked: boolean) {
+    if (!canManageSmsGlobally) {
+      setCustomerSmsOptIn(nextChecked);
+      return;
+    }
+
+    const previousSmsOptIn = Boolean(accountSmsOptIn);
+    setCustomerSmsOptIn(nextChecked);
+    setAccountSmsOptIn(nextChecked);
+    setClientAccount((current) => (current ? { ...current, smsOptIn: nextChecked } : current));
+
+    if (previousSmsOptIn === nextChecked) {
+      return;
+    }
+
+    setSmsPreferenceSaving(true);
+    void persistAccountSmsPreference(nextChecked)
+      .then(() => {
+        toast.success(
+          nextChecked ? "Text reminders turned on." : "Text reminders turned off.",
+        );
+      })
+      .catch((error) => {
+        setCustomerSmsOptIn(previousSmsOptIn);
+        setAccountSmsOptIn(previousSmsOptIn);
+        setClientAccount((current) =>
+          current ? { ...current, smsOptIn: previousSmsOptIn } : current,
+        );
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "SMS preference could not be updated.",
+        );
+      })
+      .finally(() => {
+        setSmsPreferenceSaving(false);
+      });
+  }
+
+  function renderCheckoutSmsConsent(variant: "card" | "inline") {
+    const wrapperClass =
+      variant === "card" ? "rounded-xl border border-[#2d6a4f]/10 bg-[#f8f7f4] p-4" : "";
+
+    if (hasPersistedSmsOptIn) {
+      return (
+        <div className={wrapperClass}>
+          <div className="flex items-start gap-3 py-1">
+            <span className="mt-0.5 inline-flex size-5 items-center justify-center rounded-full border border-[#2d6a4f]/18 bg-[#2d6a4f]/6 text-[#2d6a4f]">
+              <Check className="size-3.5" />
+            </span>
+            <div className="space-y-1">
+              <div className="text-sm font-medium text-[#1a3d34]">
+                Text reminders enabled for this booking
+              </div>
+              <div className="text-sm text-[#5a7a6e]">
+                You&apos;ll receive booking confirmations and pickup reminders by text. Manage this in{" "}
+                <Link
+                  href="/account"
+                  className="text-[#0d5c48] underline underline-offset-4"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  profile
+                </Link>
+                .
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (canManageSmsGlobally) {
+      return (
+        <div className={wrapperClass}>
+          <label
+            htmlFor={variant === "card" ? "customer-sms-opt-in-compact" : "customer-sms-opt-in"}
+            className="flex cursor-pointer items-start gap-3 py-1"
+          >
+            <Checkbox
+              id={variant === "card" ? "customer-sms-opt-in-compact" : "customer-sms-opt-in"}
+              checked={customerSmsOptIn}
+              disabled={smsPreferenceSaving}
+              onCheckedChange={(checked) => {
+                handleCheckoutSmsOptInChange(checked === true);
+              }}
+              className="mt-0.5 size-5 rounded-md border-[#2d6a4f]/35 bg-white shadow-[0_2px_10px_rgba(45,106,79,0.08)] data-checked:border-[#2d6a4f] data-checked:bg-[#2d6a4f] [&_[data-slot=checkbox-indicator]>svg]:size-4"
+            />
+            <div className="space-y-1">
+              <div className="text-sm font-medium text-[#1a3d34]">
+                Send text confirmations and pickup reminders
+              </div>
+              <div className="text-sm leading-6 text-[#5a7a6e]">
+                Turn this on once to use your verified number for this booking and future bookings. Manage anytime in{" "}
+                <Link
+                  href="/account"
+                  className="text-[#0d5c48] underline underline-offset-4"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  profile
+                </Link>
+                .
+              </div>
+            </div>
+          </label>
+        </div>
+      );
+    }
+
+    return (
+      <div className={wrapperClass}>
+        <label
+          htmlFor={variant === "card" ? "customer-sms-opt-in-compact" : "customer-sms-opt-in"}
+          className="flex cursor-pointer items-start gap-3 py-1"
+        >
+          <Checkbox
+            id={variant === "card" ? "customer-sms-opt-in-compact" : "customer-sms-opt-in"}
+            checked={customerSmsOptIn}
+            onCheckedChange={(checked) => {
+              setCustomerSmsOptIn(checked === true);
+            }}
+            className="mt-0.5 size-5 rounded-md border-[#2d6a4f]/35 bg-white shadow-[0_2px_10px_rgba(45,106,79,0.08)] data-checked:border-[#2d6a4f] data-checked:bg-[#2d6a4f] [&_[data-slot=checkbox-indicator]>svg]:size-4"
+          />
+          <div className="space-y-1">
+            <div className="text-sm font-medium text-[#1a3d34]">
+              Send text confirmations and pickup reminders
+            </div>
+            <div className="text-sm leading-6 text-[#5a7a6e]">
+              By checking this box, you agree to receive reservation updates from seatac.co at the mobile number above. Message frequency varies. Reply STOP to opt out, HELP for help. Msg &amp; data rates may apply. See our{" "}
+              <Link
+                href="/privacy"
+                className="text-[#0d5c48] underline underline-offset-4"
+                onClick={(event) => event.stopPropagation()}
+              >
+                privacy policy
+              </Link>{" "}
+              and{" "}
+              <Link
+                href="/sms-policy"
+                className="text-[#0d5c48] underline underline-offset-4"
+                onClick={(event) => event.stopPropagation()}
+              >
+                SMS policy
+              </Link>
+              .
+            </div>
+          </div>
+        </label>
+      </div>
+    );
   }
 
   function jumpToStep(targetStep: Step) {
@@ -2424,41 +2601,7 @@ export function ReserveWizard({
                       placeholder="Client name, venue timing, gate code, or special entry notes"
                     />
                   </div>
-                  {!hasPersistedSmsOptIn ? (
-                    <div className="rounded-xl border border-[#2d6a4f]/10 bg-[#f8f7f4] p-4">
-                      <div className="flex items-start gap-3">
-                        <Checkbox
-                          id="customer-sms-opt-in-compact"
-                          checked={customerSmsOptIn}
-                          onCheckedChange={(checked) => {
-                            setCustomerSmsOptIn(checked === true);
-                          }}
-                          className="mt-1"
-                        />
-                        <div className="space-y-1">
-                          <Label
-                            htmlFor="customer-sms-opt-in-compact"
-                            className="cursor-pointer text-sm font-medium text-[#1a3d34]"
-                          >
-                            Send text confirmations and pickup reminders
-                          </Label>
-                          <p className="text-sm leading-6 text-[#5a7a6e]">
-                            By checking this box, you agree to receive reservation updates from
-                            seatac.co at the mobile number above. Message frequency varies. Reply
-                            STOP to opt out, HELP for help. Msg &amp; data rates may apply. See our{" "}
-                            <Link href="/privacy" className="text-[#0d5c48] underline underline-offset-4">
-                              privacy policy
-                            </Link>{" "}
-                            and{" "}
-                            <Link href="/sms-policy" className="text-[#0d5c48] underline underline-offset-4">
-                              SMS policy
-                            </Link>
-                            .
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
+                  {renderCheckoutSmsConsent("card")}
                 </div>
                 <div className="space-y-4">
                   <Label className="text-[0.7rem] uppercase tracking-[0.2em] text-[#5a7a6e]">
@@ -3333,48 +3476,7 @@ export function ReserveWizard({
             </div>
             {step === 3 ? (
               <div className="space-y-3 pt-2">
-                {!hasPersistedSmsOptIn ? (
-                  <label
-                    htmlFor="customer-sms-opt-in"
-                    className="flex cursor-pointer items-start gap-3 py-1"
-                  >
-                    <Checkbox
-                      id="customer-sms-opt-in"
-                      checked={customerSmsOptIn}
-                      onCheckedChange={(checked) => {
-                        setCustomerSmsOptIn(checked === true);
-                      }}
-                      className="mt-0.5 size-5 rounded-md border-[#2d6a4f]/35 bg-white shadow-[0_2px_10px_rgba(45,106,79,0.08)] data-checked:border-[#2d6a4f] data-checked:bg-[#2d6a4f] [&_[data-slot=checkbox-indicator]>svg]:size-4"
-                    />
-                    <div className="space-y-1">
-                      <div className="text-sm font-medium text-[#1a3d34]">
-                        Send text confirmations and pickup reminders
-                      </div>
-                      <div className="text-sm text-[#5a7a6e]">
-                        By checking this box, you agree to receive reservation updates from
-                        seatac.co at the mobile number above. Message frequency varies. Reply STOP
-                        to opt out, HELP for help. Msg &amp; data rates may apply. See our privacy
-                        policy and{" "}
-                        <Link
-                          href="/privacy"
-                          className="text-[#0d5c48] underline underline-offset-4"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          privacy policy
-                        </Link>{" "}
-                        and{" "}
-                        <Link
-                          href="/sms-policy"
-                          className="text-[#0d5c48] underline underline-offset-4"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          SMS policy
-                        </Link>
-                        .
-                      </div>
-                    </div>
-                  </label>
-                ) : null}
+                {renderCheckoutSmsConsent("inline")}
                 <div className="space-y-2">
                   <label
                     htmlFor="customer-policy-agreed"

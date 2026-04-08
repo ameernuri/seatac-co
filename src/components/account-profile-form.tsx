@@ -5,10 +5,17 @@ import { useRouter } from "next/navigation";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ButtonGroup } from "@/components/ui/button-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { SeatacPrimaryButton } from "@/components/ui/seatac-primary-button";
 import {
   Tooltip,
@@ -83,6 +90,7 @@ export function AccountProfileForm({
   const [knownVerifiedPhone, setKnownVerifiedPhone] = useState(
     initialPhoneVerified ? normalizeClientPhone(initialPhone) : null,
   );
+  const [confirmSmsDisableOpen, setConfirmSmsDisableOpen] = useState(false);
   const hydratedRef = useRef(false);
   const lastPersistedRef = useRef({
     firstName: initialFirstName,
@@ -109,6 +117,19 @@ export function AccountProfileForm({
     lastName.trim().length > 0 &&
     Boolean(normalizedEmail) &&
     Boolean(normalizedPhone);
+
+  function handleSmsOptInChange(nextChecked: boolean) {
+    if (!alreadyVerifiedPhone) {
+      return;
+    }
+
+    if (!nextChecked && smsOptIn) {
+      setConfirmSmsDisableOpen(true);
+      return;
+    }
+
+    setSmsOptIn(nextChecked);
+  }
 
   useEffect(() => {
     if (emailResendCooldown <= 0) return;
@@ -558,23 +579,70 @@ export function AccountProfileForm({
         </ButtonGroup>
       </div>
 
-      <div className="md:col-span-2">
-        <div className="flex items-center justify-between rounded-[1.7rem] border border-[#d7e6de] bg-white px-5 py-4">
-          <div className="space-y-1 pr-4">
-            <p className="text-sm font-medium text-[#1a3d34]">Text confirmations and pickup reminders</p>
-            <p className="text-sm text-[#5a7a6e]">
-              {alreadyVerifiedPhone
-                ? "Use your verified number for reservation updates."
-                : "Verify your mobile number to manage SMS updates."}
-            </p>
-          </div>
-          <Switch
+      <div className="space-y-3 md:col-span-2">
+        <label
+          htmlFor="account-sms-opt-in"
+          className={`flex items-start gap-3 py-1 ${
+            alreadyVerifiedPhone ? "cursor-pointer" : "cursor-not-allowed opacity-60"
+          }`}
+        >
+          <Checkbox
+            id="account-sms-opt-in"
             checked={smsOptIn}
             disabled={!alreadyVerifiedPhone}
-            onCheckedChange={setSmsOptIn}
+            onCheckedChange={(checked) => {
+              handleSmsOptInChange(checked === true);
+            }}
+            className="mt-0.5 size-5 rounded-md border-[#2d6a4f]/35 bg-white shadow-[0_2px_10px_rgba(45,106,79,0.08)] data-checked:border-[#2d6a4f] data-checked:bg-[#2d6a4f] [&_[data-slot=checkbox-indicator]>svg]:size-4"
           />
-        </div>
+          <div className="space-y-1">
+            <div className="text-sm font-medium text-[#1a3d34]">
+              Text confirmations and pickup reminders
+            </div>
+            <div className="text-sm text-[#5a7a6e]">
+              {alreadyVerifiedPhone
+                ? "By checking this box, you agree to receive reservation updates from seatac.co at the mobile number above. Message frequency varies. Reply STOP to opt out, HELP for help. Msg & data rates may apply. See our privacy policy and SMS policy."
+                : "Verify your mobile number to manage SMS updates."}
+            </div>
+          </div>
+        </label>
       </div>
+
+      <Dialog open={confirmSmsDisableOpen} onOpenChange={setConfirmSmsDisableOpen}>
+        <DialogContent
+          showCloseButton={false}
+          className="max-w-md rounded-[1.75rem] border border-[#d7e6de] bg-white p-0"
+        >
+          <DialogHeader className="px-6 pt-6 pb-3">
+            <DialogTitle className="text-[#1a3d34]">
+              Turn off text confirmations?
+            </DialogTitle>
+            <DialogDescription className="text-[#5a7a6e]">
+              Are you sure you do not want to receive booking confirmations, pickup reminders,
+              and trip updates by text?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 rounded-b-[1.75rem] border-t border-[#d7e6de] bg-[#f6f8f5] px-6 pb-6 pt-4">
+            <button
+              type="button"
+              className="inline-flex h-11 min-w-36 items-center justify-center rounded-full border border-[#d7e6de] bg-white px-5 text-sm font-medium text-[#1a3d34] transition-colors hover:bg-[#eef4f0]"
+              onClick={() => {
+                setSmsOptIn(false);
+                setConfirmSmsDisableOpen(false);
+              }}
+            >
+              Turn off texts
+            </button>
+            <SeatacPrimaryButton
+              type="button"
+              className="h-11 min-w-36 px-5"
+              onClick={() => setConfirmSmsDisableOpen(false)}
+            >
+              Keep texts on
+            </SeatacPrimaryButton>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

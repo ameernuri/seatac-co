@@ -32,8 +32,8 @@ const routeFamilies = [
       "Bellevue and the Eastside behave differently from downtown transfers. If the trip is hotel- or office-driven, use the Bellevue route or a specific hotel transfer page instead of treating it like a generic Seattle arrival.",
     primaryHref: "/seatac-to-bellevue",
     primaryLabel: "Sea-Tac to Bellevue",
-    supportHref: "/seatac-to/hyatt-regency-bellevue",
-    supportLabel: "Hyatt Regency Bellevue transfer",
+    supportHref: "/eastside-airport-transfer-guide",
+    supportLabel: "Eastside transfer guide",
   },
   {
     title: "Cruise-day airport moves",
@@ -50,10 +50,10 @@ const routeFamilies = [
     bestFor: "Sea-Tac hotel stays, parking decisions, very early flights, and return departures",
     summary:
       "Some airport transfers are really planning questions. If the ride depends on a hotel stay, parking tradeoff, or early departure, use the airport planning pages first and then move into the route-specific booking flow.",
-    primaryHref: "/seatac-parking-guide",
-    primaryLabel: "Sea-Tac parking guide",
-    supportHref: "/seatac-airport-hotels",
-    supportLabel: "Sea-Tac airport hotels",
+    primaryHref: "/seatac-hotel-transfer-guide",
+    primaryLabel: "Sea-Tac hotel transfer guide",
+    supportHref: "/seatac-parking-guide",
+    supportLabel: "Sea-Tac parking guide",
   },
 ] as const;
 
@@ -99,10 +99,12 @@ const faqEntries = [
 ];
 
 const relatedLinks = [
+  { label: "Sea-Tac airport guide", href: "/seatac-airport-guide" },
   { label: "Sea-Tac airport car service", href: "/seatac-airport-car-service" },
   { label: "Sea-Tac to downtown Seattle", href: "/seatac-to-downtown-seattle" },
   { label: "Sea-Tac to Bellevue", href: "/seatac-to-bellevue" },
   { label: "Sea-Tac airport hotels", href: "/seatac-airport-hotels" },
+  { label: "Sea-Tac hotel transfer guide", href: "/seatac-hotel-transfer-guide" },
   { label: "Pier 66 vs Pier 91 transfer guide", href: "/pier-66-vs-pier-91-transfer-guide" },
   { label: "Sea-Tac departures", href: "/departures" },
 ] as const;

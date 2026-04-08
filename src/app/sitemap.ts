@@ -83,7 +83,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.82,
     },
     {
+      url: `${baseUrl}/seatac-airport-guide`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.83,
+    },
+    {
+      url: `${baseUrl}/seatac-hotel-transfer-guide`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.82,
+    },
+    {
       url: `${baseUrl}/downtown-seattle-airport-transfer-guide`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.82,
+    },
+    {
+      url: `${baseUrl}/eastside-airport-transfer-guide`,
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.82,

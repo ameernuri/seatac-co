@@ -207,14 +207,14 @@ export const routePages: Record<string, RoutePage> = {
     ],
     relatedLinks: [
       {
+        href: "/eastside-airport-transfer-guide",
+        label: "Support guide",
+        title: "Eastside airport transfer guide",
+      },
+      {
         href: "/seatac-to/hyatt-regency-bellevue",
         label: "Hotel transfer",
         title: "Sea-Tac to Hyatt Regency Bellevue",
-      },
-      {
-        href: "/seatac-to-downtown-seattle",
-        label: "Downtown route",
-        title: "Sea-Tac to downtown Seattle",
       },
       { href: "/seatac-airport-car-service", label: "Airport hub", title: "Sea-Tac airport car service" },
     ],

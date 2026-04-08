@@ -50,9 +50,24 @@ export const seoTrackedPagesSeed = [
     keywordCluster: "airport-routes",
   },
   {
+    url: "https://seatac.co/seatac-airport-guide",
+    pageType: "planning-guide",
+    keywordCluster: "brand-and-airport",
+  },
+  {
+    url: "https://seatac.co/seatac-hotel-transfer-guide",
+    pageType: "planning-guide",
+    keywordCluster: "hotel-transfers",
+  },
+  {
     url: "https://seatac.co/downtown-seattle-airport-transfer-guide",
     pageType: "planning-guide",
     keywordCluster: "downtown-routes",
+  },
+  {
+    url: "https://seatac.co/eastside-airport-transfer-guide",
+    pageType: "planning-guide",
+    keywordCluster: "eastside-routes",
   },
   {
     url: "https://seatac.co/seatac-parking-guide",
@@ -135,10 +150,28 @@ export const seoTrackedKeywordsSeed = [
     targetUrl: "https://seatac.co/seatac-airport-transfer-guide",
   },
   {
+    keyword: "seatac airport guide",
+    cluster: "brand-and-airport",
+    intent: "planning",
+    targetUrl: "https://seatac.co/seatac-airport-guide",
+  },
+  {
+    keyword: "seatac hotel transfer guide",
+    cluster: "hotel-transfers",
+    intent: "planning",
+    targetUrl: "https://seatac.co/seatac-hotel-transfer-guide",
+  },
+  {
     keyword: "downtown seattle airport transfer guide",
     cluster: "downtown-routes",
     intent: "planning",
     targetUrl: "https://seatac.co/downtown-seattle-airport-transfer-guide",
+  },
+  {
+    keyword: "eastside airport transfer guide",
+    cluster: "eastside-routes",
+    intent: "planning",
+    targetUrl: "https://seatac.co/eastside-airport-transfer-guide",
   },
   {
     keyword: "seatac parking",
