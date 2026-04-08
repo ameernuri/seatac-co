@@ -46,6 +46,13 @@ export function HeaderAccountMenu({ label }: HeaderAccountMenuProps) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem
+          render={<Link href="/account/bookings" className="w-full" />}
+          className="w-full cursor-pointer"
+        >
+          <UserCircle2 className="size-4" />
+          My bookings
+        </DropdownMenuItem>
+        <DropdownMenuItem
           render={<Link href="/account" className="w-full" />}
           className="w-full cursor-pointer"
         >

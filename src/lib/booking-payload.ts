@@ -74,7 +74,7 @@ export class BookingGuardrailError extends Error {
 }
 
 function buildReference() {
-  return `PL-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  return `SC-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 }
 
 async function findAvailableVehicleUnit(

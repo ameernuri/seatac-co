@@ -152,9 +152,9 @@ export const siteThemes: Record<string, SiteThemeContent> = {
     ],
     footer: {
       eyebrow: "Seatac Connection",
-      title: "Book the flight, lock in the hotel, reserve the ride, and sort parking in one Sea-Tac workflow.",
+      title: "Plan your Sea-Tac trip, compare hotels, reserve rides, and sort parking in one place.",
       body:
-        "Built to connect Sea-Tac flights, Seattle hotels, airport transfers, parking options, and cruise planning without turning seatac.co into a heavy fulfillment operation.",
+        "Use Seatac Connection to compare flights, airport hotels, parking options, cruise timing, and private rides before you travel.",
       contactPhone: "(206) 737-0808",
       contactEmail: "hello@seatac.co",
       operatingHours: "Live booking support available daily from 6:00 AM to 11:00 PM.",
@@ -185,7 +185,7 @@ export const siteThemes: Record<string, SiteThemeContent> = {
         eyebrow: "Ground",
         title: "Parking, rides, and local airport notes that answer the real arrival questions.",
         body:
-          "Find parking options, transfer notes, terminal timing, and Seattle-specific travel guidance in the same platform.",
+          "Find parking options, transfer notes, terminal timing, and Seattle-specific travel guidance before you head to the airport.",
       },
     ],
     fleetNotes: ["Flights and hotels", "Parking and cruise planning", "Ride pages when needed"],

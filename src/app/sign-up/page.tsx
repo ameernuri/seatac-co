@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ClientAccountForm } from "@/components/client-account-form";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { SeatacPrimaryButton } from "@/components/ui/seatac-primary-button";
 import { getServerSession } from "@/lib/session";
 
 type Props = {
@@ -35,12 +36,9 @@ export default async function SignUpPage({ searchParams }: Props) {
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <Link
-                  href={returnTo}
-                  className="booking-primary-button inline-flex h-11 items-center justify-center rounded-full px-5"
-                >
+                <SeatacPrimaryButton href={returnTo} className="h-11 px-5">
                   Continue
-                </Link>
+                </SeatacPrimaryButton>
                 <Link
                   href="/reserve"
                   className="booking-secondary-button inline-flex h-11 items-center justify-center rounded-full px-5"

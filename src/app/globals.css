@@ -1172,13 +1172,35 @@
   [data-booking-theme] .booking-primary-button {
     background: var(--booking-primary-bg);
     color: var(--booking-primary-text);
-    box-shadow: 0 4px 16px rgba(45, 106, 79, 0.25);
     border: 1px solid rgba(45, 106, 79, 0.3);
   }
 
-  [data-booking-theme] .booking-primary-button:hover {
+  .seatac-primary-button {
+    color: #ffffff;
+    border: 1px solid rgba(45, 106, 79, 0.3);
+    background: linear-gradient(135deg, #368862 0%, #49a078 100%);
+  }
+
+  .seatac-primary-button--default {
+    box-shadow: 0 2px 10px rgba(45, 106, 79, 0.14);
+  }
+
+  .seatac-primary-button--cta {
+    background: linear-gradient(135deg, #2f7d59 0%, #42956d 100%);
+    box-shadow: 0 6px 20px rgba(45, 106, 79, 0.26);
+  }
+
+  [data-booking-theme] .booking-primary-button:hover,
+  .seatac-primary-button:hover {
     opacity: 0.95;
-    box-shadow: 0 6px 20px rgba(45, 106, 79, 0.3);
+  }
+
+  .seatac-primary-button--default:hover {
+    box-shadow: 0 4px 14px rgba(45, 106, 79, 0.18);
+  }
+
+  .seatac-primary-button--cta:hover {
+    box-shadow: 0 8px 24px rgba(45, 106, 79, 0.3);
   }
 
   [data-booking-theme] .booking-secondary-button {
@@ -1215,19 +1237,6 @@
 
   .site-header-nav a:hover {
     color: #1a3d34;
-  }
-
-  .site-header-book-link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-family: var(--font-body), sans-serif;
-    padding: 0.7rem 1.1rem;
-    border-radius: 999px;
-    color: #ffffff;
-    font-weight: 700;
-    background: linear-gradient(135deg, #2d6a4f 0%, #40916c 100%);
-    box-shadow: 0 4px 16px rgba(45, 106, 79, 0.25);
   }
 
   @media (min-width: 1024px) {
@@ -2337,12 +2346,6 @@
     color: #1a3d34;
   }
 
-  .site-header-book-link {
-    color: #ffffff;
-    background: linear-gradient(135deg, #2d6a4f 0%, #40916c 100%);
-    box-shadow: 0 4px 16px rgba(45, 106, 79, 0.25);
-  }
-
   .site-header-utility {
     align-items: center;
     justify-content: center;
@@ -2600,25 +2603,18 @@
 
   .button-link,
   .action-pill,
-  .site-header-book-link,
   .site-header-utility {
     letter-spacing: 0.01em;
   }
 
   .button-link:hover,
   .action-pill:hover,
-  .site-header-book-link:hover {
+  .seatac-primary-button:hover {
     transform: translateY(-1px);
   }
 
   .theme-seatac[data-booking-theme] {
     --booking-primary-bg: linear-gradient(135deg, #2d6a4f 0%, #40916c 100%);
-  }
-
-  .site-header-book-link {
-    background: linear-gradient(135deg, #2d6a4f 0%, #40916c 100%);
-    border: 0;
-    box-shadow: 0 4px 16px rgba(45, 106, 79, 0.25);
   }
 
   .action-pill {

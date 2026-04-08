@@ -384,6 +384,9 @@ export const bookings = pgTable("bookings", {
   customerSmsReminderSentAt: timestamp("customer_sms_reminder_sent_at", {
     withTimezone: true,
   }),
+  customerEmailReminderSentAt: timestamp("customer_email_reminder_sent_at", {
+    withTimezone: true,
+  }),
   dispatchSmsSentAt: timestamp("dispatch_sms_sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -1140,6 +1143,8 @@ export const seoChangeLogs = pgTable(
     changeType: varchar("change_type", { length: 48 }).notNull(),
     workflowStatus: varchar("workflow_status", { length: 24 }).notNull().default("planned"),
     owner: varchar("owner", { length: 120 }),
+    batchName: varchar("batch_name", { length: 160 }),
+    batchSlug: varchar("batch_slug", { length: 80 }),
     dueDate: timestamp("due_date", { withTimezone: true }),
     summary: varchar("summary", { length: 240 }).notNull(),
     details: text("details"),
@@ -1175,6 +1180,8 @@ export const seoChangeLogRevisions = pgTable(
     revisionNumber: integer("revision_number").notNull(),
     workflowStatus: varchar("workflow_status", { length: 24 }).notNull(),
     owner: varchar("owner", { length: 120 }),
+    batchName: varchar("batch_name", { length: 160 }),
+    batchSlug: varchar("batch_slug", { length: 80 }),
     dueDate: timestamp("due_date", { withTimezone: true }),
     summary: varchar("summary", { length: 240 }).notNull(),
     details: text("details"),
@@ -1423,6 +1430,134 @@ export const seoBacklogItems = pgTable(
       table.status,
       table.priority,
     ),
+  }),
+);
+
+export const contentAuthors = pgTable(
+  "content_authors",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    slug: varchar("slug", { length: 80 }).notNull(),
+    name: varchar("name", { length: 160 }).notNull(),
+    role: varchar("role", { length: 120 }),
+    bio: text("bio"),
+    image: text("image"),
+    active: boolean("active").notNull().default(true),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    siteSlugIdx: uniqueIndex("content_authors_site_slug_idx").on(table.siteId, table.slug),
+    siteActiveIdx: index("content_authors_site_active_idx").on(table.siteId, table.active),
+  }),
+);
+
+export const blogPosts = pgTable(
+  "blog_posts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id").references(() => contentAuthors.id, { onDelete: "set null" }),
+    slug: varchar("slug", { length: 160 }).notNull(),
+    title: varchar("title", { length: 220 }).notNull(),
+    excerpt: text("excerpt"),
+    seoTitle: varchar("seo_title", { length: 220 }),
+    seoDescription: varchar("seo_description", { length: 320 }),
+    category: varchar("category", { length: 80 }),
+    coverImage: text("cover_image"),
+    content: text("content").notNull().default(""),
+    status: varchar("status", { length: 24 }).notNull().default("draft"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    siteSlugIdx: uniqueIndex("blog_posts_site_slug_idx").on(table.siteId, table.slug),
+    siteStatusIdx: index("blog_posts_site_status_idx").on(table.siteId, table.status),
+    sitePublishedIdx: index("blog_posts_site_published_idx").on(table.siteId, table.publishedAt),
+    authorIdx: index("blog_posts_author_idx").on(table.authorId),
+  }),
+);
+
+export const seoResearchDossiers = pgTable(
+  "seo_research_dossiers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => seoProjects.id, { onDelete: "cascade" }),
+    pageId: uuid("page_id").references(() => seoPages.id, { onDelete: "set null" }),
+    keywordId: uuid("keyword_id").references(() => seoKeywords.id, { onDelete: "set null" }),
+    taskId: uuid("task_id").references(() => seoTasks.id, { onDelete: "set null" }),
+    backlogItemId: uuid("backlog_item_id").references(() => seoBacklogItems.id, {
+      onDelete: "set null",
+    }),
+    title: varchar("title", { length: 220 }).notNull(),
+    status: varchar("status", { length: 24 }).notNull().default("planned"),
+    audience: varchar("audience", { length: 120 }),
+    intent: varchar("intent", { length: 48 }),
+    summary: text("summary"),
+    recommendedAngle: text("recommended_angle"),
+    nextAction: text("next_action"),
+    owner: varchar("owner", { length: 120 }),
+    dueDate: timestamp("due_date", { withTimezone: true }),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectStatusIdx: index("seo_research_dossiers_project_status_idx").on(
+      table.projectId,
+      table.status,
+    ),
+    pageIdx: index("seo_research_dossiers_page_idx").on(table.pageId),
+    keywordIdx: index("seo_research_dossiers_keyword_idx").on(table.keywordId),
+    taskIdx: index("seo_research_dossiers_task_idx").on(table.taskId),
+    backlogItemIdx: index("seo_research_dossiers_backlog_item_idx").on(table.backlogItemId),
+  }),
+);
+
+export const seoResearchSources = pgTable(
+  "seo_research_sources",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    dossierId: uuid("dossier_id")
+      .notNull()
+      .references(() => seoResearchDossiers.id, { onDelete: "cascade" }),
+    sourceType: varchar("source_type", { length: 48 }).notNull().default("web"),
+    sourceUrl: text("source_url"),
+    sourceTitle: varchar("source_title", { length: 240 }),
+    publisher: varchar("publisher", { length: 160 }),
+    notes: text("notes"),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    dossierIdx: index("seo_research_sources_dossier_idx").on(table.dossierId),
   }),
 );
 

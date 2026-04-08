@@ -67,11 +67,11 @@ export default async function ParkingPage({ searchParams }: ParkingPageProps) {
         <section className="rounded-[2.6rem] border border-[#2d6a4f]/10 bg-white px-6 py-8 shadow-[0_4px_24px_rgba(45,106,79,0.06)] lg:px-10 lg:py-10">
           <p className="text-[0.76rem] uppercase tracking-[0.34em] text-[#5a7a6e]">Sea-Tac parking</p>
           <h1 className="mt-4 text-[clamp(2.8rem,5vw,4.9rem)] leading-[0.92] tracking-[-0.04em] text-[#1a3d34]">
-            Compare parking near Sea-Tac without turning parking operations into an internal product.
+            Compare parking near Sea-Tac before you book your airport trip.
           </h1>
           <p className="mt-5 max-w-3xl text-lg leading-8 text-[#5a7a6e]">
-            ParkWhiz can handle parking search and reservation inventory while seatac.co stays focused
-            on airport context, parking strategy, and next-step planning.
+            Search parking options, compare entry and exit timing, and choose the lot that fits your
+            terminal, trip length, and airport schedule.
           </p>
 
           <form className="mt-8 grid gap-3 rounded-[1.8rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">

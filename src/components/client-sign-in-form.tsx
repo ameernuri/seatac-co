@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SeatacPrimaryButton } from "@/components/ui/seatac-primary-button";
 import type { ClientAccountSnapshot } from "@/components/client-account-form";
 
 type Props = {
@@ -90,7 +91,7 @@ export function ClientSignInForm({ returnTo = "/reserve?resume=1" }: Props) {
     setResendCooldown(30);
     toast.success(
       data.channel === "email"
-        ? "Verification code sent to your email."
+        ? `Verification code sent to ${identifier.trim().toLowerCase()}.`
         : "Verification code sent to your phone.",
     );
   }
@@ -163,15 +164,15 @@ export function ClientSignInForm({ returnTo = "/reserve?resume=1" }: Props) {
               placeholder="6-digit code"
               className="h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base font-medium tracking-[0.2em] text-[#1a3d34] placeholder:tracking-normal focus-visible:z-10"
             />
-            <Button
+            <SeatacPrimaryButton
               type="button"
               onClick={handleVerify}
               disabled={verifyLoading || code.trim().length !== 6}
-              className="booking-primary-button h-14 min-w-40 px-5 shadow-none"
+              className="h-14 min-w-40 px-5 shadow-none"
             >
               {verifyLoading ? <Loader2 className="size-4 animate-spin" /> : null}
               Verify
-            </Button>
+            </SeatacPrimaryButton>
           </ButtonGroup>
         ) : canSendCode ? (
           <ButtonGroup className="w-full rounded-2xl">
@@ -181,15 +182,15 @@ export function ClientSignInForm({ returnTo = "/reserve?resume=1" }: Props) {
               className="h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10"
             />
             {!verified ? (
-              <Button
+              <SeatacPrimaryButton
                 type="button"
                 onClick={handleSendCode}
                 disabled={sendLoading}
-                className="booking-primary-button h-14 min-w-40 px-5 shadow-none"
+                className="h-14 min-w-40 px-5 shadow-none"
               >
                 {sendLoading ? <Loader2 className="size-4 animate-spin" /> : null}
                 {codeSent ? "Resend code" : "Send code"}
-              </Button>
+              </SeatacPrimaryButton>
             ) : (
               <Button
                 type="button"
@@ -211,7 +212,7 @@ export function ClientSignInForm({ returnTo = "/reserve?resume=1" }: Props) {
         {codeSent && challengeChannel ? (
           <p className="text-xs text-[#5a7a6e]">
             {challengeChannel === "email"
-              ? "Check your email for the 6-digit code."
+              ? `Code sent to ${identifier.trim().toLowerCase()}. Check spam or promotions if you don’t see it.`
               : "Check your phone for the 6-digit code."}
           </p>
         ) : null}

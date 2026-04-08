@@ -92,6 +92,7 @@ export const env = {
     process.env.TWILIO_REMINDER_LEAD_HOURS ?? "24",
     10,
   ),
+  cronSecret: process.env.CRON_SECRET ?? process.env.REMINDER_CRON_SECRET ?? "",
   googleSearchConsoleSiteUrl:
     process.env.GOOGLE_SEARCH_CONSOLE_SITE_URL ?? "sc-domain:seatac.co",
   googleSearchConsoleClientEmail: process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL ?? "",

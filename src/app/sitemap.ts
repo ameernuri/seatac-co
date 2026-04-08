@@ -3,15 +3,17 @@ import type { MetadataRoute } from "next";
 import { getCruiseLineGuideSlugs } from "@/lib/cruise-lines";
 import { getCruiseTerminalGuideSlugs } from "@/lib/cruise-terminals";
 import { getAirlineGuideSlugs } from "@/lib/airlines";
+import { getPublishedBlogPosts } from "@/lib/blog";
 import { getHotelClusterPageSlugs } from "@/lib/hotel-clusters";
 import { getRoutePageSlugs } from "@/lib/route-pages";
 import { seededSiteData } from "@/lib/seed-data";
 
 const baseUrl = "https://seatac.co";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
   const hotels = seededSiteData.seatac_co.hotels;
+  const blogPosts = await getPublishedBlogPosts();
 
   const staticPages: MetadataRoute.Sitemap = [
     {
@@ -75,6 +77,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.82,
     },
     {
+      url: `${baseUrl}/seatac-airport-transfer-guide`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.82,
+    },
+    {
+      url: `${baseUrl}/downtown-seattle-airport-transfer-guide`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.82,
+    },
+    {
       url: `${baseUrl}/pier-66-vs-pier-91-transfer-guide`,
       lastModified: now,
       changeFrequency: "weekly",
@@ -91,6 +105,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/blog`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.76,
     },
     {
       url: `${baseUrl}/privacy`,
@@ -154,6 +174,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
+  const blogPages: MetadataRoute.Sitemap = blogPosts.map((post) => ({
+    url: `${baseUrl}/blog/${post.slug}`,
+    lastModified: post.updatedAt ?? post.publishedAt ?? now,
+    changeFrequency: "monthly",
+    priority: 0.72,
+  }));
+
   return [
     ...staticPages,
     ...routePages,
@@ -162,5 +189,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...cruiseTerminalPages,
     ...cruiseLinePages,
     ...hotelPages,
+    ...blogPages,
   ];
 }

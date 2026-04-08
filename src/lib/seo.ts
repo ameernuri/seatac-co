@@ -209,3 +209,43 @@ export function buildWebSiteJsonLd() {
     },
   };
 }
+
+type ArticleInput = {
+  title: string;
+  description: string;
+  path: string;
+  datePublished: Date | string | null | undefined;
+  dateModified?: Date | string | null | undefined;
+  authorName: string;
+  image?: string | null;
+};
+
+export function buildArticleJsonLd({
+  title,
+  description,
+  path,
+  datePublished,
+  dateModified,
+  authorName,
+  image,
+}: ArticleInput) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: title,
+    description,
+    url: absoluteUrl(path),
+    datePublished: datePublished ? new Date(datePublished).toISOString() : undefined,
+    dateModified: dateModified ? new Date(dateModified).toISOString() : undefined,
+    author: {
+      "@type": "Person",
+      name: authorName,
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "Seatac Connection",
+      url: SITE_URL,
+    },
+    ...(image ? { image: absoluteUrl(image) } : {}),
+  };
+}

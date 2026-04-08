@@ -48,19 +48,31 @@ type SignedVerificationPayload = {
   verifiedAt: string | null;
 };
 
+function collectErrorMessages(error: unknown): string[] {
+  if (!error || typeof error !== "object") {
+    return [];
+  }
+
+  const values = Object.values(error as Record<string, unknown>);
+  const directMessage =
+    "message" in error && typeof (error as { message?: unknown }).message === "string"
+      ? [(error as { message: string }).message]
+      : [];
+
+  return [...directMessage, ...values.flatMap((value) => collectErrorMessages(value))];
+}
+
+function errorMentions(error: unknown, ...needles: string[]) {
+  const haystack = collectErrorMessages(error).join("\n").toLowerCase();
+  return needles.some((needle) => haystack.includes(needle.toLowerCase()));
+}
+
 function isMissingPolicyAgreementColumnError(error: unknown) {
-  return (
-    error instanceof Error &&
-    error.message.includes("policy_agreed_at")
-  );
+  return errorMentions(error, "policy_agreed_at");
 }
 
 function isMissingUserPhoneColumnsError(error: unknown) {
-  return (
-    error instanceof Error &&
-    (error.message.includes("phone_number") ||
-      error.message.includes("phone_number_verified"))
-  );
+  return errorMentions(error, "phone_number", "phone_number_verified");
 }
 
 export function hashVerificationCode(code: string) {
@@ -265,12 +277,43 @@ export async function createEmailVerificationChallenge(input: {
   const now = new Date();
 
   if (isEmailConfigured()) {
-    const text = `Your seatac.co verification code is ${code}. This code expires in ${VERIFICATION_TTL_MINUTES} minutes.`;
+    const text = [
+      `${code} is your seatac.co verification code.`,
+      "",
+      `This code expires in ${VERIFICATION_TTL_MINUTES} minutes.`,
+      "",
+      "If you did not request this code, you can ignore this email.",
+    ].join("\n");
     await sendEmail({
       to: email,
-      subject: "Your seatac.co verification code",
+      subject: `${code} is your seatac.co verification code`,
       text,
-      html: `<p>Your seatac.co verification code is <strong>${code}</strong>.</p><p>This code expires in ${VERIFICATION_TTL_MINUTES} minutes.</p>`,
+      html: `
+        <div style="margin:0;padding:32px 20px;background:#f7faf8;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a3d34;">
+          <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid rgba(45,106,79,0.12);border-radius:28px;overflow:hidden;">
+            <div style="padding:28px 28px 0 28px;">
+              <p style="margin:0 0 10px 0;font-size:12px;line-height:1.4;letter-spacing:0.24em;text-transform:uppercase;color:#5a7a6e;">seatac.co</p>
+              <h1 style="margin:0;font-size:32px;line-height:1.05;font-weight:700;color:#1a3d34;">Your verification code</h1>
+              <p style="margin:14px 0 0 0;font-size:16px;line-height:1.6;color:#4c6b61;">
+                Use this code to continue your seatac.co sign-in or account update.
+              </p>
+            </div>
+            <div style="padding:24px 28px 8px 28px;">
+              <div style="display:inline-block;padding:18px 24px;border-radius:20px;background:#edf6f1;border:1px solid rgba(45,106,79,0.12);font-size:36px;line-height:1;letter-spacing:0.22em;font-weight:700;color:#1a3d34;">
+                ${code}
+              </div>
+            </div>
+            <div style="padding:8px 28px 28px 28px;">
+              <p style="margin:0;font-size:14px;line-height:1.7;color:#5a7a6e;">
+                This code expires in ${VERIFICATION_TTL_MINUTES} minutes.
+              </p>
+              <p style="margin:14px 0 0 0;font-size:14px;line-height:1.7;color:#5a7a6e;">
+                If you did not request this code, you can ignore this email.
+              </p>
+            </div>
+          </div>
+        </div>
+      `,
     });
   } else if (process.env.NODE_ENV === "production") {
     throw new Error("Email sign-in is unavailable right now.");
@@ -461,11 +504,20 @@ export async function ensureClientUserAccount(input: {
       .where(eq(users.id, user.id));
   }
 
+  const existingAccountSnapshot = user
+    ? await getClientAccountSnapshot(user.id).catch(() => null)
+    : null;
+  const effectiveSmsOptIn = Boolean(
+    input.smsOptIn || existingAccountSnapshot?.smsOptIn,
+  );
+  const effectivePolicyAgreed =
+    input.policyAgreed || Boolean(existingAccountSnapshot?.policyAgreedAt);
+
   const profile = await upsertClientProfile({
-    policyAgreed: input.policyAgreed,
+    policyAgreed: effectivePolicyAgreed,
     userId: user.id,
     phone: input.phone,
-    smsOptIn: input.smsOptIn,
+    smsOptIn: effectiveSmsOptIn,
   });
 
   const account = await getClientAccountSnapshot(user.id);
@@ -800,60 +852,8 @@ export async function upsertClientProfile(input: {
     updateSet.policyAgreedAt = now;
   }
 
-  try {
-    await db
-      .insert(clientProfiles)
-      .values({
-        createdAt: now,
-        policyAgreedAt: input.policyAgreed ? now : null,
-        userId: input.userId,
-        phone: input.phone,
-        phoneNormalized,
-        phoneVerifiedAt: nextPhoneVerifiedAt,
-        smsOptIn: input.smsOptIn,
-        smsOptInAt: input.smsOptIn ? now : null,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: clientProfiles.userId,
-        set: updateSet,
-      });
-
+  const readProfile = async () => {
     const [profile] = await db
-      .select()
-      .from(clientProfiles)
-      .where(eq(clientProfiles.userId, input.userId))
-      .limit(1);
-
-    return profile ?? null;
-  } catch (error) {
-    if (!isMissingPolicyAgreementColumnError(error)) throw error;
-
-    await db
-      .insert(clientProfiles)
-      .values({
-        createdAt: now,
-        userId: input.userId,
-        phone: input.phone,
-        phoneNormalized,
-        phoneVerifiedAt: nextPhoneVerifiedAt,
-        smsOptIn: input.smsOptIn,
-        smsOptInAt: input.smsOptIn ? now : null,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: clientProfiles.userId,
-        set: {
-          phone: input.phone,
-          phoneNormalized,
-          phoneVerifiedAt: now,
-          smsOptIn: input.smsOptIn,
-          smsOptInAt: input.smsOptIn ? now : null,
-          updatedAt: now,
-        },
-      });
-
-    const [fallbackProfile] = await db
       .select({
         userId: clientProfiles.userId,
         phone: clientProfiles.phone,
@@ -868,13 +868,105 @@ export async function upsertClientProfile(input: {
       .where(eq(clientProfiles.userId, input.userId))
       .limit(1);
 
-    return fallbackProfile
+    return profile
       ? {
-          ...fallbackProfile,
+          ...profile,
           policyAgreedAt: null,
         }
       : null;
+  };
+
+  const writeAttempts = existingProfile
+    ? [
+        async () => {
+          await db
+            .update(clientProfiles)
+            .set(updateSet)
+            .where(eq(clientProfiles.userId, input.userId));
+
+          const [profile] = await db
+            .select()
+            .from(clientProfiles)
+            .where(eq(clientProfiles.userId, input.userId))
+            .limit(1);
+
+          return profile ?? null;
+        },
+        async () => {
+          await db
+            .update(clientProfiles)
+            .set({
+              phone: input.phone,
+              phoneNormalized,
+              phoneVerifiedAt: nextPhoneVerifiedAt,
+              smsOptIn: input.smsOptIn,
+              smsOptInAt: input.smsOptIn ? now : null,
+              updatedAt: now,
+            })
+            .where(eq(clientProfiles.userId, input.userId));
+
+          return readProfile();
+        },
+      ]
+    : [
+        async () => {
+          await db
+            .insert(clientProfiles)
+            .values({
+              createdAt: now,
+              policyAgreedAt: input.policyAgreed ? now : null,
+              userId: input.userId,
+              phone: input.phone,
+              phoneNormalized,
+              phoneVerifiedAt: nextPhoneVerifiedAt,
+              smsOptIn: input.smsOptIn,
+              smsOptInAt: input.smsOptIn ? now : null,
+              updatedAt: now,
+            });
+
+          const [profile] = await db
+            .select()
+            .from(clientProfiles)
+            .where(eq(clientProfiles.userId, input.userId))
+            .limit(1);
+
+          return profile ?? null;
+        },
+        async () => {
+          await db
+            .insert(clientProfiles)
+            .values({
+              createdAt: now,
+              userId: input.userId,
+              phone: input.phone,
+              phoneNormalized,
+              phoneVerifiedAt: nextPhoneVerifiedAt,
+              smsOptIn: input.smsOptIn,
+              smsOptInAt: input.smsOptIn ? now : null,
+              updatedAt: now,
+            });
+
+          return readProfile();
+        },
+      ];
+
+  let lastError: unknown;
+
+  for (const [index, attempt] of writeAttempts.entries()) {
+    try {
+      return await attempt();
+    } catch (error) {
+      lastError = error;
+
+      if (index === 0 && isMissingPolicyAgreementColumnError(error)) {
+        continue;
+      }
+
+      throw error;
+    }
   }
+
+  throw lastError;
 }
 
 export async function getClientAccountSnapshot(userId: string) {

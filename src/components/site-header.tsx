@@ -5,6 +5,7 @@ import { HeaderAccountMenu } from "@/components/header-account-menu";
 import { siteChrome } from "@/lib/site-content";
 import { SiteBrand } from "@/components/site-brand";
 import { getServerSession } from "@/lib/session";
+import { SeatacPrimaryButton } from "@/components/ui/seatac-primary-button";
 
 export async function SiteHeader() {
   const session = await getServerSession();
@@ -48,9 +49,9 @@ export async function SiteHeader() {
             <PhoneCall className="size-4" />
             <span>{siteChrome.reservationPhoneLabel.replace("Reservations: ", "")}</span>
           </Link>
-          <Link href="/reserve" className="site-header-book-link">
+          <SeatacPrimaryButton href="/reserve" emphasis="cta" className="px-5 py-3">
             Book ride
-          </Link>
+          </SeatacPrimaryButton>
         </div>
       </div>
     </header>

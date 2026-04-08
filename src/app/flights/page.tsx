@@ -77,11 +77,11 @@ export default async function FlightsPage({ searchParams }: FlightsPageProps) {
             Flights at Sea-Tac
           </p>
           <h1 className="mt-4 text-[clamp(2.8rem,5vw,4.9rem)] leading-[0.92] tracking-[-0.04em] text-[#1a3d34]">
-            Book flights without turning seatac.co into a ticket desk.
+            Search Sea-Tac flights and compare the best trip options.
           </h1>
           <p className="mt-5 max-w-3xl text-lg leading-8 text-[#5a7a6e]">
-            Use Skyscanner-powered flight discovery for Sea-Tac trips, then connect into airport rides,
-            hotels, and terminal planning from the same Seattle-first workflow.
+            Compare flights for Seattle trips, then move into airport rides, hotel options,
+            and terminal planning with the rest of your itinerary in mind.
           </p>
 
           <form className="mt-8 grid gap-3 rounded-[1.8rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-4 lg:grid-cols-5">

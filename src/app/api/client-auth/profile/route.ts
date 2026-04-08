@@ -125,15 +125,23 @@ export async function POST(request: Request) {
     );
     const samePhone = normalizedExistingPhone === normalizedPhone;
     const sameEmail = existingUser.email.trim().toLowerCase() === payload.email.trim().toLowerCase();
+    const existingPhoneVerified = Boolean(
+      existingUser.phoneNumberVerified || existingProfile?.phoneVerifiedAt,
+    );
+    const shouldPromoteExistingPhoneVerification = samePhone && !existingPhoneVerified && payload.phoneVerified;
+    const shouldRequirePhoneVerification = !samePhone || shouldPromoteExistingPhoneVerification;
+    const shouldPromoteExistingEmailVerification =
+      sameEmail && !existingUser.emailVerified && payload.emailVerified;
+    const shouldRequireEmailVerification = !sameEmail || shouldPromoteExistingEmailVerification;
 
-    if (!samePhone && !payload.phoneVerified) {
+    if (shouldRequirePhoneVerification && !payload.phoneVerified) {
       return NextResponse.json(
         { error: "Verify your mobile number before saving changes." },
         { status: 400 },
       );
     }
 
-    if (!samePhone) {
+    if (shouldRequirePhoneVerification) {
       if (!payload.phoneChallengeId) {
         return NextResponse.json(
           { error: "Phone verification is required first." },
@@ -148,14 +156,14 @@ export async function POST(request: Request) {
       });
     }
 
-    if (!sameEmail && !payload.emailVerified) {
+    if (shouldRequireEmailVerification && !payload.emailVerified) {
       return NextResponse.json(
         { error: "Verify your email before saving changes." },
         { status: 400 },
       );
     }
 
-    if (!sameEmail) {
+    if (shouldRequireEmailVerification) {
       if (!payload.emailChallengeId) {
         return NextResponse.json(
           { error: "Email verification is required first." },
@@ -174,11 +182,13 @@ export async function POST(request: Request) {
       .update(users)
       .set({
         email: payload.email,
-        emailVerified: sameEmail ? existingUser.emailVerified : payload.emailVerified,
+        emailVerified: sameEmail
+          ? existingUser.emailVerified || shouldPromoteExistingEmailVerification
+          : payload.emailVerified,
         name: payload.name,
         phoneNumber: payload.phone,
         phoneNumberVerified: samePhone
-          ? Boolean(existingUser.phoneNumberVerified || existingProfile?.phoneVerifiedAt)
+          ? existingPhoneVerified || shouldPromoteExistingPhoneVerification
           : payload.phoneVerified,
         updatedAt: new Date(),
       })
@@ -187,7 +197,7 @@ export async function POST(request: Request) {
     const profile = await upsertClientProfile({
       policyAgreed: payload.policyAgreed,
       phoneVerified: samePhone
-        ? Boolean(existingProfile?.phoneVerifiedAt || existingUser.phoneNumberVerified)
+        ? existingPhoneVerified || shouldPromoteExistingPhoneVerification
         : payload.phoneVerified,
       userId: session.user.id,
       phone: payload.phone,

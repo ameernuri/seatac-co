@@ -12,9 +12,11 @@ function formatPickupAt(value: Date) {
 
 export function buildCustomerBookingConfirmationSms({
   booking,
+  bookingUrl,
   siteName,
 }: {
   booking: BookingRecord;
+  bookingUrl?: string | null;
   siteName: string;
 }) {
   return [
@@ -22,6 +24,7 @@ export function buildCustomerBookingConfirmationSms({
     `Pickup ${formatPickupAt(booking.pickupAt)}.`,
     booking.routeName ? `Route: ${booking.routeName}.` : null,
     booking.vehicleName ? `Vehicle: ${booking.vehicleName}.` : null,
+    bookingUrl ? `Manage booking: ${bookingUrl}` : null,
     "Reply STOP to opt out, HELP for help.",
   ]
     .filter(Boolean)
@@ -48,15 +51,18 @@ export function buildDispatchBookingAlertSms({
 
 export function buildCustomerReminderSms({
   booking,
+  bookingUrl,
   siteName,
 }: {
   booking: BookingRecord;
+  bookingUrl?: string | null;
   siteName: string;
 }) {
   return [
     `${siteName} reminder: booking ${booking.reference} is coming up.`,
     `Pickup ${formatPickupAt(booking.pickupAt)}.`,
     booking.routeName ? `Route: ${booking.routeName}.` : null,
+    bookingUrl ? `Manage booking: ${bookingUrl}` : null,
     "Reply STOP to opt out, HELP for help.",
   ]
     .filter(Boolean)

@@ -752,6 +752,19 @@ export function ReserveWizard({
   const [clientAccount, setClientAccount] = useState<ClientAccountSnapshot | null>(
     initialClientAccount,
   );
+  const [accountVerifiedPhone, setAccountVerifiedPhone] = useState<string | null>(
+    initialClientAccount?.phoneVerifiedAt
+      ? normalizeClientPhone(initialClientAccount.phone ?? "") || null
+      : null,
+  );
+  const [accountVerifiedEmail, setAccountVerifiedEmail] = useState<string | null>(
+    initialClientAccount?.emailVerified
+      ? initialClientAccount.email.trim().toLowerCase()
+      : null,
+  );
+  const [accountSmsOptIn, setAccountSmsOptIn] = useState(
+    Boolean(initialClientAccount?.smsOptIn),
+  );
   const [checkoutErrors, setCheckoutErrors] = useState<CheckoutFieldErrors>({});
   const [notes, setNotes] = useState(initialState?.pickupDetail ?? "");
   const [availableVehicleCounts, setAvailableVehicleCounts] = useState<Record<string, number> | null>(
@@ -766,13 +779,16 @@ export function ReserveWizard({
   const [draftLoaded, setDraftLoaded] = useState(false);
   const customerName = combineCustomerName(customerFirstName, customerLastName);
   const normalizedCustomerPhone = normalizeClientPhone(customerPhone);
-  const normalizedAccountPhone = normalizeClientPhone(clientAccount?.phone ?? "");
+  const normalizedCustomerEmail = customerEmail.trim().toLowerCase();
+  const normalizedAccountPhone =
+    accountVerifiedPhone ?? normalizeClientPhone(clientAccount?.phone ?? "");
   const hasPersistedVerifiedPhone =
-    Boolean(clientAccount?.phoneVerifiedAt) &&
+    Boolean(normalizedAccountPhone) &&
     Boolean(normalizedCustomerPhone) &&
     normalizedCustomerPhone === normalizedAccountPhone;
-  const hasPersistedSmsOptIn = hasPersistedVerifiedPhone && Boolean(clientAccount?.smsOptIn);
-  const hasVerifiedEmail = Boolean(clientAccount?.emailVerified);
+  const hasPersistedSmsOptIn = hasPersistedVerifiedPhone && Boolean(accountSmsOptIn);
+  const hasVerifiedEmail =
+    Boolean(accountVerifiedEmail) && normalizedCustomerEmail === accountVerifiedEmail;
   const selectedPricingType = pricingTypeFromTripType(tripType);
   const enabledPricingOptions = useMemo(
     () =>
@@ -1181,6 +1197,17 @@ export function ReserveWizard({
     setCustomerEmail((current) => current || clientAccount.email || "");
     setCustomerPhone((current) => current || clientAccount.phone || "");
     setCustomerSmsOptIn((current) => current || Boolean(clientAccount.smsOptIn));
+    setAccountSmsOptIn(Boolean(clientAccount.smsOptIn));
+    setAccountVerifiedEmail((current) =>
+      current ??
+      (clientAccount.emailVerified ? clientAccount.email.trim().toLowerCase() : null),
+    );
+    setAccountVerifiedPhone((current) =>
+      current ??
+      (clientAccount.phoneVerifiedAt
+        ? normalizeClientPhone(clientAccount.phone ?? "") || null
+        : null),
+    );
   }, [clientAccount, draftLoaded]);
 
   useEffect(() => {
@@ -1212,6 +1239,13 @@ export function ReserveWizard({
         setCustomerEmail((current) => current || account.email || "");
         setCustomerPhone((current) => current || account.phone || "");
         setCustomerSmsOptIn((current) => current || Boolean(account.smsOptIn));
+        setAccountSmsOptIn(Boolean(account.smsOptIn));
+        setAccountVerifiedEmail(
+          account.emailVerified ? account.email.trim().toLowerCase() : null,
+        );
+        setAccountVerifiedPhone(
+          account.phoneVerifiedAt ? normalizeClientPhone(account.phone ?? "") || null : null,
+        );
       })
       .catch(() => {});
 
@@ -1772,6 +1806,11 @@ export function ReserveWizard({
     setCustomerEmail(account.email || customerEmail);
     setCustomerPhone(account.phone || customerPhone);
     setCustomerSmsOptIn(Boolean(account.smsOptIn));
+    setAccountSmsOptIn(Boolean(account.smsOptIn));
+    setAccountVerifiedEmail(account.emailVerified ? account.email.trim().toLowerCase() : null);
+    setAccountVerifiedPhone(
+      account.phoneVerifiedAt ? normalizeClientPhone(account.phone ?? "") || null : null,
+    );
     clearCheckoutError("customerPhoneVerified");
     clearCheckoutError("customerPolicyAgreed");
     toast.success("Account ready.");
@@ -2355,6 +2394,8 @@ export function ReserveWizard({
                     name={customerName}
                     email={customerEmail}
                     phone={customerPhone}
+                    verifiedEmail={accountVerifiedEmail}
+                    verifiedPhone={accountVerifiedPhone}
                     onPhoneChange={(value) => {
                       setCustomerPhone(value);
                       clearCheckoutError("customerPhone");
@@ -3141,6 +3182,8 @@ export function ReserveWizard({
                   name={customerName}
                   email={customerEmail}
                   phone={customerPhone}
+                  verifiedEmail={accountVerifiedEmail}
+                  verifiedPhone={accountVerifiedPhone}
                   onPhoneChange={(value) => {
                     setCustomerPhone(value);
                     clearCheckoutError("customerPhone");

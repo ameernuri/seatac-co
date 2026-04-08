@@ -53,6 +53,8 @@ export async function getServerSession() {
           email: users.email,
           emailVerified: users.emailVerified,
           image: users.image,
+          phoneNumber: users.phoneNumber,
+          phoneNumberVerified: users.phoneNumberVerified,
           createdAt: users.createdAt,
           updatedAt: users.updatedAt,
         },
@@ -76,49 +78,74 @@ export async function getServerSession() {
 }
 
 export async function getClientProfileByUserId(userId: string) {
-  try {
-    const [profile] = await db
-      .select({
-        userId: clientProfiles.userId,
-        phone: clientProfiles.phone,
-        phoneNormalized: clientProfiles.phoneNormalized,
-        phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
-        smsOptIn: clientProfiles.smsOptIn,
-        smsOptInAt: clientProfiles.smsOptInAt,
-        policyAgreedAt: clientProfiles.policyAgreedAt,
-        createdAt: clientProfiles.createdAt,
-        updatedAt: clientProfiles.updatedAt,
-      })
-      .from(clientProfiles)
-      .where(eq(clientProfiles.userId, userId))
-      .limit(1);
+  const attempts = [
+    async () => {
+      const [profile] = await db
+        .select({
+          userId: clientProfiles.userId,
+          phone: clientProfiles.phone,
+          phoneNormalized: clientProfiles.phoneNormalized,
+          phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+          smsOptIn: clientProfiles.smsOptIn,
+          smsOptInAt: clientProfiles.smsOptInAt,
+          policyAgreedAt: clientProfiles.policyAgreedAt,
+          createdAt: clientProfiles.createdAt,
+          updatedAt: clientProfiles.updatedAt,
+        })
+        .from(clientProfiles)
+        .where(eq(clientProfiles.userId, userId))
+        .limit(1);
 
-    return profile ?? null;
-  } catch (error) {
-    if (
-      !(
-        error instanceof Error &&
-        error.message.includes("policy_agreed_at")
-      )
-    ) {
-      throw error;
+      return profile ?? null;
+    },
+    async () => {
+      const [profile] = await db
+        .select({
+          userId: clientProfiles.userId,
+          phone: clientProfiles.phone,
+          phoneNormalized: clientProfiles.phoneNormalized,
+          phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+          smsOptIn: clientProfiles.smsOptIn,
+          smsOptInAt: clientProfiles.smsOptInAt,
+          createdAt: clientProfiles.createdAt,
+          updatedAt: clientProfiles.updatedAt,
+        })
+        .from(clientProfiles)
+        .where(eq(clientProfiles.userId, userId))
+        .limit(1);
+
+      return profile ? { ...profile, policyAgreedAt: null } : null;
+    },
+    async () => {
+      const [profile] = await db
+        .select({
+          userId: clientProfiles.userId,
+          phone: clientProfiles.phone,
+          phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
+          smsOptIn: clientProfiles.smsOptIn,
+          smsOptInAt: clientProfiles.smsOptInAt,
+          createdAt: clientProfiles.createdAt,
+          updatedAt: clientProfiles.updatedAt,
+        })
+        .from(clientProfiles)
+        .where(eq(clientProfiles.userId, userId))
+        .limit(1);
+
+      return profile
+        ? { ...profile, phoneNormalized: null, policyAgreedAt: null }
+        : null;
+    },
+  ] as const;
+
+  let lastError: unknown;
+
+  for (const attempt of attempts) {
+    try {
+      return await attempt();
+    } catch (error) {
+      lastError = error;
     }
-
-    const [profile] = await db
-      .select({
-        userId: clientProfiles.userId,
-        phone: clientProfiles.phone,
-        phoneNormalized: clientProfiles.phoneNormalized,
-        phoneVerifiedAt: clientProfiles.phoneVerifiedAt,
-        smsOptIn: clientProfiles.smsOptIn,
-        smsOptInAt: clientProfiles.smsOptInAt,
-        createdAt: clientProfiles.createdAt,
-        updatedAt: clientProfiles.updatedAt,
-      })
-      .from(clientProfiles)
-      .where(eq(clientProfiles.userId, userId))
-      .limit(1);
-
-    return profile ? { ...profile, policyAgreedAt: null } : null;
   }
+
+  throw lastError;
 }

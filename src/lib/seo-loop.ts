@@ -45,6 +45,16 @@ export const seoTrackedPagesSeed = [
     keywordCluster: "airport-hotels",
   },
   {
+    url: "https://seatac.co/seatac-airport-transfer-guide",
+    pageType: "planning-guide",
+    keywordCluster: "airport-routes",
+  },
+  {
+    url: "https://seatac.co/downtown-seattle-airport-transfer-guide",
+    pageType: "planning-guide",
+    keywordCluster: "downtown-routes",
+  },
+  {
     url: "https://seatac.co/seatac-parking-guide",
     pageType: "planning-guide",
     keywordCluster: "airport-planning",
@@ -117,6 +127,18 @@ export const seoTrackedKeywordsSeed = [
     cluster: "airport-hotels",
     intent: "planning",
     targetUrl: "https://seatac.co/seatac-airport-hotels",
+  },
+  {
+    keyword: "seatac airport transfer guide",
+    cluster: "airport-routes",
+    intent: "planning",
+    targetUrl: "https://seatac.co/seatac-airport-transfer-guide",
+  },
+  {
+    keyword: "downtown seattle airport transfer guide",
+    cluster: "downtown-routes",
+    intent: "planning",
+    targetUrl: "https://seatac.co/downtown-seattle-airport-transfer-guide",
   },
   {
     keyword: "seatac parking",

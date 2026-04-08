@@ -138,3 +138,65 @@ export function buildDispatchBookingAlertEmail({
 
   return { html, subject, text };
 }
+
+export function buildCustomerReminderEmail({
+  booking,
+  bookingUrl,
+  site,
+}: {
+  booking: BookingRecord;
+  bookingUrl?: string | null;
+  site: NotificationSiteContext;
+}) {
+  const rows = [
+    ["Reference", booking.reference],
+    ["Pickup", formatPickupAt(booking.pickupAt)],
+    ["Route", booking.routeName ?? "Custom route"],
+    ["Vehicle", booking.vehicleName],
+  ] as const;
+  const subject = `${site.companyName}: booking ${booking.reference} reminder`;
+  const text = [
+    `${site.companyName} reminder: your trip is coming up.`,
+    `Reference: ${booking.reference}`,
+    `Pickup: ${formatPickupAt(booking.pickupAt)}`,
+    `Route: ${booking.routeName ?? "Custom route"}`,
+    `Vehicle: ${booking.vehicleName}`,
+    bookingUrl ? `Manage booking: ${bookingUrl}` : null,
+    `Questions: ${site.dispatchPhone} or ${site.dispatchEmail}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;background:#f2f7f5;padding:32px;color:#17352f;">
+      <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #d7e4df;border-radius:20px;overflow:hidden;">
+        <div style="padding:28px 28px 20px;background:#0f6a56;color:#f6f2e8;">
+          <div style="font-size:12px;letter-spacing:0.24em;text-transform:uppercase;opacity:0.85;">Pickup reminder</div>
+          <h1 style="margin:12px 0 0;font-size:32px;line-height:1.05;">Your ride is coming up.</h1>
+        </div>
+        <div style="padding:28px;">
+          <p style="margin:0 0 18px;font-size:16px;line-height:1.7;">
+            This is a reminder for your upcoming trip with ${site.companyName}.
+          </p>
+          <table style="width:100%;border-collapse:collapse;border-spacing:0;">
+            ${renderRows(rows)}
+          </table>
+          ${
+            bookingUrl
+              ? `<p style="margin:20px 0 0;font-size:15px;line-height:1.7;">
+                  Manage your booking here:
+                  <a href="${bookingUrl}" style="color:#0f6a56;">${bookingUrl}</a>
+                </p>`
+              : ""
+          }
+          <p style="margin:20px 0 0;font-size:15px;line-height:1.7;">
+            If you need help, call <a href="tel:${site.dispatchPhone.replace(/\D/g, "")}" style="color:#0f6a56;">${site.dispatchPhone}</a>
+            or email <a href="mailto:${site.dispatchEmail}" style="color:#0f6a56;">${site.dispatchEmail}</a>.
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return { html, subject, text };
+}

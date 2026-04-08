@@ -10,11 +10,13 @@ export function SiteFooter() {
     { label: "Book Sea-Tac flights", href: "/flights" },
     { label: "Book Seattle hotels", href: "/hotels" },
     { label: "Reserve airport rides", href: "/rides" },
+    { label: "Sea-Tac airport transfer guide", href: "/seatac-airport-transfer-guide" },
     { label: "Compare Sea-Tac parking", href: "/parking" },
     { label: "Seattle cruise schedule", href: "/cruises" },
     { label: "Sea-Tac park-and-fly hotels", href: "/park-and-fly-hotels-seatac" },
     { label: "Sea-Tac to Pier 66", href: "/seatac-to-pier-66" },
     { label: "Sea-Tac departures", href: "/departures" },
+    { label: "Downtown Seattle transfer guide", href: "/downtown-seattle-airport-transfer-guide" },
   ] as const;
 
   return (

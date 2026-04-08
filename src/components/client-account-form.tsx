@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -18,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SeatacPrimaryButton } from "@/components/ui/seatac-primary-button";
 import { normalizeClientPhone } from "@/lib/client-phone";
 
 export type ClientAccountSnapshot = {
@@ -53,6 +53,8 @@ type CheckoutProps = SharedProps & {
   onPhoneChange: (phone: string) => void;
   policyAgreed: boolean;
   smsOptIn: boolean;
+  verifiedEmail?: string | null;
+  verifiedPhone?: string | null;
   variant: "checkout";
 };
 
@@ -102,6 +104,11 @@ function extractErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function normalizeEmail(value: string) {
+  const email = value.trim().toLowerCase();
+  return /\S+@\S+\.\S+/.test(email) ? email : "";
+}
+
 export function ClientAccountForm(props: Props) {
   const router = useRouter();
   const variant = props.variant ?? "full";
@@ -133,6 +140,7 @@ export function ClientAccountForm(props: Props) {
   const resolvedSmsOptIn = checkoutVariantProps?.smsOptIn ?? smsOptIn;
   const verificationPurpose = isCheckout ? "reserve-account" : "sign-up";
   const normalizedPhone = normalizeClientPhone(resolvedPhone) || null;
+  const normalizedEmail = normalizeEmail(resolvedEmail);
   const normalizedAccountPhone = useMemo(
     () => normalizeClientPhone(checkoutVariantProps?.account?.phone ?? "") || null,
     [checkoutVariantProps?.account?.phone],
@@ -140,8 +148,17 @@ export function ClientAccountForm(props: Props) {
   const persistedVerifiedPhone = isCheckout && checkoutVariantProps?.account?.phoneVerifiedAt
     ? normalizedAccountPhone
     : null;
+  const persistedVerifiedEmail = isCheckout ? checkoutVariantProps?.verifiedEmail ?? null : null;
   const alreadyVerified = Boolean(
-    normalizedPhone && knownVerifiedPhone && normalizedPhone === knownVerifiedPhone,
+    normalizedPhone &&
+      (checkoutVariantProps?.verifiedPhone ?? knownVerifiedPhone) &&
+      normalizedPhone === (checkoutVariantProps?.verifiedPhone ?? knownVerifiedPhone),
+  );
+  const alreadyVerifiedEmail = Boolean(
+    isCheckout &&
+      normalizedEmail &&
+      persistedVerifiedEmail &&
+      normalizedEmail === persistedVerifiedEmail,
   );
   const canSendCode = isPhone(resolvedPhone);
   const canCompleteSignUp =
@@ -156,6 +173,7 @@ export function ClientAccountForm(props: Props) {
       Verified
     </span>
   ) : null;
+  void alreadyVerifiedEmail;
 
   useEffect(() => {
     if (persistedVerifiedPhone) {
@@ -168,6 +186,17 @@ export function ClientAccountForm(props: Props) {
       setKnownVerifiedPhone(verifiedPhone);
     }
   }, [verifiedPhone]);
+
+  useEffect(() => {
+    if (!alreadyVerified) {
+      return;
+    }
+
+    setCodeSent(false);
+    setOtpCode("");
+    setChallengeId(null);
+    setResendCooldown(0);
+  }, [alreadyVerified]);
 
   useEffect(() => {
     if (knownVerifiedPhone && knownVerifiedPhone !== normalizedPhone) {
@@ -199,20 +228,26 @@ export function ClientAccountForm(props: Props) {
     return data.account as ClientAccountSnapshot | null;
   }
 
-  async function syncProfile() {
+  async function syncProfile(overrideChallengeId?: string | null) {
+    const payload: Record<string, unknown> = {
+      email: resolvedEmail,
+      name: resolvedName,
+      policyAgreed: isCheckout ? checkoutVariantProps?.policyAgreed : termsAgreed,
+      phone: resolvedPhone,
+      purpose: verificationPurpose,
+      smsOptIn: resolvedSmsOptIn,
+    };
+
+    const resolvedChallengeId = overrideChallengeId ?? challengeId;
+    if (resolvedChallengeId) {
+      payload.challengeId = resolvedChallengeId;
+    }
+
     const response = await fetch("/api/client-auth/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({
-        challengeId,
-        email: resolvedEmail,
-        name: resolvedName,
-        policyAgreed: isCheckout ? checkoutVariantProps?.policyAgreed : termsAgreed,
-        phone: resolvedPhone,
-        purpose: verificationPurpose,
-        smsOptIn: resolvedSmsOptIn,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await response.json().catch(() => ({}));
@@ -299,14 +334,20 @@ export function ClientAccountForm(props: Props) {
       return;
     }
 
-    setChallengeId(typeof data.challengeId === "string" ? data.challengeId : challengeId);
+    const verifiedChallengeId =
+      typeof data.challengeId === "string" ? data.challengeId : challengeId;
+    setChallengeId(verifiedChallengeId);
 
     if (isCheckout) {
       try {
-        const result = await syncProfile();
+        const result = await syncProfile(verifiedChallengeId);
         const account = result.account ?? (await fetchAccountSnapshot());
         setVerifiedPhone(normalizedPhone);
         setKnownVerifiedPhone(normalizedPhone);
+        setCodeSent(false);
+        setOtpCode("");
+        setChallengeId(null);
+        setResendCooldown(0);
         setVerifyLoading(false);
         toast.success(result.existed ? "Signed in to your existing account." : "Account ready.");
 
@@ -328,6 +369,10 @@ export function ClientAccountForm(props: Props) {
 
     setVerifiedPhone(normalizedPhone);
     setKnownVerifiedPhone(normalizedPhone);
+    setCodeSent(false);
+    setOtpCode("");
+    setChallengeId(null);
+    setResendCooldown(0);
     setVerifyLoading(false);
     toast.success("Phone verified.");
     setVerificationDialogOpen(false);
@@ -395,9 +440,9 @@ export function ClientAccountForm(props: Props) {
             inputMode="tel"
             value={resolvedPhone}
             onChange={(event) => checkoutVariantProps?.onPhoneChange(event.target.value)}
-            className={codeSent ? "h-14 min-w-0 flex-[1.15] border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10" : "h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10"}
+            className={alreadyVerified ? "h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10" : codeSent ? "h-14 min-w-0 flex-[1.15] border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10" : "h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10"}
           />
-          {codeSent ? (
+          {alreadyVerified ? null : codeSent ? (
             <>
               <Input
                 value={otpCode}
@@ -415,26 +460,26 @@ export function ClientAccountForm(props: Props) {
                 placeholder="6-digit code"
                 className="h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base font-medium tracking-[0.2em] text-[#1a3d34] placeholder:tracking-normal focus-visible:z-10"
               />
-              <Button
+              <SeatacPrimaryButton
                 type="button"
                 onClick={handleVerifyCode}
                 disabled={verifyLoading || otpCode.trim().length !== 6}
-                className="booking-primary-button h-14 min-w-40 px-5 shadow-none"
+                className="h-14 min-w-40 px-5 shadow-none"
               >
                 {verifyLoading ? <Loader2 className="size-4 animate-spin" /> : null}
                 Verify
-              </Button>
+              </SeatacPrimaryButton>
             </>
-          ) : alreadyVerified ? null : canSendCode ? (
-            <Button
+          ) : canSendCode ? (
+            <SeatacPrimaryButton
               type="button"
               onClick={handleSendCode}
               disabled={sendLoading}
-              className="booking-primary-button h-14 min-w-40 px-5 shadow-none"
+              className="h-14 min-w-40 px-5 shadow-none"
             >
               {sendLoading ? <Loader2 className="size-4 animate-spin" /> : null}
               Send code
-            </Button>
+            </SeatacPrimaryButton>
           ) : null}
         </ButtonGroup>
       </div>
@@ -501,9 +546,9 @@ export function ClientAccountForm(props: Props) {
               inputMode="tel"
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
-              className={codeSent ? "h-14 min-w-0 flex-[1.15] border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10" : "h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10"}
+              className={alreadyVerified ? "h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10" : codeSent ? "h-14 min-w-0 flex-[1.15] border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10" : "h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base text-[#1a3d34] shadow-none focus-visible:z-10"}
             />
-            {codeSent ? (
+            {alreadyVerified ? null : codeSent ? (
               <>
                 <Input
                   value={otpCode}
@@ -521,26 +566,26 @@ export function ClientAccountForm(props: Props) {
                   placeholder="6-digit code"
                   className="h-14 min-w-0 flex-1 border-[#2d6a4f]/15 bg-white px-4 text-base font-medium tracking-[0.2em] text-[#1a3d34] placeholder:tracking-normal focus-visible:z-10"
                 />
-                <Button
+                <SeatacPrimaryButton
                   type="button"
                   onClick={handleVerifyCode}
                   disabled={verifyLoading || otpCode.trim().length !== 6}
-                  className="booking-primary-button h-14 min-w-40 px-5 shadow-none"
+                  className="h-14 min-w-40 px-5 shadow-none"
                 >
                   {verifyLoading ? <Loader2 className="size-4 animate-spin" /> : null}
                   Verify
-                </Button>
+                </SeatacPrimaryButton>
               </>
-            ) : alreadyVerified ? null : canSendCode ? (
-              <Button
+            ) : canSendCode ? (
+              <SeatacPrimaryButton
                 type="button"
                 onClick={handleSendCode}
                 disabled={sendLoading}
-                className="booking-primary-button h-14 min-w-40 px-5 shadow-none"
+                className="h-14 min-w-40 px-5 shadow-none"
               >
                 {sendLoading ? <Loader2 className="size-4 animate-spin" /> : null}
                 Send code
-              </Button>
+              </SeatacPrimaryButton>
             ) : null}
           </ButtonGroup>
         </div>
@@ -597,15 +642,15 @@ export function ClientAccountForm(props: Props) {
       </label>
 
       <div className="pt-2">
-        <Button
+        <SeatacPrimaryButton
           type="button"
           onClick={handleCompleteSignUp}
           disabled={signUpLoading || !canCompleteSignUp}
-          className="booking-primary-button h-12 rounded-full px-5"
+          className="h-12 px-5"
         >
           {signUpLoading ? <Loader2 className="size-4 animate-spin" /> : null}
           Sign up
-        </Button>
+        </SeatacPrimaryButton>
       </div>
 
       <Dialog open={verificationDialogOpen} onOpenChange={setVerificationDialogOpen}>
@@ -620,15 +665,15 @@ export function ClientAccountForm(props: Props) {
           </DialogHeader>
           <div className="space-y-3">
             {!codeSent ? (
-              <Button
+              <SeatacPrimaryButton
                 type="button"
                 onClick={handleSendCode}
                 disabled={sendLoading || !canSendCode}
-                className="booking-primary-button h-12 rounded-full px-5"
+                className="h-12 px-5"
               >
                 {sendLoading ? <Loader2 className="size-4 animate-spin" /> : null}
                 Send code
-              </Button>
+              </SeatacPrimaryButton>
             ) : (
               <>
                 <div className="flex items-center justify-end">
@@ -651,15 +696,15 @@ export function ClientAccountForm(props: Props) {
                     placeholder="6-digit code"
                     className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-4 text-base font-medium tracking-[0.2em] text-[#1a3d34] placeholder:tracking-normal focus-visible:ring-0 focus-visible:ring-offset-0"
                   />
-                  <Button
+                  <SeatacPrimaryButton
                     type="button"
                     onClick={handleVerifyCode}
                     disabled={verifyLoading || otpCode.trim().length !== 6}
-                    className="booking-primary-button h-full min-w-32 rounded-none border-0 border-l border-l-[#2d6a4f]/15 px-5 shadow-none"
+                    className="h-full min-w-32 rounded-none border-0 border-l border-l-[#2d6a4f]/15 px-5 shadow-none"
                   >
                     {verifyLoading ? <Loader2 className="size-4 animate-spin" /> : null}
                     Verify
-                  </Button>
+                  </SeatacPrimaryButton>
                 </div>
               </>
             )}

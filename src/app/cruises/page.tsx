@@ -69,7 +69,7 @@ export default async function CruisesPage() {
           <div className="rounded-[2.2rem] border border-[#2d6a4f]/10 bg-white p-6 shadow-[0_4px_20px_rgba(45,106,79,0.06)] lg:p-8">
             <p className="text-[0.76rem] uppercase tracking-[0.34em] text-[#5a7a6e]">Cruise schedule</p>
             <h2 className="mt-3 text-[2rem] leading-[1.02] tracking-[-0.03em] text-[#1a3d34]">
-              Seattle cruise arrivals and departures should feed the whole airport workflow.
+              Check Seattle cruise arrivals and departures before planning your airport transfer.
             </h2>
             {cruiseSchedule.entries.length > 0 ? (
               <div className="mt-6 grid gap-4">

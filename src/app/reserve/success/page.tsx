@@ -85,6 +85,12 @@ export default async function ReserveSuccessPage({ searchParams }: Props) {
             </div>
 
             <div className="flex flex-wrap gap-3">
+              <Link
+                href={`/account/bookings/${encodeURIComponent(result.booking.reference)}`}
+                className="inline-flex h-12 items-center justify-center rounded-full px-6 text-sm font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
+              >
+                Manage booking
+              </Link>
               {!isConfirmed && result.session.url ? (
                 <Link
                   href={result.session.url}

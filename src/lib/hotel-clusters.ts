@@ -359,7 +359,7 @@ export const hotelClusterPages: Record<string, HotelClusterPage> = {
       },
       {
         question: "Do these pages connect to the cruise terminal guides?",
-        answer: "Yes. They are built to sit alongside the Pier 66 and Pier 91 planning pages.",
+        answer: "Yes. You can use these hotel pages together with the Pier 66 and Pier 91 guides when planning a pre-cruise or post-cruise stay.",
       },
     ],
   },

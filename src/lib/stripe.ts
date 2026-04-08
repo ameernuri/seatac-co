@@ -18,6 +18,7 @@ import {
   buildCustomerBookingConfirmationSms,
   buildDispatchBookingAlertSms,
 } from "@/lib/sms-templates";
+import { getBookingManageUrl } from "@/lib/account-bookings";
 import {
   getDispatchSmsRecipients,
   isSmsConfigured,
@@ -65,6 +66,7 @@ async function sendBookingSmsNotifications(
   const siteName = site?.name ?? "seatac.co";
   const siteSlug = site?.slug ?? env.siteSlug;
   const siteContext = await getNotificationSiteContext(siteSlug);
+  const bookingUrl = getBookingManageUrl(booking.reference, env.appUrl);
 
   if (isEmailConfigured()) {
     if (!booking.customerEmailConfirmationSentAt) {
@@ -131,7 +133,7 @@ async function sendBookingSmsNotifications(
   if (booking.customerSmsOptIn && !booking.customerSmsConfirmationSentAt) {
     try {
       await sendTextMessage({
-        body: buildCustomerBookingConfirmationSms({ booking, siteName }),
+        body: buildCustomerBookingConfirmationSms({ booking, bookingUrl, siteName }),
         to: booking.customerPhone,
       });
 
