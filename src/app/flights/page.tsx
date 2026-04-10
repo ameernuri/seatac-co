@@ -39,6 +39,7 @@ export default async function FlightsPage({ searchParams }: FlightsPageProps) {
   const departDate = params.departDate?.trim() || getDateOffset(14);
   const returnDate = params.returnDate?.trim() || "";
   const adults = Number.parseInt(params.adults ?? "1", 10);
+  const missingDestination = params.search === "1" && !destination;
   const shouldSearch = params.search === "1" && Boolean(destination);
   const result = shouldSearch
     ? await searchSkyscannerFlights({
@@ -175,7 +176,13 @@ export default async function FlightsPage({ searchParams }: FlightsPageProps) {
               Flight shopping runs through Skyscanner so seatac.co does not service tickets.
             </h2>
 
-            {result ? (
+            {missingDestination ? (
+              <div className="mt-6 rounded-[1.5rem] border border-amber-500/20 bg-amber-50 p-5">
+                <p className="text-sm leading-7 text-amber-900">
+                  Enter a destination airport code to search flights from Sea-Tac.
+                </p>
+              </div>
+            ) : result ? (
               result.offers.length > 0 ? (
                 <div className="mt-6 grid gap-4">
                   {result.offers.map((offer, index) => (
@@ -214,8 +221,7 @@ export default async function FlightsPage({ searchParams }: FlightsPageProps) {
               ) : (
                 <div className="mt-6 rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
                   <p className="text-sm leading-7 text-[#5a7a6e]">
-                    {result.meta.error ??
-                      "No normalized live offers were returned yet. The handoff path is still ready."}
+                    Flight search is temporarily unavailable. Try again soon.
                   </p>
                   {result.meta.searchUrl ? (
                     <div className="mt-4">
@@ -229,8 +235,7 @@ export default async function FlightsPage({ searchParams }: FlightsPageProps) {
             ) : (
               <div className="mt-6 rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
                 <p className="text-sm leading-7 text-[#5a7a6e]">
-                  Search an airport pair to start the outsourced flight flow, then move into hotels,
-                  rides, and airport planning from the same trip context.
+                  Search an airport pair to compare flights, then plan the ride, hotel, and airport timing.
                 </p>
               </div>
             )}

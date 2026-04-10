@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { ClearReserveDraft } from "@/components/clear-reserve-draft";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Card, CardContent } from "@/components/ui/card";
+import { formatBookingReference, formatBookingRoute } from "@/lib/booking-display";
 import { formatCurrency } from "@/lib/format";
 import { getReserveSuccessState, isStripeConfigured } from "@/lib/stripe";
 
@@ -33,6 +35,7 @@ export default async function ReserveSuccessPage({ searchParams }: Props) {
 
   return (
     <div className="site-shell min-h-screen">
+      <ClearReserveDraft storageKey="seatac-reserve-draft-v2" />
       <SiteHeader />
       <main className="mx-auto max-w-4xl px-6 py-16 lg:px-10">
         <Card className="rounded-[2rem] border border-primary/15 bg-white shadow-[0_8px_40px_rgba(45,106,79,0.12)]">
@@ -56,7 +59,7 @@ export default async function ReserveSuccessPage({ searchParams }: Props) {
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-[1.5rem] border border-primary/15 bg-primary/[0.04] p-5">
                 <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Reference</p>
-                <p className="mt-3 text-2xl font-semibold text-foreground">{result.booking.reference}</p>
+                <p className="mt-3 text-2xl font-semibold text-foreground">{formatBookingReference(result.booking.reference)}</p>
               </div>
               <div className="rounded-[1.5rem] border border-primary/15 bg-primary/[0.04] p-5">
                 <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
@@ -73,7 +76,7 @@ export default async function ReserveSuccessPage({ searchParams }: Props) {
             <div className="rounded-[1.7rem] border border-primary/15 bg-primary/[0.04] p-6 text-foreground/80">
               <div className="flex flex-col gap-2">
                 <div>
-                  <span className="text-muted-foreground">Route:</span> {result.booking.routeName}
+                  <span className="text-muted-foreground">Route:</span> {formatBookingRoute(result.booking)}
                 </div>
                 <div>
                   <span className="text-muted-foreground">Passenger:</span> {result.booking.customerName}

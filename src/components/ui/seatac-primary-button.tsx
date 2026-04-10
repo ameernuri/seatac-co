@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -30,13 +29,13 @@ export function SeatacPrimaryButton(props: LinkProps | ButtonProps) {
 
   if (typeof (props as LinkProps).href === "string") {
     return (
-      <Link href={(props as LinkProps).href} className={className}>
+      <a href={(props as LinkProps).href} className={className}>
         {props.children}
-      </Link>
+      </a>
     );
   }
 
-  const { children, className: _className, ...buttonProps } = props;
+  const { children, ...buttonProps } = props;
 
   return (
     <Button {...buttonProps} className={className}>

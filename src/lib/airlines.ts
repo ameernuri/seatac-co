@@ -5,11 +5,16 @@ export type AirlineGuide = {
   title: string;
   description: string;
   concourse: string;
+  checkInNotes?: string;
+  baggageNotes?: string;
+  airportUpgradeNotes?: string;
   pickupNotes: string;
   bestFor: string[];
   routeSlugs: string[];
   hotelSlugs: string[];
+  faq?: { question: string; answer: string }[];
   relatedLinks: { href: string; label: string }[];
+  sourceLinks?: { href: string; label: string }[];
 };
 
 export const airlineGuides: AirlineGuide[] = [
@@ -19,18 +24,61 @@ export const airlineGuides: AirlineGuide[] = [
     name: "Alaska Airlines",
     title: "Alaska Airlines at Sea-Tac",
     description:
-      "Alaska at Sea-Tac guide with terminal and concourse notes, arrivals pickup timing, departures planning, and airport transfer options.",
-    concourse: "Mostly N and C gates",
+      "Alaska Airlines at Sea-Tac guide with SEA Gateway check-in notes, N and C gate planning, baggage timing, arrivals pickup guidance, and airport transfer links.",
+    concourse: "Primarily North Satellite and C gates, with day-of-flight gate assignments subject to change",
+    checkInNotes:
+      "Alaska passengers use the SEA Gateway lobby experience at Sea-Tac, where the airport and airline added expanded check-in, bag-drop, ticketing, and passenger processing space. Use Alaska's day-of-travel tools and Sea-Tac signs for the exact counter, kiosk, and gate assignment.",
+    baggageNotes:
+      "Checked-bag timing matters for Alaska arrivals and departures because Alaska handles a large share of SEA traffic. Build in extra time during peak morning, afternoon, holiday, and cruise-season travel periods, especially if you are traveling with family bags, ski gear, or cruise luggage.",
+    airportUpgradeNotes:
+      "The Port of Seattle and Alaska Airlines completed the SEA Gateway project to modernize the front-end Alaska passenger journey at SEA. For travelers, the practical takeaway is better check-in and bag-drop flow, but not a reason to cut arrival time too close during busy banks.",
     pickupNotes:
-      "Give baggage claim a little more time on busy domestic banks, especially if you are traveling with checked bags or ski gear.",
-    bestFor: ["Domestic arrivals", "West Coast flights", "Frequent Seattle visitors"],
+      "For Alaska domestic arrivals, wait until the aircraft is at the gate and baggage status is clear before tightening the pickup window. If bags are checked, plan a wider buffer before meeting your ride at Sea-Tac because baggage claim and curb access can be the slowest part of the trip.",
+    bestFor: ["SEA Gateway check-in", "Domestic arrivals", "West Coast flights", "Frequent Seattle visitors"],
     routeSlugs: ["seatac-downtown-core", "seatac-pier-66", "seatac-pier-91"],
     hotelSlugs: ["edgewater-hotel", "inn-at-the-market", "coast-gateway-hotel"],
+    faq: [
+      {
+        question: "Where does Alaska Airlines check in at Sea-Tac?",
+        answer:
+          "Alaska travelers should follow Sea-Tac and Alaska signage for the SEA Gateway check-in and bag-drop area. The exact counter, kiosk, and bag-drop flow can vary by service need, so use Alaska's airport tools and day-of-travel airport signs before heading to security.",
+      },
+      {
+        question: "Which concourse does Alaska Airlines use at SEA?",
+        answer:
+          "Alaska commonly uses North Satellite and C gates at Sea-Tac, but SEA gate assignments can change. Treat the concourse guidance as a planning baseline and confirm the exact gate in Alaska's app, the airport monitors, or the Sea-Tac flight status page.",
+      },
+      {
+        question: "How early should Alaska passengers arrive at Sea-Tac?",
+        answer:
+          "Use Alaska and Sea-Tac day-of-travel guidance for the final arrival time. As a practical planning rule, give yourself more time when checking bags, traveling during holiday or cruise periods, or using airport parking before an Alaska departure.",
+      },
+      {
+        question: "When should I schedule pickup after an Alaska arrival?",
+        answer:
+          "Do not schedule the car for the published landing minute. For carry-on-only domestic Alaska arrivals, use a moderate post-gate buffer. For checked bags, family travel, ski gear, or cruise luggage, add more time so the pickup happens after baggage claim is realistic.",
+      },
+      {
+        question: "What pages should Alaska passengers open next?",
+        answer:
+          "Most Alaska passengers need the Sea-Tac arrivals page, departures page, flight lookup, airport transfer guide, or a route page such as Sea-Tac to downtown Seattle, Pier 66, or Pier 91.",
+      },
+    ],
     relatedLinks: [
-      { href: "/seatac-to-waterfront-hotels", label: "Seattle waterfront hotels" },
-      { href: "/seatac-to-cruise-pre-stay-hotels", label: "Cruise pre-stay hotels" },
-      { href: "/bell-street-cruise-terminal-pier-66", label: "Pier 66 guide" },
+      { href: "/arrivals", label: "Sea-Tac arrivals guide" },
+      { href: "/departures", label: "Sea-Tac departures guide" },
+      { href: "/flight", label: "Alaska flight lookup" },
+      { href: "/seatac-airport-transfer-guide", label: "Airport transfer guide" },
       { href: "/seatac-to-downtown-seattle", label: "Sea-Tac to downtown Seattle" },
+      { href: "/seatac-to-pier-66", label: "Sea-Tac to Pier 66" },
+      { href: "/seatac-to-pier-91", label: "Sea-Tac to Pier 91" },
+      { href: "/seatac-airport-hotels", label: "Sea-Tac airport hotels" },
+    ],
+    sourceLinks: [
+      { href: "https://www.portseattle.org/projects/sea-gateway-project", label: "Port of Seattle SEA Gateway project" },
+      { href: "https://www.alaskaair.com/content/airports", label: "Alaska Airlines airport information" },
+      { href: "https://www.portseattle.org/sea-tac/airlines-destinations", label: "Sea-Tac airlines and destinations" },
+      { href: "https://www.portseattle.org/sea-tac/maps", label: "Sea-Tac airport maps" },
     ],
   },
   {

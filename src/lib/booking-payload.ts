@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db/client";
@@ -16,6 +16,7 @@ import {
   normalizeDispatchOverride,
 } from "@/lib/dispatch-rules";
 import { env } from "@/env";
+import { getActiveBookingHoldCutoff } from "@/lib/booking-holds";
 import { getBookingConstraintsBySiteId } from "@/lib/booking-constraints-store";
 import { validateBookingWindow } from "@/lib/booking-constraints";
 import { quoteReservation, type ServiceMode } from "@/lib/quote";
@@ -77,6 +78,33 @@ function buildReference() {
   return `SC-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 }
 
+const availabilityBookingColumns = {
+  dispatchOverride: bookings.dispatchOverride,
+  dropoffAddress: bookings.dropoffAddress,
+  pickupAddress: bookings.pickupAddress,
+  pickupAt: bookings.pickupAt,
+  returnAt: bookings.returnAt,
+  serviceEndAt: bookings.serviceEndAt,
+  siteId: bookings.siteId,
+  vehicleUnitId: bookings.vehicleUnitId,
+} satisfies Record<string, unknown>;
+
+const bookingDraftColumns = {
+  customerEmail: bookings.customerEmail,
+  id: bookings.id,
+  paymentCheckoutSessionId: bookings.paymentCheckoutSessionId,
+  paymentStatus: bookings.paymentStatus,
+  dropoffLabel: bookings.dropoffLabel,
+  pickupAt: bookings.pickupAt,
+  pickupLabel: bookings.pickupLabel,
+  reference: bookings.reference,
+  routeName: bookings.routeName,
+  siteId: bookings.siteId,
+  totalCents: bookings.totalCents,
+  vehicleId: bookings.vehicleId,
+  vehicleUnitId: bookings.vehicleUnitId,
+} satisfies Record<string, unknown>;
+
 async function findAvailableVehicleUnit(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   vehicleId: string,
@@ -94,17 +122,22 @@ async function findAvailableVehicleUnit(
   }
 
   const overlappingBookings = await tx
-    .select()
+    .select(availabilityBookingColumns)
     .from(bookings)
     .where(
       and(
         inArray(
-          bookings.status,
-          ["pending", "confirmed", "paid"],
-        ),
-        inArray(
           bookings.vehicleUnitId,
           units.map((unit) => unit.id),
+        ),
+        or(
+          eq(bookings.paymentStatus, "paid"),
+          eq(bookings.status, "confirmed"),
+          and(
+            eq(bookings.status, "pending"),
+            eq(bookings.paymentStatus, "pending"),
+            gt(bookings.updatedAt, getActiveBookingHoldCutoff()),
+          ),
         ),
       ),
     );
@@ -391,7 +424,7 @@ export async function createBookingDraft(
         paymentStatus: "pending",
         paymentMethod: "stripe",
       })
-      .returning();
+      .returning(bookingDraftColumns);
 
     return booking;
   });

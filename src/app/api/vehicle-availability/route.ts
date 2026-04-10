@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -17,6 +17,7 @@ import {
   normalizeDispatchOverride,
 } from "@/lib/dispatch-rules";
 import { env } from "@/env";
+import { getActiveBookingHoldCutoff } from "@/lib/booking-holds";
 import { getBookingConstraintsBySiteId } from "@/lib/booking-constraints-store";
 import { validateBookingWindow } from "@/lib/booking-constraints";
 import { getRequiredSite } from "@/lib/sites";
@@ -106,12 +107,29 @@ export async function POST(request: Request) {
   }
 
   const overlapping = await db
-    .select()
+    .select({
+      dispatchOverride: bookings.dispatchOverride,
+      dropoffAddress: bookings.dropoffAddress,
+      pickupAddress: bookings.pickupAddress,
+      pickupAt: bookings.pickupAt,
+      returnAt: bookings.returnAt,
+      serviceEndAt: bookings.serviceEndAt,
+      siteId: bookings.siteId,
+      vehicleUnitId: bookings.vehicleUnitId,
+    })
     .from(bookings)
     .where(
       and(
-        inArray(bookings.status, ["pending", "confirmed", "paid"]),
         inArray(bookings.vehicleUnitId, unitIds),
+        or(
+          eq(bookings.paymentStatus, "paid"),
+          eq(bookings.status, "confirmed"),
+          and(
+            eq(bookings.status, "pending"),
+            eq(bookings.paymentStatus, "pending"),
+            gt(bookings.updatedAt, getActiveBookingHoldCutoff()),
+          ),
+        ),
       ),
     );
   const blockRows = await db

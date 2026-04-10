@@ -110,7 +110,7 @@ export default async function ParkingPage({ searchParams }: ParkingPageProps) {
           <div className="rounded-[2.2rem] border border-[#2d6a4f]/10 bg-white p-6 shadow-[0_4px_20px_rgba(45,106,79,0.06)] lg:p-8">
             <p className="text-[0.76rem] uppercase tracking-[0.34em] text-[#5a7a6e]">Live parking options</p>
             <h2 className="mt-3 text-[2rem] leading-[1.02] tracking-[-0.03em] text-[#1a3d34]">
-              Parking search belongs with the airport planning layer, not inside a custom reservation stack.
+              Compare parking options near Sea-Tac for your travel window.
             </h2>
             {result ? (
               result.offers.length > 0 ? (
@@ -151,14 +151,14 @@ export default async function ParkingPage({ searchParams }: ParkingPageProps) {
               ) : (
                 <div className="mt-6 rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
                   <p className="text-sm leading-7 text-[#5a7a6e]">
-                    {result.meta.error ?? "No ParkWhiz parking options were returned for that time window."}
+                    Parking results are temporarily unavailable. Try another time or check back soon.
                   </p>
                 </div>
               )
             ) : (
               <div className="mt-6 rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
                 <p className="text-sm leading-7 text-[#5a7a6e]">
-                  Search a parking window to compare outsourced parking inventory for Sea-Tac trips.
+                  Search a parking window to compare options near the airport.
                 </p>
               </div>
             )}

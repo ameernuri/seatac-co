@@ -110,6 +110,7 @@ const faqEntries = [
 ];
 
 const relatedLinks = [
+  { label: "Sea-Tac airport FAQ", href: "/seatac-airport-faq" },
   { label: "Sea-Tac departures", href: "/departures" },
   { label: "Sea-Tac arrivals", href: "/arrivals" },
   { label: "Sea-Tac airport transfer guide", href: "/seatac-airport-transfer-guide" },

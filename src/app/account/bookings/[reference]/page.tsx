@@ -6,8 +6,14 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { SeatacPrimaryButton } from "@/components/ui/seatac-primary-button";
 import { getBookingForUser } from "@/lib/account-bookings";
+import {
+  formatBookingLocation,
+  formatBookingReference,
+  formatBookingRoute,
+} from "@/lib/booking-display";
 import { centsToDollars, formatCurrency, formatDateTime } from "@/lib/format";
 import { getServerSession } from "@/lib/session";
+import { getVehicleDisplayName } from "@/lib/vehicle-display";
 
 type Props = {
   params: Promise<{
@@ -41,7 +47,7 @@ export default async function AccountBookingPage({ params }: Props) {
                 Booking
               </p>
               <h1 className="text-4xl font-semibold leading-tight text-[#1a3d34]">
-                {booking.reference}
+                {formatBookingReference(booking.reference)}
               </h1>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -82,7 +88,7 @@ export default async function AccountBookingPage({ params }: Props) {
                       Route
                     </p>
                     <p className="text-lg font-semibold text-[#1a3d34]">
-                      {booking.routeName ?? `${booking.pickupLabel} to ${booking.dropoffLabel ?? "destination"}`}
+                      {formatBookingRoute(booking)}
                     </p>
                   </div>
                   <div className="space-y-1">
@@ -97,7 +103,9 @@ export default async function AccountBookingPage({ params }: Props) {
                     <p className="text-[0.76rem] uppercase tracking-[0.28em] text-[#5a7a6e]">
                       Vehicle
                     </p>
-                    <p className="text-lg font-semibold text-[#1a3d34]">{booking.vehicleName}</p>
+                    <p className="text-lg font-semibold text-[#1a3d34]">
+                      {getVehicleDisplayName(booking.vehicleName)}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -115,14 +123,20 @@ export default async function AccountBookingPage({ params }: Props) {
                   <p className="text-[0.76rem] uppercase tracking-[0.28em] text-[#5a7a6e]">
                     Pickup address
                   </p>
-                  <p className="mt-1 font-medium text-[#1a3d34]">{booking.pickupAddress}</p>
+                  <p className="mt-1 font-medium text-[#1a3d34]">
+                    {formatBookingLocation(booking.pickupLabel || booking.pickupAddress) ||
+                      booking.pickupAddress}
+                  </p>
                 </div>
                 {booking.dropoffAddress ? (
                   <div>
                     <p className="text-[0.76rem] uppercase tracking-[0.28em] text-[#5a7a6e]">
                       Drop-off address
                     </p>
-                    <p className="mt-1 font-medium text-[#1a3d34]">{booking.dropoffAddress}</p>
+                    <p className="mt-1 font-medium text-[#1a3d34]">
+                      {formatBookingLocation(booking.dropoffLabel || booking.dropoffAddress) ||
+                        booking.dropoffAddress}
+                    </p>
                   </div>
                 ) : null}
                 <div>
@@ -135,7 +149,7 @@ export default async function AccountBookingPage({ params }: Props) {
               </div>
 
               <div className="rounded-[1.4rem] border border-[#2d6a4f]/10 bg-[#f7faf8] p-5 text-sm leading-6 text-[#5a7a6e]">
-                Need route or timing changes? Call dispatch and reference <span className="font-semibold text-[#1a3d34]">{booking.reference}</span>.
+                Need route or timing changes? Call dispatch and reference <span className="font-semibold text-[#1a3d34]">{formatBookingReference(booking.reference)}</span>.
               </div>
             </aside>
           </div>

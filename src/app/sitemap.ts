@@ -89,6 +89,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.83,
     },
     {
+      url: `${baseUrl}/seatac-airport-faq`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.82,
+    },
+    {
       url: `${baseUrl}/seatac-hotel-transfer-guide`,
       lastModified: now,
       changeFrequency: "weekly",

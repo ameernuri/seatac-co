@@ -1,12 +1,47 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { JsonLd } from "@/components/json-ld";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { getPublishedBlogPostBySlug, renderBlogParagraphs } from "@/lib/blog";
+import { getPublishedBlogPostBySlug, renderBlogBlocks } from "@/lib/blog";
 import { buildArticleJsonLd, buildSeatacMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
+
+function renderInlineContent(text: string) {
+  const segments = text.split(/(\[[^\]]+\]\([^)]+\))/g).filter(Boolean);
+
+  return segments.map((segment, index) => {
+    const match = segment.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (!match) {
+      return <span key={index}>{segment}</span>;
+    }
+
+    const [, label, href] = match;
+    const isInternal = href.startsWith("/");
+
+    if (isInternal) {
+      return (
+        <Link key={index} href={href} className="font-semibold text-emerald-700 underline decoration-emerald-200 underline-offset-4 transition-colors hover:text-emerald-800">
+          {label}
+        </Link>
+      );
+    }
+
+    return (
+      <a
+        key={index}
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="font-semibold text-emerald-700 underline decoration-emerald-200 underline-offset-4 transition-colors hover:text-emerald-800"
+      >
+        {label}
+      </a>
+    );
+  });
+}
 
 function formatDate(value: Date | string | null | undefined) {
   if (!value) {
@@ -56,7 +91,7 @@ export default async function BlogPostPage({
     notFound();
   }
 
-  const paragraphs = renderBlogParagraphs(post.content);
+  const blocks = renderBlogBlocks(post.content);
 
   return (
     <div className="site-shell min-h-screen bg-[#f8f9fa]">
@@ -89,9 +124,30 @@ export default async function BlogPostPage({
             <p className="mt-5 text-xl leading-9 text-slate-600">{post.excerpt}</p>
           ) : null}
           <div className="mt-10 space-y-6 text-lg leading-8 text-slate-700">
-            {paragraphs.map((paragraph, index) => (
-              <p key={index}>{paragraph}</p>
-            ))}
+            {blocks.map((block, index) => {
+              if (block.type === "heading") {
+                return (
+                  <h2
+                    key={index}
+                    className="pt-4 text-2xl font-bold tracking-[-0.02em] text-emerald-950"
+                  >
+                    {block.text}
+                  </h2>
+                );
+              }
+
+              if (block.type === "list") {
+                return (
+                  <ul key={index} className="space-y-3 pl-6 text-base leading-7 text-slate-700 marker:text-emerald-700 list-disc">
+                    {block.items.map((item, itemIndex) => (
+                      <li key={itemIndex}>{renderInlineContent(item)}</li>
+                    ))}
+                  </ul>
+                );
+              }
+
+              return <p key={index}>{renderInlineContent(block.text)}</p>;
+            })}
           </div>
         </article>
       </main>

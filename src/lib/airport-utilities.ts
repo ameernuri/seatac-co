@@ -116,6 +116,7 @@ export const airportUtilityPages: AirportUtilityPage[] = [
     ],
     usefulLinks: [
       { label: "Flight lookup", href: "/flight" },
+      { label: "Sea-Tac airport FAQ", href: "/seatac-airport-faq" },
       { label: "Sea-Tac airport hotels", href: "/seatac-airport-hotels" },
       { label: "Downtown Seattle hotel transfers", href: "/seatac-to-downtown-seattle-hotels" },
       { label: "Sea-Tac to Pier 66", href: "/seatac-to-pier-66" },
@@ -207,6 +208,7 @@ export const airportUtilityPages: AirportUtilityPage[] = [
       },
     ],
     usefulLinks: [
+      { label: "Sea-Tac airport FAQ", href: "/seatac-airport-faq" },
       { label: "Downtown Seattle hotel transfers", href: "/seatac-to-downtown-seattle-hotels" },
       { label: "Bellevue hotel transfers", href: "/seatac-to-bellevue-hotels" },
       { label: "Waterfront hotel transfers", href: "/seatac-to-waterfront-hotels" },

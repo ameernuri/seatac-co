@@ -100,14 +100,12 @@ export function GoogleAddressInput({
     const query = value.trim();
 
     if (!query) {
-      setPredictionItems([]);
       return;
     }
 
     const service = autocompleteServiceRef.current;
 
     if (!service) {
-      setPredictionItems([]);
       return;
     }
 
@@ -156,7 +154,7 @@ export function GoogleAddressInput({
   const visibleItems =
     value.trim() === "" ? commonItems : predictionItems;
 
-  async function selectPrediction(placeId: string, fallbackValue: string) {
+  async function selectPrediction(placeId: string, fallbackValue: string, displayValue: string) {
     const service = placesServiceRef.current;
 
     if (!service) {
@@ -182,7 +180,7 @@ export function GoogleAddressInput({
           return;
         }
 
-        const label = place.formatted_address || place.name || fallbackValue;
+        const label = displayValue || place.name || place.formatted_address || fallbackValue;
         onChangeRef.current(label);
         onResolvedRef.current({
           label,
@@ -216,6 +214,7 @@ export function GoogleAddressInput({
         onChange={(event) => {
           onChange(event.target.value);
           onResolved(null);
+          setPredictionItems([]);
         }}
         placeholder={placeholder}
         className={cn("seatac-address-input", className)}
@@ -238,7 +237,7 @@ export function GoogleAddressInput({
                     selectCommon(item.value);
                     return;
                   }
-                  void selectPrediction(item.placeId, item.value);
+                  void selectPrediction(item.placeId, item.value, item.title);
                 }}
                 className="rounded-xl px-3 py-3 text-left transition hover:bg-[#f4f7f3]"
               >

@@ -973,6 +973,10 @@ export const seoPages = pgTable(
     projectId: uuid("project_id")
       .notNull()
       .references(() => seoProjects.id, { onDelete: "cascade" }),
+    bundleId: uuid("bundle_id"),
+    templateFamilyId: uuid("template_family_id").references(() => seoTemplateFamilies.id, {
+      onDelete: "set null",
+    }),
     url: text("url").notNull(),
     pageType: varchar("page_type", { length: 48 }).notNull(),
     keywordCluster: varchar("keyword_cluster", { length: 96 }),
@@ -993,6 +997,8 @@ export const seoPages = pgTable(
     projectUrlIdx: uniqueIndex("seo_pages_project_url_idx").on(table.projectId, table.url),
     projectTypeIdx: index("seo_pages_project_type_idx").on(table.projectId, table.pageType),
     clusterIdx: index("seo_pages_cluster_idx").on(table.keywordCluster),
+    bundleIdx: index("seo_pages_bundle_idx").on(table.bundleId),
+    templateFamilyIdx: index("seo_pages_template_family_idx").on(table.templateFamilyId),
   }),
 );
 
@@ -1039,6 +1045,7 @@ export const seoKeywords = pgTable(
     projectId: uuid("project_id")
       .notNull()
       .references(() => seoProjects.id, { onDelete: "cascade" }),
+    bundleId: uuid("bundle_id"),
     targetPageId: uuid("target_page_id").references(() => seoPages.id, {
       onDelete: "set null",
     }),
@@ -1064,6 +1071,7 @@ export const seoKeywords = pgTable(
       table.device,
     ),
     clusterIdx: index("seo_keywords_cluster_idx").on(table.projectId, table.cluster),
+    bundleIdx: index("seo_keywords_bundle_idx").on(table.bundleId),
   }),
 );
 
@@ -1312,6 +1320,119 @@ export const seoLoopRuns = pgTable(
   }),
 );
 
+export const seoContentBundles = pgTable(
+  "seo_content_bundles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => seoProjects.id, { onDelete: "cascade" }),
+    slug: varchar("slug", { length: 96 }).notNull(),
+    label: varchar("label", { length: 180 }).notNull(),
+    cluster: varchar("cluster", { length: 96 }).notNull(),
+    audience: varchar("audience", { length: 120 }),
+    intent: varchar("intent", { length: 48 }),
+    status: varchar("status", { length: 24 }).notNull().default("partial"),
+    description: text("description"),
+    primaryPageId: uuid("primary_page_id").references(() => seoPages.id, {
+      onDelete: "set null",
+    }),
+    primaryKeywordId: uuid("primary_keyword_id").references(() => seoKeywords.id, {
+      onDelete: "set null",
+    }),
+    pageIds: jsonb("page_ids").notNull().default([]),
+    keywordIds: jsonb("keyword_ids").notNull().default([]),
+    taskIds: jsonb("task_ids").notNull().default([]),
+    backlogItemIds: jsonb("backlog_item_ids").notNull().default([]),
+    dossierIds: jsonb("dossier_ids").notNull().default([]),
+    blogPostIds: jsonb("blog_post_ids").notNull().default([]),
+    requiredAssetTypes: jsonb("required_asset_types").notNull().default([]),
+    presentAssetTypes: jsonb("present_asset_types").notNull().default([]),
+    missingAssetTypes: jsonb("missing_asset_types").notNull().default([]),
+    completenessScore: integer("completeness_score").notNull().default(0),
+    futureAdsCandidate: boolean("future_ads_candidate").notNull().default(false),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectSlugIdx: uniqueIndex("seo_content_bundles_project_slug_idx").on(
+      table.projectId,
+      table.slug,
+    ),
+    projectClusterIdx: index("seo_content_bundles_project_cluster_idx").on(
+      table.projectId,
+      table.cluster,
+    ),
+    projectStatusIdx: index("seo_content_bundles_project_status_idx").on(
+      table.projectId,
+      table.status,
+      table.completenessScore,
+    ),
+    primaryPageIdx: index("seo_content_bundles_primary_page_idx").on(table.primaryPageId),
+  }),
+);
+
+export const seoDemandSignals = pgTable(
+  "seo_demand_signals",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => seoProjects.id, { onDelete: "cascade" }),
+    bundleId: uuid("bundle_id").references(() => seoContentBundles.id, {
+      onDelete: "set null",
+    }),
+    templateFamilyId: uuid("template_family_id").references(() => seoTemplateFamilies.id, {
+      onDelete: "set null",
+    }),
+    pageId: uuid("page_id").references(() => seoPages.id, { onDelete: "set null" }),
+    keywordId: uuid("keyword_id").references(() => seoKeywords.id, { onDelete: "set null" }),
+    source: varchar("source", { length: 48 }).notNull(),
+    signalType: varchar("signal_type", { length: 48 }).notNull(),
+    signalKey: varchar("signal_key", { length: 180 }).notNull(),
+    title: varchar("title", { length: 220 }).notNull(),
+    summary: text("summary"),
+    audience: varchar("audience", { length: 120 }),
+    intent: varchar("intent", { length: 48 }),
+    cluster: varchar("cluster", { length: 96 }),
+    priority: integer("priority").notNull().default(0),
+    signalStrength: integer("signal_strength").notNull().default(0),
+    status: varchar("status", { length: 24 }).notNull().default("active"),
+    recommendedAction: text("recommended_action"),
+    suggestedUrl: varchar("suggested_url", { length: 240 }),
+    evidence: jsonb("evidence").notNull().default({}),
+    capturedAt: timestamp("captured_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectSignalKeyIdx: uniqueIndex("seo_demand_signals_project_signal_key_idx").on(
+      table.projectId,
+      table.signalKey,
+    ),
+    projectStatusPriorityIdx: index("seo_demand_signals_project_status_priority_idx").on(
+      table.projectId,
+      table.status,
+      table.priority,
+    ),
+    projectClusterIdx: index("seo_demand_signals_project_cluster_idx").on(
+      table.projectId,
+      table.cluster,
+    ),
+    pageIdx: index("seo_demand_signals_page_idx").on(table.pageId),
+    keywordIdx: index("seo_demand_signals_keyword_idx").on(table.keywordId),
+    bundleIdx: index("seo_demand_signals_bundle_idx").on(table.bundleId),
+  }),
+);
+
 export const seoTasks = pgTable(
   "seo_tasks",
   {
@@ -1319,6 +1440,12 @@ export const seoTasks = pgTable(
     projectId: uuid("project_id")
       .notNull()
       .references(() => seoProjects.id, { onDelete: "cascade" }),
+    bundleId: uuid("bundle_id").references(() => seoContentBundles.id, {
+      onDelete: "set null",
+    }),
+    templateFamilyId: uuid("template_family_id").references(() => seoTemplateFamilies.id, {
+      onDelete: "set null",
+    }),
     pageId: uuid("page_id").references(() => seoPages.id, { onDelete: "set null" }),
     keywordId: uuid("keyword_id").references(() => seoKeywords.id, { onDelete: "set null" }),
     experimentId: uuid("experiment_id").references(() => seoExperiments.id, {
@@ -1355,6 +1482,8 @@ export const seoTasks = pgTable(
     ),
     pageIdx: index("seo_tasks_page_idx").on(table.pageId),
     keywordIdx: index("seo_tasks_keyword_idx").on(table.keywordId),
+    bundleIdx: index("seo_tasks_bundle_idx").on(table.bundleId),
+    templateFamilyIdx: index("seo_tasks_template_family_idx").on(table.templateFamilyId),
   }),
 );
 
@@ -1402,6 +1531,12 @@ export const seoBacklogItems = pgTable(
     projectId: uuid("project_id")
       .notNull()
       .references(() => seoProjects.id, { onDelete: "cascade" }),
+    bundleId: uuid("bundle_id").references(() => seoContentBundles.id, {
+      onDelete: "set null",
+    }),
+    templateFamilyId: uuid("template_family_id").references(() => seoTemplateFamilies.id, {
+      onDelete: "set null",
+    }),
     pageId: uuid("page_id").references(() => seoPages.id, { onDelete: "set null" }),
     keywordId: uuid("keyword_id").references(() => seoKeywords.id, { onDelete: "set null" }),
     source: varchar("source", { length: 48 }).notNull(),
@@ -1429,6 +1564,90 @@ export const seoBacklogItems = pgTable(
       table.projectId,
       table.status,
       table.priority,
+    ),
+    bundleIdx: index("seo_backlog_items_bundle_idx").on(table.bundleId),
+    templateFamilyIdx: index("seo_backlog_items_template_family_idx").on(table.templateFamilyId),
+  }),
+);
+
+export const seoCoverageMaps = pgTable(
+  "seo_coverage_maps",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => seoProjects.id, { onDelete: "cascade" }),
+    cluster: varchar("cluster", { length: 96 }).notNull(),
+    label: varchar("label", { length: 160 }).notNull(),
+    audience: varchar("audience", { length: 120 }),
+    intent: varchar("intent", { length: 48 }),
+    status: varchar("status", { length: 24 }).notNull().default("missing"),
+    primaryPageId: uuid("primary_page_id").references(() => seoPages.id, {
+      onDelete: "set null",
+    }),
+    primaryPageType: varchar("primary_page_type", { length: 48 }),
+    supportPageIds: jsonb("support_page_ids").notNull().default([]),
+    trackedKeywordIds: jsonb("tracked_keyword_ids").notNull().default([]),
+    missingAssetTypes: jsonb("missing_asset_types").notNull().default([]),
+    coverageScore: integer("coverage_score").notNull().default(0),
+    totalTrackedKeywords: integer("total_tracked_keywords").notNull().default(0),
+    totalPages: integer("total_pages").notNull().default(0),
+    totalSupportPages: integer("total_support_pages").notNull().default(0),
+    nextSuggestedTitle: varchar("next_suggested_title", { length: 200 }),
+    nextSuggestedUrl: varchar("next_suggested_url", { length: 240 }),
+    evidence: jsonb("evidence").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectClusterIdx: uniqueIndex("seo_coverage_maps_project_cluster_idx").on(
+      table.projectId,
+      table.cluster,
+    ),
+    projectStatusIdx: index("seo_coverage_maps_project_status_idx").on(
+      table.projectId,
+      table.status,
+      table.coverageScore,
+    ),
+    primaryPageIdx: index("seo_coverage_maps_primary_page_idx").on(table.primaryPageId),
+  }),
+);
+
+export const seoTemplateFamilies = pgTable(
+  "seo_template_families",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => seoProjects.id, { onDelete: "cascade" }),
+    slug: varchar("slug", { length: 80 }).notNull(),
+    label: varchar("label", { length: 160 }).notNull(),
+    description: text("description"),
+    pageTypes: jsonb("page_types").notNull().default([]),
+    itemTypes: jsonb("item_types").notNull().default([]),
+    requiredSections: jsonb("required_sections").notNull().default([]),
+    checklist: jsonb("checklist").notNull().default([]),
+    writingGuidance: text("writing_guidance"),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectSlugIdx: uniqueIndex("seo_template_families_project_slug_idx").on(
+      table.projectId,
+      table.slug,
+    ),
+    projectLabelIdx: index("seo_template_families_project_label_idx").on(
+      table.projectId,
+      table.label,
     ),
   }),
 );
@@ -1467,6 +1686,12 @@ export const blogPosts = pgTable(
     siteId: uuid("site_id")
       .notNull()
       .references(() => sites.id, { onDelete: "cascade" }),
+    bundleId: uuid("bundle_id").references(() => seoContentBundles.id, {
+      onDelete: "set null",
+    }),
+    templateFamilyId: uuid("template_family_id").references(() => seoTemplateFamilies.id, {
+      onDelete: "set null",
+    }),
     authorId: uuid("author_id").references(() => contentAuthors.id, { onDelete: "set null" }),
     slug: varchar("slug", { length: 160 }).notNull(),
     title: varchar("title", { length: 220 }).notNull(),
@@ -1491,6 +1716,48 @@ export const blogPosts = pgTable(
     siteStatusIdx: index("blog_posts_site_status_idx").on(table.siteId, table.status),
     sitePublishedIdx: index("blog_posts_site_published_idx").on(table.siteId, table.publishedAt),
     authorIdx: index("blog_posts_author_idx").on(table.authorId),
+    bundleIdx: index("blog_posts_bundle_idx").on(table.bundleId),
+    templateFamilyIdx: index("blog_posts_template_family_idx").on(table.templateFamilyId),
+  }),
+);
+
+export const blogPostRevisions = pgTable(
+  "blog_post_revisions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    blogPostId: uuid("blog_post_id")
+      .notNull()
+      .references(() => blogPosts.id, { onDelete: "cascade" }),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    revisionNumber: integer("revision_number").notNull(),
+    revisionType: varchar("revision_type", { length: 48 }).notNull().default("manual_edit"),
+    createdBy: varchar("created_by", { length: 160 }),
+    title: varchar("title", { length: 220 }).notNull(),
+    slug: varchar("slug", { length: 160 }).notNull(),
+    excerpt: text("excerpt"),
+    seoTitle: varchar("seo_title", { length: 220 }),
+    seoDescription: varchar("seo_description", { length: 320 }),
+    category: varchar("category", { length: 80 }),
+    coverImage: text("cover_image"),
+    content: text("content").notNull().default(""),
+    postStatus: varchar("post_status", { length: 24 }).notNull().default("draft"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    postRevisionIdx: uniqueIndex("blog_post_revisions_post_revision_idx").on(
+      table.blogPostId,
+      table.revisionNumber,
+    ),
+    siteCreatedIdx: index("blog_post_revisions_site_created_idx").on(
+      table.siteId,
+      table.createdAt,
+    ),
   }),
 );
 
@@ -1501,10 +1768,16 @@ export const seoResearchDossiers = pgTable(
     projectId: uuid("project_id")
       .notNull()
       .references(() => seoProjects.id, { onDelete: "cascade" }),
+    bundleId: uuid("bundle_id").references(() => seoContentBundles.id, {
+      onDelete: "set null",
+    }),
     pageId: uuid("page_id").references(() => seoPages.id, { onDelete: "set null" }),
     keywordId: uuid("keyword_id").references(() => seoKeywords.id, { onDelete: "set null" }),
     taskId: uuid("task_id").references(() => seoTasks.id, { onDelete: "set null" }),
     backlogItemId: uuid("backlog_item_id").references(() => seoBacklogItems.id, {
+      onDelete: "set null",
+    }),
+    templateFamilyId: uuid("template_family_id").references(() => seoTemplateFamilies.id, {
       onDelete: "set null",
     }),
     title: varchar("title", { length: 220 }).notNull(),
@@ -1533,6 +1806,8 @@ export const seoResearchDossiers = pgTable(
     keywordIdx: index("seo_research_dossiers_keyword_idx").on(table.keywordId),
     taskIdx: index("seo_research_dossiers_task_idx").on(table.taskId),
     backlogItemIdx: index("seo_research_dossiers_backlog_item_idx").on(table.backlogItemId),
+    bundleIdx: index("seo_research_dossiers_bundle_idx").on(table.bundleId),
+    templateFamilyIdx: index("seo_research_dossiers_template_family_idx").on(table.templateFamilyId),
   }),
 );
 
@@ -1666,6 +1941,182 @@ export const adsPerformanceSnapshots = pgTable(
   }),
 );
 
+export const seoAgentRuns = pgTable(
+  "seo_agent_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => seoProjects.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").references(() => seoTasks.id, { onDelete: "set null" }),
+    backlogItemId: uuid("backlog_item_id").references(() => seoBacklogItems.id, {
+      onDelete: "set null",
+    }),
+    dossierId: uuid("dossier_id").references(() => seoResearchDossiers.id, {
+      onDelete: "set null",
+    }),
+    blogPostId: uuid("blog_post_id").references(() => blogPosts.id, { onDelete: "set null" }),
+    agentName: varchar("agent_name", { length: 120 }).notNull().default("openclaw"),
+    runType: varchar("run_type", { length: 48 }).notNull(),
+    status: varchar("status", { length: 24 }).notNull().default("running"),
+    automationLevel: varchar("automation_level", { length: 32 }).notNull().default("observer"),
+    approvalState: varchar("approval_state", { length: 32 }).notNull().default("not_required"),
+    instructionSummary: text("instruction_summary"),
+    allowedActions: jsonb("allowed_actions").notNull().default([]),
+    actionsTaken: jsonb("actions_taken").notNull().default([]),
+    filesChanged: jsonb("files_changed").notNull().default([]),
+    dbRowsChanged: jsonb("db_rows_changed").notNull().default([]),
+    resultSummary: text("result_summary"),
+    error: text("error"),
+    leaseOwner: varchar("lease_owner", { length: 120 }),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
+    staleAt: timestamp("stale_at", { withTimezone: true }),
+    metadata: jsonb("metadata").notNull().default({}),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectStartedIdx: index("seo_agent_runs_project_started_idx").on(
+      table.projectId,
+      table.startedAt,
+    ),
+    projectStatusIdx: index("seo_agent_runs_project_status_idx").on(
+      table.projectId,
+      table.status,
+      table.startedAt,
+    ),
+    taskIdx: index("seo_agent_runs_task_idx").on(table.taskId),
+    backlogItemIdx: index("seo_agent_runs_backlog_item_idx").on(table.backlogItemId),
+    leaseIdx: index("seo_agent_runs_lease_idx").on(
+      table.projectId,
+      table.status,
+      table.leaseExpiresAt,
+    ),
+  }),
+);
+
+export const seoContentQaChecks = pgTable(
+  "seo_content_qa_checks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => seoProjects.id, { onDelete: "cascade" }),
+    pageId: uuid("page_id").references(() => seoPages.id, { onDelete: "set null" }),
+    keywordId: uuid("keyword_id").references(() => seoKeywords.id, { onDelete: "set null" }),
+    taskId: uuid("task_id").references(() => seoTasks.id, { onDelete: "set null" }),
+    backlogItemId: uuid("backlog_item_id").references(() => seoBacklogItems.id, {
+      onDelete: "set null",
+    }),
+    dossierId: uuid("dossier_id").references(() => seoResearchDossiers.id, {
+      onDelete: "set null",
+    }),
+    blogPostId: uuid("blog_post_id").references(() => blogPosts.id, { onDelete: "set null" }),
+    agentRunId: uuid("agent_run_id").references(() => seoAgentRuns.id, { onDelete: "set null" }),
+    checkType: varchar("check_type", { length: 48 }).notNull().default("pre_publish"),
+    status: varchar("status", { length: 24 }).notNull().default("completed"),
+    reviewState: varchar("review_state", { length: 32 }).notNull().default("draft"),
+    approvalState: varchar("approval_state", { length: 32 }).notNull().default("blocked"),
+    score: integer("score").notNull().default(0),
+    maxScore: integer("max_score").notNull().default(100),
+    minSourceCount: integer("min_source_count").notNull().default(3),
+    sourceCount: integer("source_count").notNull().default(0),
+    passedSourceCheck: boolean("passed_source_check").notNull().default(false),
+    sourceQualityScore: integer("source_quality_score").notNull().default(0),
+    passedSourceQualityCheck: boolean("passed_source_quality_check").notNull().default(false),
+    sourceQualityFindings: jsonb("source_quality_findings").notNull().default([]),
+    requiredSections: jsonb("required_sections").notNull().default([]),
+    presentSections: jsonb("present_sections").notNull().default([]),
+    missingSections: jsonb("missing_sections").notNull().default([]),
+    internalLinkCount: integer("internal_link_count").notNull().default(0),
+    requiredInternalLinkCount: integer("required_internal_link_count").notNull().default(3),
+    passedInternalLinkCheck: boolean("passed_internal_link_check").notNull().default(false),
+    recommendations: jsonb("recommendations").notNull().default([]),
+    publishBlockers: jsonb("publish_blockers").notNull().default([]),
+    approvedBy: varchar("approved_by", { length: 160 }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    approvalNote: text("approval_note"),
+    metadata: jsonb("metadata").notNull().default({}),
+    checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectCheckedIdx: index("seo_content_qa_checks_project_checked_idx").on(
+      table.projectId,
+      table.checkedAt,
+    ),
+    projectApprovalIdx: index("seo_content_qa_checks_project_approval_idx").on(
+      table.projectId,
+      table.approvalState,
+      table.checkedAt,
+    ),
+    backlogItemIdx: index("seo_content_qa_checks_backlog_item_idx").on(table.backlogItemId),
+    blogPostIdx: index("seo_content_qa_checks_blog_post_idx").on(table.blogPostId),
+    dossierIdx: index("seo_content_qa_checks_dossier_idx").on(table.dossierId),
+  }),
+);
+
+export const seoLoopAlerts = pgTable(
+  "seo_loop_alerts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => seoProjects.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").references(() => seoTasks.id, { onDelete: "set null" }),
+    backlogItemId: uuid("backlog_item_id").references(() => seoBacklogItems.id, {
+      onDelete: "set null",
+    }),
+    agentRunId: uuid("agent_run_id").references(() => seoAgentRuns.id, { onDelete: "set null" }),
+    qaCheckId: uuid("qa_check_id").references(() => seoContentQaChecks.id, { onDelete: "set null" }),
+    blogPostId: uuid("blog_post_id").references(() => blogPosts.id, { onDelete: "set null" }),
+    alertType: varchar("alert_type", { length: 64 }).notNull(),
+    severity: varchar("severity", { length: 16 }).notNull().default("medium"),
+    status: varchar("status", { length: 24 }).notNull().default("open"),
+    dedupeKey: varchar("dedupe_key", { length: 240 }).notNull(),
+    title: varchar("title", { length: 220 }).notNull(),
+    detail: text("detail"),
+    nextAction: text("next_action"),
+    source: varchar("source", { length: 80 }).notNull().default("seo:alerts:refresh"),
+    metadata: jsonb("metadata").notNull().default({}),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    projectStatusIdx: index("seo_loop_alerts_project_status_idx").on(
+      table.projectId,
+      table.status,
+      table.severity,
+      table.lastSeenAt,
+    ),
+    projectDedupeIdx: uniqueIndex("seo_loop_alerts_project_dedupe_idx").on(
+      table.projectId,
+      table.dedupeKey,
+    ),
+  }),
+);
+
 export const schema = {
   user: users,
   session: sessions,
@@ -1707,12 +2158,24 @@ export const schema = {
   seoExperiments,
   seoExperimentRevisions,
   seoLoopRuns,
+  seoContentBundles,
+  seoDemandSignals,
   seoTasks,
   seoTaskCheckpoints,
   seoBacklogItems,
+  seoCoverageMaps,
+  seoTemplateFamilies,
+  contentAuthors,
+  blogPosts,
+  blogPostRevisions,
+  seoResearchDossiers,
+  seoResearchSources,
   adsAccounts,
   adsCampaigns,
   adsPerformanceSnapshots,
+  seoAgentRuns,
+  seoContentQaChecks,
+  seoLoopAlerts,
 };
 
 export type Site = typeof sites.$inferSelect;
@@ -1752,3 +2215,21 @@ export type SeoSearchConsoleSnapshot = typeof seoSearchConsoleSnapshots.$inferSe
 export type SeoChangeLog = typeof seoChangeLogs.$inferSelect;
 export type SeoExperiment = typeof seoExperiments.$inferSelect;
 export type SeoLoopRun = typeof seoLoopRuns.$inferSelect;
+export type SeoContentBundle = typeof seoContentBundles.$inferSelect;
+export type SeoDemandSignal = typeof seoDemandSignals.$inferSelect;
+export type SeoCoverageMap = typeof seoCoverageMaps.$inferSelect;
+export type SeoTemplateFamily = typeof seoTemplateFamilies.$inferSelect;
+export type SeoTask = typeof seoTasks.$inferSelect;
+export type SeoTaskCheckpoint = typeof seoTaskCheckpoints.$inferSelect;
+export type SeoBacklogItem = typeof seoBacklogItems.$inferSelect;
+export type ContentAuthor = typeof contentAuthors.$inferSelect;
+export type BlogPost = typeof blogPosts.$inferSelect;
+export type BlogPostRevision = typeof blogPostRevisions.$inferSelect;
+export type SeoResearchDossier = typeof seoResearchDossiers.$inferSelect;
+export type SeoResearchSource = typeof seoResearchSources.$inferSelect;
+export type AdsAccount = typeof adsAccounts.$inferSelect;
+export type AdsCampaign = typeof adsCampaigns.$inferSelect;
+export type AdsPerformanceSnapshot = typeof adsPerformanceSnapshots.$inferSelect;
+export type SeoAgentRun = typeof seoAgentRuns.$inferSelect;
+export type SeoContentQaCheck = typeof seoContentQaChecks.$inferSelect;
+export type SeoLoopAlert = typeof seoLoopAlerts.$inferSelect;

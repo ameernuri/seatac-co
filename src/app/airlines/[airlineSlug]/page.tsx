@@ -107,7 +107,7 @@ export default async function AirlineGuidePage({ params }: AirlineGuidePageProps
     ).values(),
   );
 
-  const faqs = [
+  const faqs = airline.faq ?? [
     {
       question: `What terminal or concourse does ${airline.name} use at Sea-Tac?`,
       answer: `${airline.name} usually works from ${airline.concourse}. Gate assignments can shift at Sea-Tac, so use this as a planning baseline before pickup day.`,
@@ -161,7 +161,7 @@ export default async function AirlineGuidePage({ params }: AirlineGuidePageProps
 
         <section className="mt-10 rounded-[2.2rem] border border-[#2d6a4f]/10 bg-white p-6 shadow-[0_4px_20px_rgba(45,106,79,0.06)] lg:p-8">
           <p className="text-[0.76rem] uppercase tracking-[0.34em] text-[#5a7a6e]">
-            Common questions
+            Airline-specific FAQ
           </p>
           <div className="mt-5 grid gap-4 lg:grid-cols-3">
             {faqs.map((faq) => (
@@ -190,12 +190,36 @@ export default async function AirlineGuidePage({ params }: AirlineGuidePageProps
                 </h2>
                 <p className="mt-3 text-sm leading-7 text-[#5a7a6e]">{airline.concourse}</p>
               </div>
+              {airline.checkInNotes ? (
+                <div className="rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
+                  <h2 className="text-[1.3rem] font-semibold tracking-[-0.03em] text-[#123b33]">
+                    Check-in context
+                  </h2>
+                  <p className="mt-3 text-sm leading-7 text-[#5a7a6e]">{airline.checkInNotes}</p>
+                </div>
+              ) : null}
+              {airline.baggageNotes ? (
+                <div className="rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
+                  <h2 className="text-[1.3rem] font-semibold tracking-[-0.03em] text-[#123b33]">
+                    Baggage notes
+                  </h2>
+                  <p className="mt-3 text-sm leading-7 text-[#5a7a6e]">{airline.baggageNotes}</p>
+                </div>
+              ) : null}
               <div className="rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
                 <h2 className="text-[1.3rem] font-semibold tracking-[-0.03em] text-[#123b33]">
                   Pickup timing
                 </h2>
                 <p className="mt-3 text-sm leading-7 text-[#5a7a6e]">{airline.pickupNotes}</p>
               </div>
+              {airline.airportUpgradeNotes ? (
+                <div className="rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
+                  <h2 className="text-[1.3rem] font-semibold tracking-[-0.03em] text-[#123b33]">
+                    Airport upgrade notes
+                  </h2>
+                  <p className="mt-3 text-sm leading-7 text-[#5a7a6e]">{airline.airportUpgradeNotes}</p>
+                </div>
+              ) : null}
               <div className="rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
                 <h2 className="text-[1.3rem] font-semibold tracking-[-0.03em] text-[#123b33]">
                   Best fit
@@ -357,6 +381,30 @@ export default async function AirlineGuidePage({ params }: AirlineGuidePageProps
             ))}
           </div>
         </section>
+
+        {airline.sourceLinks?.length ? (
+          <section className="mt-10 rounded-[2.2rem] border border-[#2d6a4f]/10 bg-white p-6 shadow-[0_4px_20px_rgba(45,106,79,0.06)] lg:p-8">
+            <p className="text-[0.76rem] uppercase tracking-[0.34em] text-[#5a7a6e]">
+              Official sources
+            </p>
+            <h2 className="mt-3 text-[2rem] leading-[1.02] tracking-[-0.03em] text-[#1a3d34]">
+              Verify airline and airport details before travel.
+            </h2>
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              {airline.sourceLinks.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="rounded-[1.4rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] px-5 py-5 text-sm font-semibold text-[#123b33] transition hover:border-[#2d6a4f]/20 hover:bg-white"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </main>
       <SiteFooter />
     </div>

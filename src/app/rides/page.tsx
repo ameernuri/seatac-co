@@ -185,15 +185,14 @@ export default async function RidesPage({ searchParams }: RidesPageProps) {
               ) : (
                 <div className="mt-6 rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
                   <p className="text-sm leading-7 text-[#5a7a6e]">
-                    {result.meta.error ?? "No Transferz offers were returned for this search yet."}
+                    Ride marketplace results are temporarily unavailable. Try again soon.
                   </p>
                 </div>
               )
             ) : (
               <div className="mt-6 rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
                 <p className="text-sm leading-7 text-[#5a7a6e]">
-                  Search a ride to compare outsourced transfer supply with the private routes already
-                  sold directly through seatac.co.
+                  Search a ride to compare marketplace transfers with seatac.co private routes.
                 </p>
               </div>
             )}

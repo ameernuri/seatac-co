@@ -114,8 +114,7 @@ export default async function CruisesPage() {
             ) : (
               <div className="mt-6 rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
                 <p className="text-sm leading-7 text-[#5a7a6e]">
-                  {cruiseSchedule.error ??
-                    "Cruise schedule tracking is scaffolded, but no live vessel entries were returned yet."}
+                  Cruise schedule data is temporarily unavailable. Check back soon.
                 </p>
               </div>
             )}

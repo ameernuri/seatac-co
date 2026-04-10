@@ -27,6 +27,33 @@ import {
 
 let stripeClient: Stripe | null = null;
 
+const paymentStateBookingColumns = {
+  customerEmail: bookings.customerEmail,
+  customerEmailConfirmationSentAt: bookings.customerEmailConfirmationSentAt,
+  customerName: bookings.customerName,
+  customerPhone: bookings.customerPhone,
+  customerSmsConfirmationSentAt: bookings.customerSmsConfirmationSentAt,
+  customerSmsOptIn: bookings.customerSmsOptIn,
+  dispatchEmailSentAt: bookings.dispatchEmailSentAt,
+  dispatchSmsSentAt: bookings.dispatchSmsSentAt,
+  dropoffAddress: bookings.dropoffAddress,
+  dropoffLabel: bookings.dropoffLabel,
+  id: bookings.id,
+  paymentCheckoutSessionId: bookings.paymentCheckoutSessionId,
+  paymentCollectedAt: bookings.paymentCollectedAt,
+  paymentStatus: bookings.paymentStatus,
+  pickupAddress: bookings.pickupAddress,
+  pickupAt: bookings.pickupAt,
+  pickupLabel: bookings.pickupLabel,
+  reference: bookings.reference,
+  routeName: bookings.routeName,
+  siteId: bookings.siteId,
+  specialInstructions: bookings.specialInstructions,
+  status: bookings.status,
+  totalCents: bookings.totalCents,
+  vehicleName: bookings.vehicleName,
+} satisfies Record<string, unknown>;
+
 export function isStripeConfigured() {
   return Boolean(env.stripeSecretKey);
 }
@@ -202,9 +229,9 @@ export async function applyBookingPaymentState({
       updatedAt: new Date(),
     })
     .where(eq(bookings.id, bookingId))
-    .returning();
+    .returning(paymentStateBookingColumns);
 
-  await sendBookingSmsNotifications(booking);
+  await sendBookingSmsNotifications(booking as typeof bookings.$inferSelect | undefined);
 
   return booking;
 }
@@ -254,6 +281,8 @@ export async function getReserveSuccessState(sessionId: string) {
       contact: booking.customerEmail,
       customerName: booking.customerName,
       reference: booking.reference,
+      pickupLabel: booking.pickupLabel,
+      dropoffLabel: booking.dropoffLabel,
       routeName: booking.routeName,
       vehicleName: booking.vehicleName,
     },

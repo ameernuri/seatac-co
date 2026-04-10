@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   Check,
@@ -54,6 +54,7 @@ import { type GoogleAddress } from "@/lib/google-maps";
 import { quoteReservation, type ServiceMode } from "@/lib/quote";
 import { extrasCatalog, siteChrome } from "@/lib/site-content";
 import { cn } from "@/lib/utils";
+import { getVehicleDisplayName } from "@/lib/vehicle-display";
 import { addDays, format } from "date-fns";
 
 type Props = {
@@ -138,6 +139,28 @@ function pricingTypeFromTripType(tripType: TripType): PricingType {
   return "flat";
 }
 
+function findDefaultVehicleId(vehicles: Vehicle[], passengers: number, bags: number) {
+  return (
+    vehicles.find(
+      (vehicle) =>
+        passengers <= vehicle.passengersMax && bags <= vehicle.bagsMax,
+    )?.id ?? ""
+  );
+}
+
+function findEarliestNextAvailablePickupAt(
+  statuses: Record<string, VehicleAvailabilityStatus> | null | undefined,
+) {
+  const candidates = Object.values(statuses ?? {})
+    .map((status) => status.nextAvailablePickupAt)
+    .filter((value): value is string => Boolean(value))
+    .map((value) => new Date(value))
+    .filter((value) => Number.isFinite(value.getTime()))
+    .sort((left, right) => left.getTime() - right.getTime());
+
+  return candidates[0] ?? null;
+}
+
 function getEnabledPricingOptions(
   constraints: BookingConstraints,
   options?: { allowFlatRate?: boolean },
@@ -195,10 +218,6 @@ function formatExtraQuantityLabel(extra: RideExtra, quantity: number) {
   return `${quantity} ${pluralizedUnit}`;
 }
 
-function getVehicleDisplayName(name: string) {
-  return name.replace(/^Airport\s+/i, "");
-}
-
 function getVehicleImagePosition(name: string) {
   if (/suv/i.test(name)) {
     return "center 28%";
@@ -253,7 +272,8 @@ function RideAdditionCard({
             <button
               type="button"
               onClick={() => onQuantityChange(Math.max(quantity - 1, 0))}
-              className="grid size-9 place-items-center rounded-full border border-[#2d6a4f]/15 bg-white text-[#1a3d34] transition hover:border-[#2d6a4f]/30 hover:bg-[#f8f7f4]"
+              disabled={quantity <= 0}
+              className="grid size-9 place-items-center rounded-full border border-[#2d6a4f]/15 bg-white text-[#1a3d34] transition hover:border-[#2d6a4f]/30 hover:bg-[#f8f7f4] disabled:cursor-not-allowed disabled:opacity-40"
               aria-label={`Remove ${extra.label.toLowerCase()}`}
             >
               <Minus className="size-4" />
@@ -266,7 +286,8 @@ function RideAdditionCard({
               onClick={() =>
                 onQuantityChange(Math.min(quantity + 1, extra.maxQuantity ?? quantity + 1))
               }
-              className="grid size-9 place-items-center rounded-full border border-[#2d6a4f]/15 bg-white text-[#1a3d34] transition hover:border-[#2d6a4f]/30 hover:bg-[#f8f7f4]"
+              disabled={quantity >= (extra.maxQuantity ?? Number.POSITIVE_INFINITY)}
+              className="grid size-9 place-items-center rounded-full border border-[#2d6a4f]/15 bg-white text-[#1a3d34] transition hover:border-[#2d6a4f]/30 hover:bg-[#f8f7f4] disabled:cursor-not-allowed disabled:opacity-40"
               aria-label={`Add ${extra.label.toLowerCase()}`}
             >
               <Plus className="size-4" />
@@ -728,13 +749,15 @@ export function ReserveWizard({
   const [pickupTime, setPickupTime] = useState(initialPickupSlot.time);
   const [returnTrip, setReturnTrip] = useState(false);
   const [returnDate, setReturnDate] = useState("");
-  const [returnTime, setReturnTime] = useState("17:00");
+  const [returnTime, setReturnTime] = useState(initialPickupSlot.time);
   const [passengers, setPassengers] = useState("2");
   const [bags, setBags] = useState("2");
   const [hoursRequested, setHoursRequested] = useState(
     String(bookingConstraints.hourlyMinimumHours),
   );
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>(() =>
+    findDefaultVehicleId(vehicles, 2, 2),
+  );
   const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
   const initialCustomerNameParts = splitCustomerName(initialClientAccount?.name ?? "");
   const [customerFirstName, setCustomerFirstName] = useState(
@@ -765,7 +788,17 @@ export function ReserveWizard({
   const [accountSmsOptIn, setAccountSmsOptIn] = useState(
     Boolean(initialClientAccount?.smsOptIn),
   );
-  const [smsPreferenceSaving, setSmsPreferenceSaving] = useState(false);
+  const [globalSmsOptInAtCheckoutStart, setGlobalSmsOptInAtCheckoutStart] =
+    useState(
+      Boolean(
+        initialClientAccount?.smsOptIn &&
+          initialClientAccount?.phoneVerifiedAt &&
+          normalizeClientPhone(initialClientAccount.phone ?? ""),
+      ),
+    );
+  const smsOptInTouchedThisCheckoutRef = useRef(false);
+  const scheduleTouchedRef = useRef(false);
+  const availabilityAutoAdjustedRef = useRef(false);
   const [checkoutErrors, setCheckoutErrors] = useState<CheckoutFieldErrors>({});
   const [notes, setNotes] = useState(initialState?.pickupDetail ?? "");
   const [availableVehicleCounts, setAvailableVehicleCounts] = useState<Record<string, number> | null>(
@@ -789,6 +822,8 @@ export function ReserveWizard({
     normalizedCustomerPhone === normalizedAccountPhone;
   const hasPersistedSmsOptIn = hasPersistedVerifiedPhone && Boolean(accountSmsOptIn);
   const canManageSmsGlobally = Boolean(clientAccount) && hasPersistedVerifiedPhone;
+  const shouldHideSmsCheckboxForGlobalOptIn =
+    globalSmsOptInAtCheckoutStart && hasPersistedSmsOptIn;
   const hasVerifiedEmail =
     Boolean(accountVerifiedEmail) && normalizedCustomerEmail === accountVerifiedEmail;
   const selectedPricingType = pricingTypeFromTripType(tripType);
@@ -991,8 +1026,19 @@ export function ReserveWizard({
     [bookingConstraints.maxAdvanceDays],
   );
   const pickupDateDisabled = useCallback(
-    (date: Date) => date < startOfToday || date > maxBookableDate,
-    [maxBookableDate, startOfToday],
+    (date: Date) => {
+      if (date < startOfToday || date > maxBookableDate) {
+        return true;
+      }
+
+      return (
+        buildBookingTimeOptions({
+          constraints: bookingConstraints,
+          dateValue: formatDateValue(date),
+        }).length === 0
+      );
+    },
+    [bookingConstraints, maxBookableDate, startOfToday],
   );
   const returnDateDisabled = useCallback(
     (date: Date) => {
@@ -1071,7 +1117,6 @@ export function ReserveWizard({
         customerName: string;
         customerPolicyAgreed: boolean;
         customerPhone: string;
-        customerSmsOptIn: boolean;
         dropoffAddress: string;
         flightNumber: string;
         hoursRequested: string;
@@ -1084,6 +1129,7 @@ export function ReserveWizard({
         returnTime: string;
         returnTrip: boolean;
         routeId: string;
+        scheduleTouched: boolean;
         selectedExtras: string[];
         selectedVehicleId: string;
         step: Step;
@@ -1112,6 +1158,9 @@ export function ReserveWizard({
       if (typeof draft.flightNumber === "string") setFlightNumber(draft.flightNumber);
       if (typeof draft.pickupDate === "string") setPickupDate(draft.pickupDate);
       if (typeof draft.pickupTime === "string") setPickupTime(draft.pickupTime);
+      if (typeof draft.scheduleTouched === "boolean") {
+        scheduleTouchedRef.current = draft.scheduleTouched;
+      }
       if (typeof draft.returnTrip === "boolean") setReturnTrip(draft.returnTrip);
       if (typeof draft.returnDate === "string") setReturnDate(draft.returnDate);
       if (typeof draft.returnTime === "string") setReturnTime(draft.returnTime);
@@ -1143,9 +1192,6 @@ export function ReserveWizard({
       }
       if (typeof draft.customerEmail === "string") setCustomerEmail(draft.customerEmail);
       if (typeof draft.customerPhone === "string") setCustomerPhone(draft.customerPhone);
-      if (typeof draft.customerSmsOptIn === "boolean") {
-        setCustomerSmsOptIn(draft.customerSmsOptIn);
-      }
       if (typeof draft.customerPolicyAgreed === "boolean") {
         setCustomerPolicyAgreed(draft.customerPolicyAgreed);
       }
@@ -1169,7 +1215,6 @@ export function ReserveWizard({
     customerName,
     customerPolicyAgreed,
     customerPhone,
-    customerSmsOptIn,
     draftLoaded,
     dropoffAddress,
     flightNumber,
@@ -1198,8 +1243,17 @@ export function ReserveWizard({
     setCustomerLastName((current) => current || splitCustomerName(clientAccount.name || "").lastName);
     setCustomerEmail((current) => current || clientAccount.email || "");
     setCustomerPhone((current) => current || clientAccount.phone || "");
-    setCustomerSmsOptIn((current) => current || Boolean(clientAccount.smsOptIn));
+    setCustomerSmsOptIn(Boolean(clientAccount.smsOptIn));
     setAccountSmsOptIn(Boolean(clientAccount.smsOptIn));
+    if (!smsOptInTouchedThisCheckoutRef.current) {
+      setGlobalSmsOptInAtCheckoutStart(
+        Boolean(
+          clientAccount.smsOptIn &&
+            clientAccount.phoneVerifiedAt &&
+            normalizeClientPhone(clientAccount.phone ?? ""),
+        ),
+      );
+    }
     setAccountVerifiedEmail((current) =>
       current ??
       (clientAccount.emailVerified ? clientAccount.email.trim().toLowerCase() : null),
@@ -1240,8 +1294,17 @@ export function ReserveWizard({
         setCustomerLastName((current) => current || splitCustomerName(account.name || "").lastName);
         setCustomerEmail((current) => current || account.email || "");
         setCustomerPhone((current) => current || account.phone || "");
-        setCustomerSmsOptIn((current) => current || Boolean(account.smsOptIn));
+        setCustomerSmsOptIn(Boolean(account.smsOptIn));
         setAccountSmsOptIn(Boolean(account.smsOptIn));
+        if (!smsOptInTouchedThisCheckoutRef.current) {
+          setGlobalSmsOptInAtCheckoutStart(
+            Boolean(
+              account.smsOptIn &&
+                account.phoneVerifiedAt &&
+                normalizeClientPhone(account.phone ?? ""),
+            ),
+          );
+        }
         setAccountVerifiedEmail(
           account.emailVerified ? account.email.trim().toLowerCase() : null,
         );
@@ -1257,10 +1320,20 @@ export function ReserveWizard({
   }, []);
 
   useEffect(() => {
-    if (hasPersistedSmsOptIn) {
+    if (shouldHideSmsCheckboxForGlobalOptIn) {
       setCustomerSmsOptIn(true);
     }
-  }, [hasPersistedSmsOptIn]);
+  }, [shouldHideSmsCheckboxForGlobalOptIn]);
+
+  function handlePickupDateChange(value: string) {
+    scheduleTouchedRef.current = true;
+    setPickupDate(value);
+  }
+
+  function handlePickupTimeChange(value: string) {
+    scheduleTouchedRef.current = true;
+    setPickupTime(value);
+  }
 
   function persistReserveDraft(nextStep: Step) {
     if (typeof window === "undefined") {
@@ -1275,7 +1348,6 @@ export function ReserveWizard({
       customerName,
       customerPolicyAgreed,
       customerPhone,
-      customerSmsOptIn,
       dropoffAddress,
       flightNumber,
       hoursRequested,
@@ -1288,6 +1360,7 @@ export function ReserveWizard({
       returnTime,
       returnTrip,
       routeId,
+      scheduleTouched: scheduleTouchedRef.current,
       selectedExtras,
       selectedVehicleId,
       step: nextStep,
@@ -1381,6 +1454,24 @@ export function ReserveWizard({
         setAvailabilityError(null);
         setAvailableVehicleCounts(data.availableCounts ?? null);
         setVehicleStatuses(data.vehicleStatuses ?? null);
+
+        const hasAvailableVehicle = Object.values(
+          (data.availableCounts ?? {}) as Record<string, number>,
+        ).some((count) => Number(count) > 0);
+        const nextAvailablePickupAt = findEarliestNextAvailablePickupAt(
+          data.vehicleStatuses as Record<string, VehicleAvailabilityStatus> | null,
+        );
+
+        if (
+          !hasAvailableVehicle &&
+          nextAvailablePickupAt &&
+          !scheduleTouchedRef.current &&
+          !availabilityAutoAdjustedRef.current
+        ) {
+          availabilityAutoAdjustedRef.current = true;
+          setPickupDate(format(nextAvailablePickupAt, "yyyy-MM-dd"));
+          setPickupTime(format(nextAvailablePickupAt, "HH:mm"));
+        }
       } catch {
         if (controller.signal.aborted) {
           return;
@@ -1466,6 +1557,13 @@ export function ReserveWizard({
         bookingConstraints,
       })
     : null;
+  const priceIsLoading =
+    availabilityLoading || !vehicleStatuses || Boolean(scheduleValidationMessage);
+  const sidebarPriceLabel = priceIsLoading
+    ? "Checking"
+    : selectedVehicle
+      ? formatCurrency(pricing?.total ?? 0)
+      : "Choose a vehicle";
   const extraSelections = useMemo(
     () =>
       extrasCatalog
@@ -1487,19 +1585,12 @@ export function ReserveWizard({
         ),
     [selectedExtras],
   );
-  const checkoutReady =
-    customerName.trim().length > 0 &&
-    isValidEmail(customerEmail) &&
-    isValidPhone(customerPhone) &&
-    hasPersistedVerifiedPhone &&
-    customerPolicyAgreed &&
-    true;
-
   const activeStep = stepMeta.find((item) => item.id === step) ?? stepMeta[0];
   const extrasSelected = selectedExtras.length;
   const vehicleOptionSummaries = compatibleVehicles.map((vehicle) => {
     const status = vehicleStatuses?.[vehicle.id] ?? null;
     const availableUnits = status?.availableUnits ?? availableVehicleCounts?.[vehicle.id] ?? null;
+    const isPendingAvailability = availabilityLoading || !vehicleStatuses;
     const isAvailable = status ? status.reasonType === "available" : false;
     const quotePreview = quoteReservation({
       baseVehicleFloor,
@@ -1531,6 +1622,7 @@ export function ReserveWizard({
     return {
       availableUnits,
       isAvailable,
+      isPendingAvailability,
       nextAvailableLabel: status?.nextAvailablePickupAt
         ? formatDateTime(status.nextAvailablePickupAt)
         : null,
@@ -1540,14 +1632,23 @@ export function ReserveWizard({
       vehicle,
     };
   });
-  const nextStepDisabled =
-    step === 2 &&
-    (!selectedVehicle ||
-      !selectedVehicleMatchesFit ||
-      !selectedVehicleIsAvailable ||
-      availabilityLoading ||
-      Boolean(availabilityError) ||
-      !vehicleStatuses);
+  const stepTwoBlockingMessage =
+    compatibleVehicles.length === 0
+      ? "No vehicle fits this party size."
+      : availabilityLoading
+        ? "Checking live availability."
+        : availabilityError
+          ? availabilityError
+          : !vehicleStatuses
+            ? "Live availability is not ready yet."
+            : !selectedVehicle
+              ? "Choose a vehicle."
+              : !selectedVehicleMatchesFit
+                ? "Choose a vehicle that fits this party size."
+                : !selectedVehicleIsAvailable
+                  ? selectedVehicleStatus?.reason ??
+                    "That vehicle is unavailable for this time."
+                  : null;
   const summaryRows = [
     {
       label: "Route",
@@ -1575,7 +1676,7 @@ export function ReserveWizard({
     },
     {
       label: "Vehicle",
-      value: selectedVehicle?.name ?? "Choose a vehicle",
+      value: selectedVehicle ? getVehicleDisplayName(selectedVehicle.name) : "Choose a vehicle",
       detail: flightNumber ? `Flight ${flightNumber}` : null,
       onEdit: () => jumpToStep(2),
     },
@@ -1661,7 +1762,7 @@ export function ReserveWizard({
         const pickup = parseDateValue(pickupDate);
         setReturnDate(pickup ? formatDateValue(addDays(pickup, 1)) : pickupDate);
       }
-      if (!returnTime && pickupTime) {
+      if (pickupTime) {
         setReturnTime(pickupTime);
       }
       return;
@@ -1787,7 +1888,11 @@ export function ReserveWizard({
       return true;
     }
 
-    if (options?.showToast !== false) {
+    const errorKeys = Object.keys(nextErrors);
+    const onlyPolicyMissing =
+      errorKeys.length === 1 && errorKeys[0] === "customerPolicyAgreed";
+
+    if (options?.showToast !== false && !onlyPolicyMissing) {
       toast.error("Complete the required checkout details.");
     }
 
@@ -1843,6 +1948,8 @@ export function ReserveWizard({
   }
 
   function handleCheckoutSmsOptInChange(nextChecked: boolean) {
+    smsOptInTouchedThisCheckoutRef.current = true;
+
     if (!canManageSmsGlobally) {
       setCustomerSmsOptIn(nextChecked);
       return;
@@ -1857,7 +1964,6 @@ export function ReserveWizard({
       return;
     }
 
-    setSmsPreferenceSaving(true);
     void persistAccountSmsPreference(nextChecked)
       .then(() => {
         toast.success(
@@ -1875,9 +1981,6 @@ export function ReserveWizard({
             ? error.message
             : "SMS preference could not be updated.",
         );
-      })
-      .finally(() => {
-        setSmsPreferenceSaving(false);
       });
   }
 
@@ -1885,28 +1988,23 @@ export function ReserveWizard({
     const wrapperClass =
       variant === "card" ? "rounded-xl border border-[#2d6a4f]/10 bg-[#f8f7f4] p-4" : "";
 
-    if (hasPersistedSmsOptIn) {
+    if (shouldHideSmsCheckboxForGlobalOptIn) {
       return (
         <div className={wrapperClass}>
-          <div className="flex items-start gap-3 py-1">
-            <span className="mt-0.5 inline-flex size-5 items-center justify-center rounded-full border border-[#2d6a4f]/18 bg-[#2d6a4f]/6 text-[#2d6a4f]">
-              <Check className="size-3.5" />
-            </span>
-            <div className="space-y-1">
-              <div className="text-sm font-medium text-[#1a3d34]">
-                Text reminders enabled for this booking
-              </div>
-              <div className="text-sm text-[#5a7a6e]">
-                You&apos;ll receive booking confirmations and pickup reminders by text. Manage this in{" "}
-                <Link
-                  href="/account"
-                  className="text-[#0d5c48] underline underline-offset-4"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  profile
-                </Link>
-                .
-              </div>
+          <div className="space-y-1 py-1">
+            <div className="text-sm font-medium text-[#1a3d34]">
+              Text reminders are enabled from your profile.
+            </div>
+            <div className="text-sm text-[#5a7a6e]">
+              Manage SMS settings in{" "}
+              <Link
+                href="/account"
+                className="text-[#0d5c48] underline underline-offset-4"
+                onClick={(event) => event.stopPropagation()}
+              >
+                profile
+              </Link>
+              .
             </div>
           </div>
         </div>
@@ -1923,7 +2021,6 @@ export function ReserveWizard({
             <Checkbox
               id={variant === "card" ? "customer-sms-opt-in-compact" : "customer-sms-opt-in"}
               checked={customerSmsOptIn}
-              disabled={smsPreferenceSaving}
               onCheckedChange={(checked) => {
                 handleCheckoutSmsOptInChange(checked === true);
               }}
@@ -1934,7 +2031,7 @@ export function ReserveWizard({
                 Send text confirmations and pickup reminders
               </div>
               <div className="text-sm leading-6 text-[#5a7a6e]">
-                Turn this on once to use your verified number for this booking and future bookings. Manage anytime in{" "}
+                By checking this box, you agree to receive reservation updates from seatac.co at the mobile number above. Message frequency varies. Reply STOP to opt out, HELP for help. Msg &amp; data rates may apply. Manage anytime in{" "}
                 <Link
                   href="/account"
                   className="text-[#0d5c48] underline underline-offset-4"
@@ -1972,6 +2069,8 @@ export function ReserveWizard({
               By checking this box, you agree to receive reservation updates from seatac.co at the mobile number above. Message frequency varies. Reply STOP to opt out, HELP for help. Msg &amp; data rates may apply. See our{" "}
               <Link
                 href="/privacy"
+                target="_blank"
+                rel="noreferrer"
                 className="text-[#0d5c48] underline underline-offset-4"
                 onClick={(event) => event.stopPropagation()}
               >
@@ -1980,6 +2079,8 @@ export function ReserveWizard({
               and{" "}
               <Link
                 href="/sms-policy"
+                target="_blank"
+                rel="noreferrer"
                 className="text-[#0d5c48] underline underline-offset-4"
                 onClick={(event) => event.stopPropagation()}
               >
@@ -2084,12 +2185,12 @@ export function ReserveWizard({
     }
 
     if (current === 3) {
-      if (!clientAccount) {
-        toast.error("Verify your phone to attach the booking to your account.");
+      if (!validateCheckoutFields()) {
         return false;
       }
 
-      if (!validateCheckoutFields()) {
+      if (!clientAccount) {
+        toast.error("Verify your phone to attach the booking to your account.");
         return false;
       }
     }
@@ -2112,6 +2213,7 @@ export function ReserveWizard({
     }
 
     setSubmitting(true);
+    const checkoutToastId = toast.loading("Creating secure checkout...");
 
     try {
       const pickupAt = new Date(`${pickupDate}T${pickupTime}:00`).toISOString();
@@ -2163,7 +2265,9 @@ export function ReserveWizard({
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        toast.error(data.error ?? "Payment session could not be created.");
+        toast.error(data.error ?? "Payment session could not be created.", {
+          id: checkoutToastId,
+        });
         return;
       }
 
@@ -2172,7 +2276,7 @@ export function ReserveWizard({
         return;
       }
 
-      toast.error("Stripe checkout URL was not returned.");
+      toast.error("Stripe checkout URL was not returned.", { id: checkoutToastId });
     } finally {
       setSubmitting(false);
     }
@@ -2282,19 +2386,19 @@ export function ReserveWizard({
               <div className="grid gap-4">
                 <div className="p-1">
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <BookingDateField
-                      label="Pick up date"
-                      value={pickupDate}
-                      onChange={setPickupDate}
-                      placeholder="Select Date"
-                      disabled={pickupDateDisabled}
-                    />
-                    <BookingTimeField
-                      label="Pick up time"
-                      options={pickupTimeOptions}
-                      value={pickupTime}
-                      onChange={setPickupTime}
-                    />
+                      <BookingDateField
+                        label="Pick up date"
+                        value={pickupDate}
+                        onChange={handlePickupDateChange}
+                        placeholder="Select Date"
+                        disabled={pickupDateDisabled}
+                      />
+                      <BookingTimeField
+                        label="Pick up time"
+                        options={pickupTimeOptions}
+                        value={pickupTime}
+                        onChange={handlePickupTimeChange}
+                      />
                   </div>
 
                   {(tripType === "hourly" || tripType === "event") && (
@@ -2391,6 +2495,7 @@ export function ReserveWizard({
                 {vehicleOptionSummaries.map(
                   ({
                     availableUnits,
+                    isPendingAvailability,
                     isAvailable,
                     nextAvailableLabel,
                     quotePreview,
@@ -2401,11 +2506,13 @@ export function ReserveWizard({
                     <button
                       key={vehicle.id}
                       type="button"
-                      disabled={!isAvailable}
+                      disabled={!isAvailable || isPendingAvailability}
                       onClick={() => isAvailable && setSelectedVehicleId(vehicle.id)}
                       className={cn(
                         "relative rounded-2xl border p-5 text-left transition",
-                        isAvailable
+                        isPendingAvailability
+                          ? "border-[#2d6a4f]/10 bg-white opacity-75"
+                          : isAvailable
                           ? selectedVehicle?.id === vehicle.id
                             ? "border-[#2d6a4f]/30 bg-[#2d6a4f]/8"
                             : "border-[#2d6a4f]/10 bg-white hover:border-[#2d6a4f]/20 hover:bg-[#f8f7f4]"
@@ -2461,7 +2568,11 @@ export function ReserveWizard({
                         <p className="font-sans text-2xl font-semibold text-[#1a3d34]">
                           {formatCurrency(quotePreview.baseFare)}
                         </p>
-                        {!isAvailable && (
+                        {isPendingAvailability ? (
+                          <span className="mt-2 inline-flex rounded-full border border-[#2d6a4f]/10 bg-[#f8f7f4] px-3 py-1 text-xs uppercase tracking-[0.15em] text-[#5a7a6e]">
+                            Checking
+                          </span>
+                        ) : !isAvailable && (
                           <span className="mt-2 inline-flex rounded-full border border-[#2d6a4f]/10 bg-[#f8f7f4] px-3 py-1 text-xs uppercase tracking-[0.15em] text-[#8aa398]">
                             Unavailable
                           </span>
@@ -2692,7 +2803,6 @@ export function ReserveWizard({
                 {step < 3 ? (
                   <Button
                     type="button"
-                    disabled={nextStepDisabled}
                     onClick={() => {
                       if (validateStep(step)) {
                         setStep((step + 1) as Step);
@@ -2707,7 +2817,7 @@ export function ReserveWizard({
                     <Button
                       type="button"
                       onClick={submitBooking}
-                      disabled={submitting || !checkoutReady}
+                      disabled={submitting}
                       className="h-11 rounded-full bg-[#2d6a4f] px-6 text-sm font-semibold text-white hover:bg-[#2d6a4f]/90"
                     >
                       {submitting
@@ -2716,11 +2826,6 @@ export function ReserveWizard({
                           ? `Pay ${formatCurrency(pricing.total)} now`
                           : "Pay now"}
                     </Button>
-                    {!checkoutReady ? (
-                      <p className="text-right text-xs text-[#8aa398]">
-                        Complete the required rider details to continue.
-                      </p>
-                    ) : null}
                   </div>
                 )}
               </div>
@@ -2951,7 +3056,7 @@ export function ReserveWizard({
                     <BookingDateField
                       label="Pickup date"
                       value={pickupDate}
-                      onChange={setPickupDate}
+                      onChange={handlePickupDateChange}
                       placeholder="Select Date"
                       disabled={pickupDateDisabled}
                     />
@@ -2959,7 +3064,7 @@ export function ReserveWizard({
                       label="Pickup time"
                       options={pickupTimeOptions}
                       value={pickupTime}
-                      onChange={setPickupTime}
+                      onChange={handlePickupTimeChange}
                     />
 
                     {(tripType === "hourly" || tripType === "event") && (
@@ -2994,7 +3099,7 @@ export function ReserveWizard({
                 <BookingDateField
                   label="Pickup date"
                   value={pickupDate}
-                  onChange={setPickupDate}
+                  onChange={handlePickupDateChange}
                   placeholder="Select Date"
                   disabled={pickupDateDisabled}
                 />
@@ -3002,7 +3107,7 @@ export function ReserveWizard({
                   label="Pickup time"
                   options={pickupTimeOptions}
                   value={pickupTime}
-                  onChange={setPickupTime}
+                  onChange={handlePickupTimeChange}
                 />
 
                 {(tripType === "hourly" || tripType === "event") && (
@@ -3095,6 +3200,7 @@ export function ReserveWizard({
                 {vehicleOptionSummaries.map(
                   ({
                     availableUnits,
+                    isPendingAvailability,
                     isAvailable,
                     nextAvailableLabel,
                     quotePreview,
@@ -3105,11 +3211,13 @@ export function ReserveWizard({
                     <button
                       key={vehicle.id}
                       type="button"
-                      disabled={!isAvailable}
+                      disabled={!isAvailable || isPendingAvailability}
                       onClick={() => isAvailable && setSelectedVehicleId(vehicle.id)}
                       className={cn(
                         "relative self-start overflow-hidden rounded-[1.7rem] border text-left transition",
-                        isAvailable
+                        isPendingAvailability
+                          ? "border-[#2d6a4f]/10 bg-white opacity-75"
+                          : isAvailable
                           ? selectedVehicle?.id === vehicle.id
                             ? "border-[#2d6a4f] bg-[#eef7f2] shadow-[0_20px_42px_rgba(45,106,79,0.24)] ring-2 ring-[#2d6a4f]/22 md:pb-4"
                             : "border-[#2d6a4f]/10 bg-white hover:border-[#2d6a4f]/20 hover:bg-[#f8f7f4] md:mt-4"
@@ -3158,7 +3266,11 @@ export function ReserveWizard({
                             <Badge className="rounded-full bg-black/24 px-2 py-1 text-[0.58rem] text-white backdrop-blur-sm md:bg-[#f8f7f4] md:px-3 md:text-[0.68rem] md:text-[#5a7a6e]">
                               {vehicle.bagsMax} bags
                             </Badge>
-                            {!isAvailable && (
+                            {isPendingAvailability ? (
+                              <Badge className="rounded-full border border-white/16 bg-white/10 px-2 py-1 text-[0.58rem] uppercase tracking-[0.12em] text-white/85 backdrop-blur-sm md:border-[#2d6a4f]/10 md:bg-[#f8f7f4] md:px-3 md:text-[0.68rem] md:tracking-[0.2em] md:text-[#5a7a6e]">
+                                Checking
+                              </Badge>
+                            ) : !isAvailable && (
                               <Badge className="rounded-full border border-white/16 bg-white/10 px-2 py-1 text-[0.58rem] uppercase tracking-[0.12em] text-white/85 backdrop-blur-sm md:border-[#2d6a4f]/10 md:bg-[#f8f7f4] md:px-3 md:text-[0.68rem] md:tracking-[0.2em] md:text-[#8aa398]">
                                 Unavailable
                               </Badge>
@@ -3194,7 +3306,7 @@ export function ReserveWizard({
                           </div>
                         </div>
                       </div>
-                      {!isAvailable ? (
+                      {!isPendingAvailability && !isAvailable ? (
                         <div className="space-y-3 px-4 pb-4 md:hidden">
                           <div
                             className={cn(
@@ -3213,7 +3325,7 @@ export function ReserveWizard({
                         </div>
                       ) : null}
                       <div className="hidden space-y-4 p-5 md:block">
-                        {!isAvailable && (
+                        {!isPendingAvailability && !isAvailable && (
                           <div
                             className={cn(
                               "border-t px-0 pt-4 text-sm",
@@ -3373,6 +3485,12 @@ export function ReserveWizard({
           )}
         </div>
 
+        {step === 2 && stepTwoBlockingMessage ? (
+          <p className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+            {stepTwoBlockingMessage}
+          </p>
+        ) : null}
+
         <div className="mt-8 flex flex-wrap items-center justify-end gap-4 border-t border-[#2d6a4f]/10 pt-6">
           <div className="flex gap-3">
             {!landingOnly && step > minimumStep && (
@@ -3403,7 +3521,7 @@ export function ReserveWizard({
             ) : step < 3 && (
               <Button
                 type="button"
-                disabled={nextStepDisabled}
+                disabled={step === 2 && Boolean(stepTwoBlockingMessage)}
                 onClick={() => {
                   if (!validateStep(step)) {
                     return;
@@ -3430,7 +3548,7 @@ export function ReserveWizard({
                   Estimated total
                 </p>
                 <p className="mt-2 font-sans text-4xl font-semibold text-[#1a3d34]">
-                  {selectedVehicle ? formatCurrency(pricing?.total ?? 0) : "Choose a vehicle"}
+                  {sidebarPriceLabel}
                 </p>
               </div>
             </div>
@@ -3499,6 +3617,8 @@ export function ReserveWizard({
                         Review the{" "}
                         <Link
                           href="/terms"
+                          target="_blank"
+                          rel="noreferrer"
                           className="text-[#0d5c48] underline underline-offset-4"
                           onClick={(event) => event.stopPropagation()}
                         >
@@ -3507,6 +3627,8 @@ export function ReserveWizard({
                         and{" "}
                         <Link
                           href="/privacy"
+                          target="_blank"
+                          rel="noreferrer"
                           className="text-[#0d5c48] underline underline-offset-4"
                           onClick={(event) => event.stopPropagation()}
                         >
@@ -3523,7 +3645,7 @@ export function ReserveWizard({
                 <Button
                   type="button"
                   onClick={submitBooking}
-                  disabled={submitting || !checkoutReady}
+                  disabled={submitting}
                   className="booking-primary-button h-14 w-full rounded-full text-lg font-semibold"
                 >
                   {submitting

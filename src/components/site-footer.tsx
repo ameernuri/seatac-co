@@ -11,6 +11,7 @@ export function SiteFooter() {
     { label: "Book Seattle hotels", href: "/hotels" },
     { label: "Reserve airport rides", href: "/rides" },
     { label: "Sea-Tac airport guide", href: "/seatac-airport-guide" },
+    { label: "Sea-Tac airport FAQ", href: "/seatac-airport-faq" },
     { label: "Sea-Tac airport transfer guide", href: "/seatac-airport-transfer-guide" },
     { label: "Sea-Tac hotel transfer guide", href: "/seatac-hotel-transfer-guide" },
     { label: "Compare Sea-Tac parking", href: "/parking" },

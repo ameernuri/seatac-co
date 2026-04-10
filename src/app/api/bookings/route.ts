@@ -63,6 +63,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
 
+    console.error("Booking checkout failed.", error);
+
     return NextResponse.json(
       { error: "Stripe checkout session could not be created." },
       { status: 502 },

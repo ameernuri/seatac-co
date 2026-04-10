@@ -70,3 +70,36 @@ export function renderBlogParagraphs(content: string) {
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
 }
+
+export type BlogBlock =
+  | { type: "heading"; text: string }
+  | { type: "list"; items: string[] }
+  | { type: "paragraph"; text: string };
+
+export function renderBlogBlocks(content: string): BlogBlock[] {
+  return content
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => {
+      if (block.startsWith("## ")) {
+        return {
+          type: "heading" as const,
+          text: block.replace(/^##\s+/, "").trim(),
+        };
+      }
+
+      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+      if (lines.length > 0 && lines.every((line) => line.startsWith("- "))) {
+        return {
+          type: "list" as const,
+          items: lines.map((line) => line.replace(/^- /, "").trim()),
+        };
+      }
+
+      return {
+        type: "paragraph" as const,
+        text: block,
+      };
+    });
+}

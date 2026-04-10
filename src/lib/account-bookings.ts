@@ -2,10 +2,34 @@ import { eq, or } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { bookings } from "@/db/schema";
+import { formatBookingReference } from "@/lib/booking-display";
 import { normalizeClientPhone } from "@/lib/client-phone";
 import { getClientAccountSnapshot } from "@/lib/client-auth";
 
-type BookingRow = typeof bookings.$inferSelect;
+const accountBookingColumns = {
+  customerEmail: bookings.customerEmail,
+  customerPhone: bookings.customerPhone,
+  customerSmsOptIn: bookings.customerSmsOptIn,
+  customerUserId: bookings.customerUserId,
+  dropoffAddress: bookings.dropoffAddress,
+  dropoffLabel: bookings.dropoffLabel,
+  id: bookings.id,
+  paymentCheckoutSessionId: bookings.paymentCheckoutSessionId,
+  paymentStatus: bookings.paymentStatus,
+  pickupAddress: bookings.pickupAddress,
+  pickupAt: bookings.pickupAt,
+  pickupLabel: bookings.pickupLabel,
+  reference: bookings.reference,
+  routeName: bookings.routeName,
+  specialInstructions: bookings.specialInstructions,
+  status: bookings.status,
+  totalCents: bookings.totalCents,
+  vehicleName: bookings.vehicleName,
+} satisfies Record<string, unknown>;
+
+export type AccountBookingRow = {
+  [K in keyof typeof accountBookingColumns]: (typeof bookings.$inferSelect)[K];
+};
 
 async function getBookingAccessIdentity(userId: string) {
   const account = await getClientAccountSnapshot(userId).catch(() => null);
@@ -36,7 +60,7 @@ async function getBookingAccessIdentity(userId: string) {
 }
 
 function bookingMatchesAccess(
-  booking: BookingRow,
+  booking: AccountBookingRow,
   access: Awaited<ReturnType<typeof getBookingAccessIdentity>>,
 ) {
   if (booking.customerUserId === access.userId) {
@@ -69,7 +93,7 @@ async function getAccessibleBookings(userId: string) {
   }
 
   const rows = await db
-    .select()
+    .select(accountBookingColumns)
     .from(bookings)
     .where(predicates.length === 1 ? predicates[0] : or(...predicates));
 
@@ -79,22 +103,46 @@ async function getAccessibleBookings(userId: string) {
 export async function getBookingsForUser(userId: string) {
   const now = new Date();
   const accessible = await getAccessibleBookings(userId);
+  const paymentPending = accessible
+    .filter(
+      (booking) =>
+        booking.pickupAt >= now &&
+        booking.paymentStatus !== "paid" &&
+        booking.status !== "confirmed",
+    )
+    .sort((a, b) => a.pickupAt.getTime() - b.pickupAt.getTime());
   const upcoming = accessible
-    .filter((booking) => booking.pickupAt >= now)
+    .filter(
+      (booking) =>
+        booking.pickupAt >= now &&
+        (booking.paymentStatus === "paid" || booking.status === "confirmed"),
+    )
     .sort((a, b) => a.pickupAt.getTime() - b.pickupAt.getTime());
 
   const past = accessible
     .filter((booking) => booking.pickupAt < now)
     .sort((a, b) => b.pickupAt.getTime() - a.pickupAt.getTime());
 
-  return { upcoming, past };
+  return { paymentPending, upcoming, past };
 }
 
 export async function getBookingForUser(userId: string, reference: string) {
+  const referenceCandidates = new Set([reference]);
+  if (/^SC-/i.test(reference)) {
+    referenceCandidates.add(reference.replace(/^SC-/i, "PL-"));
+  }
+  if (/^PL-/i.test(reference)) {
+    referenceCandidates.add(reference.replace(/^PL-/i, "SC-"));
+  }
+
   const [booking] = await db
-    .select()
+    .select(accountBookingColumns)
     .from(bookings)
-    .where(eq(bookings.reference, reference))
+    .where(
+      referenceCandidates.size === 1
+        ? eq(bookings.reference, reference)
+        : or(...[...referenceCandidates].map((candidate) => eq(bookings.reference, candidate))),
+    )
     .limit(1);
 
   if (!booking) {
@@ -106,5 +154,5 @@ export async function getBookingForUser(userId: string, reference: string) {
 }
 
 export function getBookingManageUrl(reference: string, appUrl: string) {
-  return `${appUrl.replace(/\/$/, "")}/account/bookings/${encodeURIComponent(reference)}`;
+  return `${appUrl.replace(/\/$/, "")}/account/bookings/${encodeURIComponent(formatBookingReference(reference))}`;
 }

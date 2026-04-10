@@ -89,7 +89,7 @@ export default async function HotelsPage({ searchParams }: HotelsPageProps) {
             destination and inventory coverage as the broader hotel layer comes online.
           </p>
 
-          <form className="mt-8 grid gap-3 rounded-[1.8rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-4 lg:grid-cols-6">
+          <form className="mt-8 grid gap-3 rounded-[1.8rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-4 lg:grid-cols-7">
             <input type="hidden" name="search" value="1" />
             <label className="grid gap-2 lg:col-span-2">
               <span className="text-[0.72rem] uppercase tracking-[0.22em] text-[#5a7a6e]">
@@ -135,7 +135,7 @@ export default async function HotelsPage({ searchParams }: HotelsPageProps) {
                 className="h-12 rounded-[1rem] border border-[#2d6a4f]/20 bg-white px-4 text-base text-[#1a3d34] outline-none transition focus:border-[#2d6a4f]/45"
               />
             </label>
-            <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="grid gap-2 lg:col-span-2 lg:grid-cols-[minmax(0,1fr)_auto]">
               <label className="grid gap-2">
                 <span className="text-[0.72rem] uppercase tracking-[0.22em] text-[#5a7a6e]">Hotel</span>
                 <input
@@ -217,7 +217,8 @@ export default async function HotelsPage({ searchParams }: HotelsPageProps) {
               ) : (
                 <div className="mt-6 rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
                   <p className="text-sm leading-7 text-[#5a7a6e]">
-                    {hotelResults.error ?? "No Booking.com Demand offers were returned for that search yet."}
+                    We could not load live hotel rates for this search. Try a different date,
+                    adjust the destination, or call (206) 737-0808 for help planning the stay.
                   </p>
                 </div>
               )
@@ -253,7 +254,7 @@ export default async function HotelsPage({ searchParams }: HotelsPageProps) {
                   </div>
                 ) : (
                   <p className="mt-5 text-sm leading-7 text-[#5a7a6e]">
-                    {expediaRapid.error ?? "No Expedia Rapid region suggestions were returned yet."}
+                    Destination suggestions are temporarily unavailable.
                   </p>
                 )
               ) : (

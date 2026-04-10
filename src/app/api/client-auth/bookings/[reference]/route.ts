@@ -46,7 +46,13 @@ export async function PATCH(request: Request, { params }: Props) {
       updatedAt: new Date(),
     })
     .where(eq(bookings.id, booking.id))
-    .returning();
+    .returning({
+      customerSmsOptIn: bookings.customerSmsOptIn,
+      id: bookings.id,
+      reference: bookings.reference,
+      specialInstructions: bookings.specialInstructions,
+      updatedAt: bookings.updatedAt,
+    });
 
   return NextResponse.json({ booking: updated });
 }

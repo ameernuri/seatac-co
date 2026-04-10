@@ -8,7 +8,6 @@ import { type GoogleAddress, loadGoogleMapsApi } from "@/lib/google-maps";
 
 // Seatac.co theme colors
 const SEATAC_GREEN = "#2d6a4f";
-const SEATAC_GREEN_LIGHT = "#40916c";
 
 export type RouteSummary = {
   distanceMiles: number;
@@ -65,6 +64,7 @@ export function RouteMapCard({
     () => fallbackCenter ?? pickupPlace ?? dropoffPlace ?? SEA_TAC,
     [dropoffPlace, fallbackCenter, pickupPlace],
   );
+  const initialCenterRef = useRef(center);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +82,10 @@ export function RouteMapCard({
         }
 
         mapInstanceRef.current = new googleMaps.maps.Map(mapRef.current, {
-          center: { lat: center.lat, lng: center.lng },
+          center: {
+            lat: initialCenterRef.current.lat,
+            lng: initialCenterRef.current.lng,
+          },
           zoom: 11,
           mapId: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID,
           disableDefaultUI: true,
@@ -115,7 +118,15 @@ export function RouteMapCard({
       rendererRef.current?.setMap(null);
       rendererRef.current = null;
     };
-  }, [center.lat, center.lng]);
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !mapInstanceRef.current || summary) {
+      return;
+    }
+
+    mapInstanceRef.current.setCenter({ lat: center.lat, lng: center.lng });
+  }, [center.lat, center.lng, ready, summary]);
 
   useEffect(() => {
     async function renderRoute() {
@@ -174,7 +185,7 @@ export function RouteMapCard({
         setSummary(nextSummary);
         onRouteResolved(nextSummary);
         setError(null);
-      } catch (routeError) {
+      } catch {
         rendererRef.current?.set("directions", null);
         setSummary(null);
         onRouteResolved(null);
@@ -191,8 +202,10 @@ export function RouteMapCard({
     center.lat,
     center.lng,
     dropoffAddress,
+    dropoffPlace,
     onRouteResolved,
     pickupAddress,
+    pickupPlace,
     ready,
   ]);
 
@@ -305,13 +318,13 @@ export function RouteMapCard({
               <div className="flex items-start gap-3">
                 <span className="shrink-0 whitespace-nowrap">Pickup</span>
                 <span className="ml-auto max-w-[16rem] text-right text-[#1a3d34]">
-                  {summary?.startAddress || pickupAddress || "—"}
+                  {pickupAddress || summary?.startAddress || "—"}
                 </span>
               </div>
               <div className="flex items-start gap-3">
                 <span className="shrink-0 whitespace-nowrap">Drop-off</span>
                 <span className="ml-auto max-w-[16rem] text-right text-[#1a3d34]">
-                  {summary?.endAddress || dropoffAddress || "—"}
+                  {dropoffAddress || summary?.endAddress || "—"}
                 </span>
               </div>
               {error ? <div className="text-[#8aa89e]">{error}</div> : null}
