@@ -100,8 +100,6 @@ export default async function ReserveRoutePage({ params, searchParams }: Reserve
           showTitle={false}
           startStep={1}
           minStep={1}
-          routeLocked
-          lockedPricingType={initialState.tripType === "flat" ? "flat" : undefined}
           allowFlatRate={initialState.tripType === "flat"}
           bookingConstraints={bookingConstraints}
           vehicles={vehicles}

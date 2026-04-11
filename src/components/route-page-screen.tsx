@@ -15,10 +15,6 @@ export async function RoutePageScreen({ slug }: { slug: string }) {
     getSettingsMap(env.siteSlug),
   ]);
   const bookingConstraints = normalizeBookingConstraints(settings.bookingConstraints);
-  const resolvedRoute =
-    page.reservationDefaults?.routeSlug
-      ? routes.find((route) => route.slug === page.reservationDefaults?.routeSlug) ?? null
-      : null;
 
   return (
     <RouteLandingPage
@@ -36,8 +32,6 @@ export async function RoutePageScreen({ slug }: { slug: string }) {
           showTitle={false}
           startStep={1}
           minStep={1}
-          routeLocked
-          lockedPricingType={page.reservationDefaults?.tripType === "flat" ? "flat" : undefined}
           allowFlatRate={page.reservationDefaults?.tripType === "flat"}
           initialState={page.reservationDefaults}
         />

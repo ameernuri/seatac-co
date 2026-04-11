@@ -198,6 +198,28 @@ function coercePricingType(
   return enabledOptions[0]?.value ?? "flat";
 }
 
+function getCustomRouteFallbackPricingType(
+  constraints: BookingConstraints,
+  options?: { allowFlatRate?: boolean },
+): PricingType {
+  const enabledOptions = getEnabledPricingOptions(constraints, options);
+
+  if (enabledOptions.some((option) => option.value === "distance")) {
+    return "distance";
+  }
+
+  if (enabledOptions.some((option) => option.value === "hourly")) {
+    return "hourly";
+  }
+
+  return coercePricingType(
+    constraints.customTripDefaultPricing,
+    constraints,
+    false,
+    options,
+  );
+}
+
 function routesForPricingType(routes: Route[], pricingType: PricingType) {
   if (pricingType === "hourly") {
     return routes.filter((route) => route.mode === "hourly");
@@ -799,6 +821,7 @@ export function ReserveWizard({
   const smsOptInTouchedThisCheckoutRef = useRef(false);
   const scheduleTouchedRef = useRef(false);
   const availabilityAutoAdjustedRef = useRef(false);
+  const skipNextDraftPersistRef = useRef(false);
   const [checkoutErrors, setCheckoutErrors] = useState<CheckoutFieldErrors>({});
   const [notes, setNotes] = useState(initialState?.pickupDetail ?? "");
   const [availableVehicleCounts, setAvailableVehicleCounts] = useState<Record<string, number> | null>(
@@ -811,6 +834,7 @@ export function ReserveWizard({
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
+  const [resumedDraft, setResumedDraft] = useState(false);
   const customerName = combineCustomerName(customerFirstName, customerLastName);
   const normalizedCustomerPhone = normalizeClientPhone(customerPhone);
   const normalizedCustomerEmail = customerEmail.trim().toLowerCase();
@@ -1100,11 +1124,13 @@ export function ReserveWizard({
         if (raw) {
           window.sessionStorage.removeItem(RESERVE_DRAFT_STORAGE_KEY);
         }
+        setResumedDraft(false);
         setDraftLoaded(true);
         return;
       }
 
       if (!raw) {
+        setResumedDraft(false);
         setDraftLoaded(true);
         return;
       }
@@ -1135,6 +1161,7 @@ export function ReserveWizard({
         step: Step;
         tripType: TripType;
       }>;
+      skipNextDraftPersistRef.current = true;
 
       if (draft.tripType) {
         const restoredPricingType = coercePricingType(
@@ -1160,6 +1187,13 @@ export function ReserveWizard({
       if (typeof draft.pickupTime === "string") setPickupTime(draft.pickupTime);
       if (typeof draft.scheduleTouched === "boolean") {
         scheduleTouchedRef.current = draft.scheduleTouched;
+      } else if (
+        typeof draft.pickupDate === "string" ||
+        typeof draft.pickupTime === "string" ||
+        typeof draft.returnDate === "string" ||
+        typeof draft.returnTime === "string"
+      ) {
+        scheduleTouchedRef.current = true;
       }
       if (typeof draft.returnTrip === "boolean") setReturnTrip(draft.returnTrip);
       if (typeof draft.returnDate === "string") setReturnDate(draft.returnDate);
@@ -1196,6 +1230,7 @@ export function ReserveWizard({
         setCustomerPolicyAgreed(draft.customerPolicyAgreed);
       }
       if (typeof draft.notes === "string") setNotes(draft.notes);
+      setResumedDraft(true);
     } finally {
       setDraftLoaded(true);
     }
@@ -1203,6 +1238,11 @@ export function ReserveWizard({
 
   useEffect(() => {
     if (typeof window === "undefined" || !draftLoaded) {
+      return;
+    }
+
+    if (skipNextDraftPersistRef.current) {
+      skipNextDraftPersistRef.current = false;
       return;
     }
 
@@ -1791,12 +1831,9 @@ export function ReserveWizard({
       selectedRoute &&
       nextValue.trim() !== selectedRoute.origin.trim()
     ) {
-      const fallbackPricingType = coercePricingType(
-        bookingConstraints.customTripDefaultPricing,
-        bookingConstraints,
-        false,
-        { allowFlatRate },
-      );
+      const fallbackPricingType = getCustomRouteFallbackPricingType(bookingConstraints, {
+        allowFlatRate,
+      });
       setTripType(fallbackPricingType === "hourly" ? "hourly" : fallbackPricingType);
       setRouteId("");
     }
@@ -1812,12 +1849,9 @@ export function ReserveWizard({
       selectedRoute &&
       nextValue.trim() !== selectedRoute.destination.trim()
     ) {
-      const fallbackPricingType = coercePricingType(
-        bookingConstraints.customTripDefaultPricing,
-        bookingConstraints,
-        false,
-        { allowFlatRate },
-      );
+      const fallbackPricingType = getCustomRouteFallbackPricingType(bookingConstraints, {
+        allowFlatRate,
+      });
       setTripType(fallbackPricingType === "hourly" ? "hourly" : fallbackPricingType);
       setRouteId("");
     }
@@ -1834,6 +1868,23 @@ export function ReserveWizard({
     setDropoffPlace(pickupPlace);
     setRouteSummary(null);
     setStepOneAttempted(false);
+
+    if (tripType === "flat") {
+      const fallbackPricingType = getCustomRouteFallbackPricingType(bookingConstraints, {
+        allowFlatRate,
+      });
+      setTripType(fallbackPricingType === "hourly" ? "hourly" : fallbackPricingType);
+      setRouteId("");
+    }
+  }
+
+  function handleStartFreshBooking() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.sessionStorage.removeItem(RESERVE_DRAFT_STORAGE_KEY);
+    window.location.assign("/reserve");
   }
 
   function getExtraQuantity(key: string) {
@@ -2862,6 +2913,19 @@ export function ReserveWizard({
             <h1 className="max-w-2xl font-display text-4xl leading-[0.96] text-[#1a3d34] md:text-5xl">
               Reserve your ride.
             </h1>
+          ) : null}
+          {resumedDraft ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.6rem] border border-[#2d6a4f]/12 bg-[#edf7f2] px-5 py-4 text-sm text-[#2d6a4f]">
+              <p className="font-medium">Resumed your saved booking.</p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleStartFreshBooking}
+                className="h-10 rounded-full border-[#2d6a4f]/18 bg-white px-4 text-sm font-semibold text-[#1a3d34] hover:bg-white"
+              >
+                Start fresh
+              </Button>
+            </div>
           ) : null}
           <div className="hidden min-w-0 px-2 lg:block">
             <div className="overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

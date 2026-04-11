@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { EditorialGuideShell } from "@/components/editorial-guide-shell";
 import { JsonLd } from "@/components/json-ld";
 import {
   buildBreadcrumbJsonLd,
@@ -137,10 +138,11 @@ export default function Pier66VsPier91TransferGuidePage() {
   );
 
   return (
-    <main className="bg-[#f8f9fa] text-slate-900">
-      <JsonLd data={breadcrumbJsonLd} />
-      <JsonLd data={faqJsonLd} />
-      <JsonLd data={collectionJsonLd} />
+    <EditorialGuideShell>
+      <main className="bg-[#f8f9fa] text-slate-900">
+        <JsonLd data={breadcrumbJsonLd} />
+        <JsonLd data={faqJsonLd} />
+        <JsonLd data={collectionJsonLd} />
 
       <section className="mx-auto max-w-6xl px-6 pb-10 pt-16 lg:px-8">
         <div className="rounded-[2.5rem] border border-emerald-100 bg-white px-8 py-12 shadow-sm lg:px-12 lg:py-16">
@@ -310,6 +312,7 @@ export default function Pier66VsPier91TransferGuidePage() {
           </div>
         </div>
       </section>
-    </main>
+      </main>
+    </EditorialGuideShell>
   );
 }
