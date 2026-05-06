@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Cal_Sans } from "next/font/google";
+import Script from "next/script";
 
 import { Providers } from "@/components/providers";
 import "./globals.css";
@@ -42,6 +43,19 @@ export default function RootLayout({
       <body
         className={`${bodyFont.variable} ${displayFont.variable} min-h-screen bg-background text-foreground antialiased`}
       >
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-2NSD507P33"
+          strategy="afterInteractive"
+        />
+        <Script id="google-tags" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-2NSD507P33');
+            gtag('config', 'AW-18023510769');
+          `}
+        </Script>
         <Providers>{children}</Providers>
       </body>
     </html>
