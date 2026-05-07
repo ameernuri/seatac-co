@@ -44,7 +44,7 @@ export default function RootLayout({
         className={`${bodyFont.variable} ${displayFont.variable} min-h-screen bg-background text-foreground antialiased`}
       >
         <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-2NSD507P33"
+          src="https://www.googletagmanager.com/gtag/js?id=AW-18023510769"
           strategy="afterInteractive"
         />
         <Script id="google-tags" strategy="afterInteractive">
@@ -52,8 +52,8 @@ export default function RootLayout({
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
-            gtag('config', 'G-2NSD507P33');
             gtag('config', 'AW-18023510769');
+            gtag('config', 'G-2NSD507P33');
           `}
         </Script>
         <Providers>{children}</Providers>
