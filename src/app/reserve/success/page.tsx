@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ClearReserveDraft } from "@/components/clear-reserve-draft";
+import { GoogleConversionEvent } from "@/components/google-conversion-event";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,6 +36,14 @@ export default async function ReserveSuccessPage({ searchParams }: Props) {
 
   return (
     <div className="site-shell min-h-screen">
+      {isConfirmed ? (
+        <GoogleConversionEvent
+          adsConversionLabel={process.env.NEXT_PUBLIC_GOOGLE_ADS_BOOKING_CONVERSION_LABEL}
+          eventName="purchase"
+          transactionId={result.session.id}
+          value={total}
+        />
+      ) : null}
       <ClearReserveDraft storageKey="seatac-reserve-draft-v2" />
       <SiteHeader />
       <main className="mx-auto max-w-4xl px-6 py-16 lg:px-10">

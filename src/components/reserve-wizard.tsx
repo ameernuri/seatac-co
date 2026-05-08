@@ -2323,6 +2323,14 @@ export function ReserveWizard({
       }
 
       if (data.checkoutUrl) {
+        window.gtag?.("event", "begin_checkout", {
+          currency: "USD",
+          value: pricing.total,
+          route_name: bookingRouteName,
+          service_mode: effectiveServiceMode,
+          trip_type: tripType,
+          vehicle_name: selectedVehicle.name,
+        });
         window.location.assign(data.checkoutUrl);
         return;
       }

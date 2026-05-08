@@ -54,40 +54,40 @@ export default async function Home() {
   };
 
   const highlights = [
-    { label: "Book flights", href: "/flights" },
-    { label: "Book hotels", href: "/hotels" },
-    { label: "Reserve rides", href: "/rides" },
-    { label: "Compare parking", href: "/parking" },
-    { label: "Track cruises", href: "/cruises" },
+    { label: "Sea-Tac pickups", href: "/seatac-airport-car-service" },
+    { label: "Airport departures", href: "/seatac-airport-car-service" },
+    { label: "Cruise transfers", href: "/seatac-to-pier-66" },
+    { label: "Hotel pickups", href: "/seatac-to-downtown-seattle-hotels" },
+    { label: "Bellevue rides", href: "/seatac-to-bellevue" },
   ] as const;
 
   const services = [
     {
-      eyebrow: "Flights",
-      title: "Sea-Tac flight booking",
-      copy: "Search partner-powered flight options, then connect the itinerary to Sea-Tac hotels, parking, and rides.",
+      eyebrow: "Airport",
+      title: "Sea-Tac pickups and departures",
+      copy: "Reserve private rides for airport arrivals, early departures, luggage-heavy trips, and direct hotel transfers.",
       image: "/airport-suv-vibrant.png",
       imagePosition: "center center",
-      href: "/flights",
-      ctaLabel: "See flight booking",
+      href: "/rides",
+      ctaLabel: "Book airport ride",
+    },
+    {
+      eyebrow: "Cruise",
+      title: "Pier 66 and Pier 91 transfers",
+      copy: "Book transportation between Sea-Tac, Seattle hotels, Bell Street Pier 66, and Smith Cove Pier 91.",
+      image: "/cruise-v2.png",
+      imagePosition: "center center",
+      href: "/seatac-to-pier-66",
+      ctaLabel: "Book cruise transfer",
     },
     {
       eyebrow: "Hotels",
-      title: "Seattle and Sea-Tac hotels",
-      copy: "Book airport, downtown, Bellevue, and cruise-pre-stay hotels without leaving the Sea-Tac planning flow.",
-      image: "/cruise-v2.png",
-      imagePosition: "center center",
-      href: "/hotels",
-      ctaLabel: "See hotel booking",
-    },
-    {
-      eyebrow: "Ground",
-      title: "Parking, rides, and cruise timing",
-      copy: "Use one Seattle-first layer for Sea-Tac parking, airport transfers, and cruise-terminal trip timing.",
+      title: "Downtown, Bellevue, and Redmond rides",
+      copy: "Reserve private hotel pickups, Eastside airport returns, business rides, and selected hourly service.",
       image: "/bellevue-hotel.png",
       imagePosition: "center center",
       href: "/rides",
-      ctaLabel: "See ride marketplace",
+      ctaLabel: "Book hotel pickup",
     },
   ] as const;
 
@@ -108,24 +108,24 @@ export default async function Home() {
 
   const quickFacts = [
     {
-      label: "Flights",
-      value: "Book flights from Sea-Tac",
-      href: "/flights",
-    },
-    {
-      label: "Hotels",
-      value: "Seattle and Sea-Tac hotels",
-      href: "/hotels",
-    },
-    {
-      label: "Rides",
-      value: "Airport and cruise rides",
+      label: "Airport",
+      value: "Sea-Tac pickups and departures",
       href: "/rides",
     },
     {
-      label: "Parking",
-      value: "Sea-Tac parking",
-      href: "/parking",
+      label: "Cruise",
+      value: "Pier 66 and Pier 91 transfers",
+      href: "/seatac-to-pier-66",
+    },
+    {
+      label: "Hotels",
+      value: "Downtown and airport hotel rides",
+      href: "/rides",
+    },
+    {
+      label: "Eastside",
+      value: "Bellevue and Redmond rides",
+      href: "/seatac-to-bellevue",
     },
   ] as const;
 
@@ -149,55 +149,48 @@ export default async function Home() {
 
   const planningPillars = [
     {
-      label: "Hotels",
-      value: "Book Seattle and Sea-Tac hotels",
-      href: "/hotels",
+      label: "Pier 91 transfer",
+      value: "Sea-Tac to Pier 91",
+      href: "/seatac-to-pier-91",
     },
     {
-      label: "Flights",
-      value: "Book flights and plan Sea-Tac timing",
-      href: "/flights",
+      label: "Airport hotel pickup",
+      value: "Sea-Tac hotel rides",
+      href: "/seatac-airport-hotels",
     },
     {
-      label: "Parking",
-      value: "Compare Sea-Tac parking",
-      href: "/parking",
+      label: "Redmond and Eastside",
+      value: "Private Eastside rides",
+      href: "/seatac-to-bellevue",
     },
     {
-      label: "Cruises",
-      value: "Seattle cruise arrivals and departures",
-      href: "/cruises",
+      label: "Hourly",
+      value: "Selected hourly car service",
+      href: "/seatac-hourly-charter",
     },
     {
-      label: "Ride marketplace",
-      value: "Airport and cruise rides",
+      label: "Book online",
+      value: "Reserve a private ride",
       href: "/rides",
     },
   ] as const;
 
   const coverageLinks = getCoverageLinks(coverageAreas);
   const keywordHubLinks = [
-    { label: "Book flights", href: "/flights" },
-    { label: "Book hotels", href: "/hotels" },
     { label: "Reserve rides", href: "/rides" },
-    { label: "Sea-Tac parking", href: "/parking" },
-    { label: "Seattle cruises", href: "/cruises" },
-    { label: "Sea-Tac arrivals", href: "/arrivals" },
-    { label: "Sea-Tac departures", href: "/departures" },
-    { label: "Alaska at Sea-Tac", href: "/airlines/alaska-at-seatac" },
-    { label: "Sea-Tac airport hotels", href: "/seatac-airport-hotels" },
-    { label: "Sea-Tac airport guide", href: "/seatac-airport-guide" },
-    { label: "Sea-Tac airport transfer guide", href: "/seatac-airport-transfer-guide" },
-    { label: "Sea-Tac hotel transfer guide", href: "/seatac-hotel-transfer-guide" },
-    { label: "Sea-Tac parking guide", href: "/seatac-parking-guide" },
-    { label: "Sea-Tac park-and-fly hotels", href: "/park-and-fly-hotels-seatac" },
     { label: "Sea-Tac airport car service", href: "/seatac-airport-car-service" },
-    { label: "Sea-Tac to downtown Seattle", href: "/seatac-to-downtown-seattle" },
-    { label: "Downtown Seattle airport transfer guide", href: "/downtown-seattle-airport-transfer-guide" },
-    { label: "Sea-Tac to Bellevue car service", href: "/seatac-to-bellevue" },
-    { label: "Eastside airport transfer guide", href: "/eastside-airport-transfer-guide" },
     { label: "Sea-Tac to Pier 66", href: "/seatac-to-pier-66" },
     { label: "Sea-Tac to Pier 91", href: "/seatac-to-pier-91" },
+    { label: "Sea-Tac to Bellevue car service", href: "/seatac-to-bellevue" },
+    { label: "Sea-Tac arrivals", href: "/arrivals" },
+    { label: "Sea-Tac departures", href: "/departures" },
+    { label: "Downtown Seattle airport rides", href: "/seatac-to-downtown-seattle" },
+    { label: "Sea-Tac airport hotels", href: "/seatac-airport-hotels" },
+    { label: "Seattle cruise terminal transfers", href: "/pier-66-vs-pier-91-transfer-guide" },
+    { label: "Sea-Tac airport transfer guide", href: "/seatac-airport-transfer-guide" },
+    { label: "Sea-Tac hotel transfer guide", href: "/seatac-hotel-transfer-guide" },
+    { label: "Downtown Seattle airport transfer guide", href: "/downtown-seattle-airport-transfer-guide" },
+    { label: "Eastside airport transfer guide", href: "/eastside-airport-transfer-guide" },
     { label: "Sea-Tac to Hyatt Regency Bellevue", href: "/seatac-to/hyatt-regency-bellevue" },
   ] as const;
 
@@ -216,14 +209,14 @@ export default async function Home() {
 
           <div className="relative z-10 mx-auto max-w-5xl px-6 flex flex-col items-center text-center">
             <span className="inline-block rounded-full bg-white border border-emerald-100 px-4 py-1.5 text-xs font-bold tracking-widest uppercase text-emerald-700 mb-8 shadow-sm">
-              The Sea-Tac Travel Platform
+              Sea-Tac Airport And Cruise Terminal Rides
             </span>
             <h1 className="text-5xl md:text-7xl font-extrabold text-emerald-950 mb-6 leading-[1.15] tracking-normal">
-              Your Seattle travel companion.
+              Book a Sea-Tac ride, cruise transfer, or hotel pickup.
             </h1>
             <p className="text-lg md:text-xl text-slate-600 max-w-2xl mx-auto mb-16 leading-relaxed tracking-wide">
-              Book flights, find hotels, reserve rides, compare parking, and move through Sea-Tac,
-              Seattle, Bellevue, and the cruise terminals from a single airport-first platform.
+              Reserve private transportation for Sea-Tac arrivals, airport departures, Pier 66,
+              Pier 91, downtown Seattle hotels, Bellevue, Redmond, and Eastside pickups.
             </p>
 
             <div className="w-full max-w-4xl mt-12 mb-8 relative z-20">

@@ -141,20 +141,20 @@ export const siteThemes: Record<string, SiteThemeContent> = {
     brandName: "Seatac Connection",
     brandMark: "Seatac Connection",
     topbarText:
-      "Sea-Tac airport planning, hotel guides, route pages, and private ride reservations in one local resource.",
+      "Private Sea-Tac airport rides, Seattle cruise transfers, hotel pickups, and Eastside car service.",
     reservationPhoneLabel: "Reservations: (206) 737-0808",
     reservationPhoneHref: "tel:+12067370808",
     navLinks: [
-      { href: "/flights", label: "Flights" },
-      { href: "/hotels", label: "Hotels" },
-      { href: "/parking", label: "Parking" },
-      { href: "/cruises", label: "Cruises" },
+      { href: "/rides", label: "Book ride" },
+      { href: "/seatac-airport-car-service", label: "Sea-Tac" },
+      { href: "/seatac-to-pier-66", label: "Cruise" },
+      { href: "/seatac-to-bellevue", label: "Bellevue" },
     ],
     footer: {
       eyebrow: "Seatac Connection",
-      title: "Plan your Sea-Tac trip, compare hotels, reserve rides, and sort parking in one place.",
+      title: "Reserve private rides for Sea-Tac, Seattle cruise terminals, hotels, and Eastside trips.",
       body:
-        "Use Seatac Connection to compare flights, airport hotels, parking options, cruise timing, and private rides before you travel.",
+        "Use Seatac Connection to book direct airport pickups, departures, cruise transfers, downtown hotel rides, Bellevue trips, and selected Redmond or Eastside pickups.",
       contactPhone: "(206) 737-0808",
       contactEmail: "hello@seatac.co",
       operatingHours: "Live booking support available daily from 6:00 AM to 11:00 PM.",
@@ -164,35 +164,36 @@ export const siteThemes: Record<string, SiteThemeContent> = {
       "Sea-Tac hotels",
       "Downtown Seattle",
       "Bellevue",
+      "Redmond",
       "Kirkland",
       "Mercer Island",
       "South Lake Union",
     ],
     serviceCards: [
       {
-        eyebrow: "Flights",
-        title: "Flight discovery that stays tied to Sea-Tac trip planning.",
+        eyebrow: "Airport",
+        title: "Sea-Tac arrivals and departures with direct booking.",
         body:
-          "Search airport pairs through partner inventory, then move directly into hotels, rides, parking, and terminal planning.",
+          "Airport pickup and drop-off rides for travelers who need a reserved private car instead of a shuttle or rideshare wait.",
+      },
+      {
+        eyebrow: "Cruise",
+        title: "Pier 66 and Pier 91 transfers for Seattle cruise passengers.",
+        body:
+          "Direct transportation between Sea-Tac, downtown hotels, Bell Street Pier 66, and Smith Cove Pier 91.",
       },
       {
         eyebrow: "Hotels",
-        title: "Hotel areas, live rates, and stay planning around the airport and cruise terminals.",
+        title: "Downtown, Bellevue, Redmond, and Eastside hotel pickups.",
         body:
-          "Useful for travelers deciding where to stay before an early departure, late arrival, or cruise transfer.",
-      },
-      {
-        eyebrow: "Ground",
-        title: "Parking, rides, and local airport notes that answer the real arrival questions.",
-        body:
-          "Find parking options, transfer notes, terminal timing, and Seattle-specific travel guidance before you head to the airport.",
+          "Private rides for hotel check-ins, airport returns, meetings, and local transfers around Seattle and the Eastside.",
       },
     ],
-    fleetNotes: ["Flights and hotels", "Parking and cruise planning", "Ride pages when needed"],
+    fleetNotes: ["Sea-Tac ride reservations", "Cruise terminal transfers", "Hotel and Eastside pickups"],
     homepageMetrics: [
-      { value: "SEA", label: "Local airport focus" },
-      { value: "5", label: "Core travel verticals" },
-      { value: "Live", label: "Provider-powered search" },
+      { value: "SEA", label: "Airport focus" },
+      { value: "2", label: "Cruise piers" },
+      { value: "1", label: "Private-car booking flow" },
     ],
     extrasCatalog: [
       {

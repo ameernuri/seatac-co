@@ -14,6 +14,8 @@ export function getCoverageLinks(areas: readonly string[]): CoverageLink[] {
         return { label: area, href: "/seatac-to-downtown-seattle" };
       case "Bellevue":
         return { label: area, href: "/seatac-to-bellevue" };
+      case "Redmond":
+        return { label: area, href: "/seatac-to-bellevue" };
       case "Kirkland":
         return { label: area, href: "/seatac-to-kirkland" };
       case "Mercer Island":

@@ -2,216 +2,148 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { JsonLd } from "@/components/json-ld";
+import { ReserveWizard } from "@/components/reserve-wizard";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { TravelProviderCards } from "@/components/travel-provider-cards";
+import { normalizeBookingConstraints } from "@/lib/booking-constraints";
+import { getActiveRoutes, getActiveVehicles, getSettingsMap } from "@/lib/data";
+import { env } from "@/env";
 import { buildCollectionPageJsonLd, buildSeatacMetadata } from "@/lib/seo";
-import { getDateTimeOffset } from "@/lib/travel/date-defaults";
-import { getProvidersForVertical } from "@/lib/travel/provider-status";
-import { SEA_AIRPORT } from "@/lib/travel/seattle";
-import { searchTransferzRides } from "@/lib/travel/transferz";
 
 export const dynamic = "force-dynamic";
 
-type RidesPageProps = {
-  searchParams: Promise<{
-    pickup?: string;
-    dropoff?: string;
-    pickupAt?: string;
-    passengers?: string;
-    search?: string;
-  }>;
-};
-
 export const metadata: Metadata = buildSeatacMetadata({
-  title: "Airport and cruise rides | seatac.co",
+  title: "Book a Sea-Tac airport or cruise terminal ride | seatac.co",
   description:
-    "Compare Sea-Tac ride options, including seatac.co private routes and Transferz-powered outsourced transfers.",
+    "Reserve a private Sea-Tac airport ride for arrivals, departures, Seattle cruise terminals, downtown hotels, Bellevue, Redmond, and Eastside pickups.",
   path: "/rides",
 });
 
-export default async function RidesPage({ searchParams }: RidesPageProps) {
-  const params = await searchParams;
-  const providers = getProvidersForVertical("rides");
-  const pickup = params.pickup?.trim() || SEA_AIRPORT.name;
-  const dropoff = params.dropoff?.trim() || "Downtown Seattle";
-  const pickupAt = params.pickupAt?.trim() || getDateTimeOffset(2, 10);
-  const passengers = Number.parseInt(params.passengers ?? "2", 10);
-  const shouldSearch = params.search === "1";
-  const result = shouldSearch
-    ? await searchTransferzRides({
-        pickupLabel: pickup,
-        dropoffLabel: dropoff,
-        pickupAt,
-        passengers: Number.isFinite(passengers) && passengers > 0 ? passengers : 2,
-      })
-    : null;
+const targetRoutes = [
+  {
+    label: "Sea-Tac arrivals",
+    title: "Airport pickup after landing",
+    body: "Reserve a private ride from Sea-Tac to Seattle hotels, Bellevue, Redmond, Kirkland, or the cruise terminals.",
+    href: "/seatac-airport-car-service",
+  },
+  {
+    label: "Sea-Tac departures",
+    title: "Hotel or home pickup to SEA",
+    body: "Book the pickup window you need for early flights, luggage-heavy departures, and direct airport drop-offs.",
+    href: "/seatac-to-downtown-seattle",
+  },
+  {
+    label: "Cruise terminals",
+    title: "Pier 66 and Pier 91 transfers",
+    body: "Private ride service between Sea-Tac, downtown hotels, Bell Street Pier 66, and Smith Cove Pier 91.",
+    href: "/seatac-to-pier-66",
+  },
+  {
+    label: "Eastside rides",
+    title: "Bellevue, Redmond, and Kirkland",
+    body: "Targeted private rides for Eastside hotel stays, business trips, office visits, and airport returns.",
+    href: "/seatac-to-bellevue",
+  },
+] as const;
 
-  const inHouseLinks = [
-    { href: "/reserve", label: "Book a private seatac.co ride" },
-    { href: "/seatac-to-downtown-seattle", label: "Sea-Tac to downtown Seattle" },
-    { href: "/seatac-to-bellevue", label: "Sea-Tac to Bellevue" },
-    { href: "/seatac-to-pier-66", label: "Sea-Tac to Pier 66" },
-    { href: "/seatac-to-pier-91", label: "Sea-Tac to Pier 91" },
-  ];
+const bookingIntents = [
+  "Sea-Tac airport pickups",
+  "Sea-Tac airport departures",
+  "Pier 66 cruise transfers",
+  "Pier 91 cruise transfers",
+  "Downtown Seattle hotels",
+  "Bellevue and Redmond rides",
+] as const;
+
+export default async function RidesPage() {
+  const [vehicles, routes, settings] = await Promise.all([
+    getActiveVehicles(env.siteSlug),
+    getActiveRoutes(env.siteSlug),
+    getSettingsMap(env.siteSlug),
+  ]);
+  const bookingConstraints = normalizeBookingConstraints(settings.bookingConstraints);
 
   return (
     <div className="site-shell min-h-screen">
       <SiteHeader />
-      <main className="mx-auto max-w-[1280px] px-5 py-12 lg:px-8 lg:py-16">
+      <main className="mx-auto max-w-[1280px] px-5 py-10 lg:px-8 lg:py-14">
         <JsonLd
           data={buildCollectionPageJsonLd(
-            "Sea-Tac rides",
-            "Airport, hotel, and cruise transfer marketplace for Sea-Tac travelers.",
+            "Book Sea-Tac rides",
+            "Private airport and cruise terminal ride booking for Sea-Tac travelers.",
             "/rides",
-            inHouseLinks.map((link) => ({ name: link.label, path: link.href })),
+            targetRoutes.map((route) => ({ name: route.title, path: route.href })),
           )}
         />
 
-        <section className="rounded-[2.6rem] border border-[#2d6a4f]/10 bg-white px-6 py-8 shadow-[0_4px_24px_rgba(45,106,79,0.06)] lg:px-10 lg:py-10">
-          <p className="text-[0.76rem] uppercase tracking-[0.34em] text-[#5a7a6e]">
-            Seattle rides
-          </p>
-          <h1 className="mt-4 text-[clamp(2.8rem,5vw,4.9rem)] leading-[0.92] tracking-[-0.04em] text-[#1a3d34]">
-            One ride hub for airport transfers, hotel pickups, and cruise terminal runs.
-          </h1>
-          <p className="mt-5 max-w-3xl text-lg leading-8 text-[#5a7a6e]">
-            Keep the premium private ride pages inside seatac.co, and use Transferz to widen coverage
-            without taking on a larger dispatch operation.
-          </p>
+        <section className="grid gap-8 lg:grid-cols-[0.88fr_1.12fr] lg:items-start">
+          <div className="rounded-[2.6rem] border border-[#2d6a4f]/10 bg-white px-6 py-8 shadow-[0_4px_24px_rgba(45,106,79,0.06)] lg:sticky lg:top-6 lg:px-8 lg:py-10">
+            <p className="text-[0.76rem] font-bold uppercase tracking-[0.34em] text-[#2d6a4f]">
+              Private ride booking
+            </p>
+            <h1 className="mt-4 text-[clamp(3rem,5.3vw,5.6rem)] leading-[0.9] tracking-[-0.055em] text-[#123b33]">
+              Book a Sea-Tac ride or cruise transfer.
+            </h1>
+            <p className="mt-5 text-lg leading-8 text-[#5a7a6e]">
+              Reserve direct private transportation for Sea-Tac arrivals, airport departures,
+              Seattle cruise terminals, downtown hotels, Bellevue, Redmond, and Eastside pickups.
+            </p>
 
-          <form className="mt-8 grid gap-3 rounded-[1.8rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-4 lg:grid-cols-5">
-            <input type="hidden" name="search" value="1" />
-            <label className="grid gap-2 lg:col-span-2">
-              <span className="text-[0.72rem] uppercase tracking-[0.22em] text-[#5a7a6e]">Pickup</span>
-              <input
-                type="text"
-                name="pickup"
-                defaultValue={pickup}
-                className="h-12 rounded-[1rem] border border-[#2d6a4f]/20 bg-white px-4 text-base text-[#1a3d34] outline-none transition focus:border-[#2d6a4f]/45"
-              />
-            </label>
-            <label className="grid gap-2 lg:col-span-2">
-              <span className="text-[0.72rem] uppercase tracking-[0.22em] text-[#5a7a6e]">Drop-off</span>
-              <input
-                type="text"
-                name="dropoff"
-                defaultValue={dropoff}
-                className="h-12 rounded-[1rem] border border-[#2d6a4f]/20 bg-white px-4 text-base text-[#1a3d34] outline-none transition focus:border-[#2d6a4f]/45"
-              />
-            </label>
-            <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:col-span-5">
-              <label className="grid gap-2">
-                <span className="text-[0.72rem] uppercase tracking-[0.22em] text-[#5a7a6e]">
-                  Pickup time
-                </span>
-                <input
-                  type="datetime-local"
-                  name="pickupAt"
-                  defaultValue={pickupAt}
-                  className="h-12 rounded-[1rem] border border-[#2d6a4f]/20 bg-white px-4 text-base text-[#1a3d34] outline-none transition focus:border-[#2d6a4f]/45"
-                />
-              </label>
-              <label className="grid gap-2">
-                <span className="text-[0.72rem] uppercase tracking-[0.22em] text-[#5a7a6e]">
-                  Passengers
-                </span>
-                <input
-                  type="number"
-                  name="passengers"
-                  min="1"
-                  max="10"
-                  defaultValue={passengers}
-                  className="h-12 rounded-[1rem] border border-[#2d6a4f]/20 bg-white px-4 text-base text-[#1a3d34] outline-none transition focus:border-[#2d6a4f]/45"
-                />
-              </label>
-              <div className="flex items-end">
-                <button type="submit" className="button-link primary h-12 whitespace-nowrap">
-                  Search rides
-                </button>
-              </div>
-            </div>
-          </form>
-        </section>
-
-        <section className="mt-8">
-          <TravelProviderCards providers={providers} />
-        </section>
-
-        <section className="mt-10 grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
-          <div className="rounded-[2.2rem] border border-[#2d6a4f]/10 bg-white p-6 shadow-[0_4px_20px_rgba(45,106,79,0.06)] lg:p-8">
-            <p className="text-[0.76rem] uppercase tracking-[0.34em] text-[#5a7a6e]">Transferz marketplace</p>
-            <h2 className="mt-3 text-[2rem] leading-[1.02] tracking-[-0.03em] text-[#1a3d34]">
-              Outsource general transfer fulfillment and keep premium direct routes in-house.
-            </h2>
-            {result ? (
-              result.offers.length > 0 ? (
-                <div className="mt-6 grid gap-4">
-                  {result.offers.map((offer, index) => (
-                    <article
-                      key={`${offer.title}-${index}`}
-                      className="rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-[1.15rem] font-semibold tracking-[-0.03em] text-[#123b33]">
-                            {offer.title}
-                          </h3>
-                          <p className="mt-1 text-sm text-[#5a7a6e]">
-                            {offer.pickupLabel} to {offer.dropoffLabel}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-semibold text-[#123b33]">
-                            {offer.totalPrice
-                              ? `${offer.currency ?? "USD"} ${offer.totalPrice}`
-                              : "Live provider pricing"}
-                          </p>
-                          {offer.vehicleType ? (
-                            <p className="text-sm text-[#5a7a6e]">{offer.vehicleType}</p>
-                          ) : null}
-                        </div>
-                      </div>
-                      {offer.deepLinkUrl ? (
-                        <div className="mt-4">
-                          <Link href={offer.deepLinkUrl} className="button-link primary" target="_blank">
-                            Continue to transfer booking
-                          </Link>
-                        </div>
-                      ) : null}
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-6 rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
-                  <p className="text-sm leading-7 text-[#5a7a6e]">
-                    Ride marketplace results are temporarily unavailable. Try again soon.
-                  </p>
-                </div>
-              )
-            ) : (
-              <div className="mt-6 rounded-[1.5rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] p-5">
-                <p className="text-sm leading-7 text-[#5a7a6e]">
-                  Search a ride to compare marketplace transfers with seatac.co private routes.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-[2.2rem] border border-[#2d6a4f]/10 bg-white p-6 shadow-[0_4px_20px_rgba(45,106,79,0.06)] lg:p-8">
-            <p className="text-[0.76rem] uppercase tracking-[0.34em] text-[#5a7a6e]">Direct ride pages</p>
-            <div className="mt-5 grid gap-4">
-              {inHouseLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="rounded-[1.4rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] px-5 py-4 text-sm font-medium text-[#123b33] transition hover:border-[#2d6a4f]/20 hover:bg-white"
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              {bookingIntents.map((intent) => (
+                <div
+                  key={intent}
+                  className="rounded-[1.2rem] border border-[#2d6a4f]/10 bg-[#f8f7f4] px-4 py-3 text-sm font-semibold text-[#123b33]"
                 >
-                  {link.label}
-                </Link>
+                  {intent}
+                </div>
               ))}
             </div>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link href="#book" className="button-link primary">
+                Reserve online
+              </Link>
+              <Link href="tel:+12067370808" className="button-link secondary">
+                Call dispatch
+              </Link>
+            </div>
           </div>
+
+          <div id="book" className="scroll-mt-6 rounded-[2.6rem] border border-[#2d6a4f]/10 bg-white p-4 shadow-[0_4px_24px_rgba(45,106,79,0.06)] lg:p-6">
+            <div className="mb-5 px-2 pt-2">
+              <p className="text-[0.76rem] font-bold uppercase tracking-[0.34em] text-[#2d6a4f]">
+                Hold your pickup window
+              </p>
+              <h2 className="mt-2 text-3xl leading-[0.95] tracking-[-0.04em] text-[#123b33] md:text-4xl">
+                Choose the route, time, and vehicle. Checkout reserves the ride.
+              </h2>
+            </div>
+            <ReserveWizard
+              bookingConstraints={bookingConstraints}
+              vehicles={vehicles}
+              routes={routes}
+              showTitle={false}
+            />
+          </div>
+        </section>
+
+        <section className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {targetRoutes.map((route) => (
+            <Link
+              key={route.label}
+              href={route.href}
+              className="rounded-[1.8rem] border border-[#2d6a4f]/10 bg-white p-6 shadow-[0_4px_18px_rgba(45,106,79,0.05)] transition hover:-translate-y-0.5 hover:border-[#2d6a4f]/20 hover:shadow-[0_10px_32px_rgba(45,106,79,0.1)]"
+            >
+              <span className="text-[0.72rem] font-bold uppercase tracking-[0.28em] text-[#2d6a4f]">
+                {route.label}
+              </span>
+              <h3 className="mt-4 text-2xl leading-[1] tracking-[-0.04em] text-[#123b33]">
+                {route.title}
+              </h3>
+              <p className="mt-4 text-sm leading-7 text-[#5a7a6e]">{route.body}</p>
+            </Link>
+          ))}
         </section>
       </main>
       <SiteFooter />

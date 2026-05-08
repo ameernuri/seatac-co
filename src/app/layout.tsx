@@ -19,9 +19,9 @@ const displayFont = Cal_Sans({
 export const metadata: Metadata = {
   metadataBase: new URL("https://seatac.co"),
   applicationName: "Seatac Connection",
-  title: "Seatac Connection | Sea-Tac airport rides and travel planning",
+  title: "Seatac Connection | Sea-Tac airport and cruise terminal rides",
   description:
-    "Airport-first booking and travel planning for Sea-Tac pickups, Seattle hotel transfers, Bellevue rides, and local airport guides.",
+    "Book private Sea-Tac airport rides, Seattle cruise terminal transfers, hotel pickups, Bellevue rides, Redmond trips, and Eastside car service.",
   alternates: {
     canonical: "/",
   },
