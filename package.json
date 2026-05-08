@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack --port 4003",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "transferz:bootstrap-key": "node --env-file=.env --import tsx src/scripts/bootstrap-transferz-api-key.ts",
