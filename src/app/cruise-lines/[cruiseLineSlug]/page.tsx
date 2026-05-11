@@ -10,6 +10,8 @@ type CruiseLineGuidePageProps = {
   }>;
 };
 
+export const dynamic = "force-dynamic";
+
 export async function generateStaticParams() {
   return getCruiseLineGuideSlugs().map((cruiseLineSlug) => ({ cruiseLineSlug }));
 }

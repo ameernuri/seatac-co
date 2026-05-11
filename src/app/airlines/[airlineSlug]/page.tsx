@@ -21,6 +21,7 @@ import {
 } from "@/lib/route-booking";
 
 export const dynamicParams = false;
+export const dynamic = "force-dynamic";
 
 type AirlineGuidePageProps = {
   params: Promise<{
