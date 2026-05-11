@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Cal_Sans } from "next/font/google";
 
+import { PhoneClickTracker } from "@/components/phone-click-tracker";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
@@ -60,6 +61,7 @@ export default function RootLayout({
       <body
         className={`${bodyFont.variable} ${displayFont.variable} min-h-screen bg-background text-foreground antialiased`}
       >
+        <PhoneClickTracker adsConversionLabel={process.env.NEXT_PUBLIC_GOOGLE_ADS_CALL_CONVERSION_LABEL} />
         <Providers>{children}</Providers>
       </body>
     </html>
