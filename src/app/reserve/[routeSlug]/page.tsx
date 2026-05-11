@@ -7,6 +7,11 @@ import { SiteHeader } from "@/components/site-header";
 import { normalizeBookingConstraints } from "@/lib/booking-constraints";
 import { getActiveRoutes, getActiveVehicles, getHotelBySlug, getSettingsMap } from "@/lib/data";
 import { env } from "@/env";
+import {
+  EXTRAS_CATALOG_KEY,
+  getDefaultExtrasCatalog,
+  getEnabledExtrasCatalog,
+} from "@/lib/extras-catalog";
 import { deriveHotelReservationDefaults, getHotelRouteName } from "@/lib/hotels";
 import {
   deriveRouteReservationDefaults,
@@ -81,6 +86,10 @@ export default async function ReserveRoutePage({ params, searchParams }: Reserve
   }
 
   const bookingConstraints = normalizeBookingConstraints(settings.bookingConstraints);
+  const extrasCatalog = getEnabledExtrasCatalog(
+    settings[EXTRAS_CATALOG_KEY],
+    getDefaultExtrasCatalog(env.siteSlug),
+  );
   const initialState = hotel
     ? deriveHotelReservationDefaults(hotel, route)
     : deriveRouteReservationDefaults(route);
@@ -102,6 +111,7 @@ export default async function ReserveRoutePage({ params, searchParams }: Reserve
           minStep={1}
           allowFlatRate={initialState.tripType === "flat"}
           bookingConstraints={bookingConstraints}
+          extrasCatalog={extrasCatalog}
           vehicles={vehicles}
           routes={routes}
           initialState={initialState}

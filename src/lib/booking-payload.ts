@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@/db/client";
 import {
   bookings,
+  siteSettings,
   vehicleBlocks,
   vehicleSiteAssignments,
   vehicleUnits,
@@ -17,6 +18,11 @@ import {
 } from "@/lib/dispatch-rules";
 import { env } from "@/env";
 import { getActiveBookingHoldCutoff } from "@/lib/booking-holds";
+import {
+  EXTRAS_CATALOG_KEY,
+  getDefaultExtrasCatalog,
+  getEnabledExtrasCatalog,
+} from "@/lib/extras-catalog";
 import { getBookingConstraintsBySiteId } from "@/lib/booking-constraints-store";
 import { validateBookingWindow } from "@/lib/booking-constraints";
 import { quoteReservation, type ServiceMode } from "@/lib/quote";
@@ -305,6 +311,20 @@ export async function createBookingDraft(
 
     return lowest;
   }, null);
+  const extrasCatalogRow = await db.query.siteSettings.findFirst({
+    where: and(
+      eq(siteSettings.siteId, site.id),
+      eq(siteSettings.key, EXTRAS_CATALOG_KEY),
+    ),
+  });
+  const extrasCatalog = getEnabledExtrasCatalog(
+    extrasCatalogRow?.value,
+    getDefaultExtrasCatalog(site.slug),
+  );
+  const allowedExtraKeys = new Set(extrasCatalog.map((extra) => extra.key));
+  const selectedExtras = payload.selectedExtras.filter((key) =>
+    allowedExtraKeys.has(key),
+  );
 
   const pricing = quoteReservation({
     baseVehicleFloor,
@@ -318,7 +338,8 @@ export async function createBookingDraft(
     routeDistanceMiles: payload.routeDistanceMiles,
     routeDurationMinutes: payload.routeDurationMinutes,
     returnTrip: payload.returnTrip,
-    selectedExtras: payload.selectedExtras,
+    extrasCatalog,
+    selectedExtras,
     bookingConstraints,
   });
 
@@ -416,7 +437,7 @@ export async function createBookingDraft(
         vehicleName: vehicle.name,
         vehicleUnitLabel: vehicleUnit.label,
         dispatchOverride: {},
-        extras: payload.selectedExtras,
+        extras: selectedExtras,
         pricing,
         subtotalCents: Math.round(pricing.subtotal * 100),
         totalCents: Math.round(pricing.total * 100),

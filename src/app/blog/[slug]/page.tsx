@@ -1,157 +1,151 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
+import Link from"next/link";
+import { notFound } from"next/navigation";
 
-import { JsonLd } from "@/components/json-ld";
-import { SiteFooter } from "@/components/site-footer";
-import { SiteHeader } from "@/components/site-header";
-import { getPublishedBlogPostBySlug, renderBlogBlocks } from "@/lib/blog";
-import { buildArticleJsonLd, buildSeatacMetadata } from "@/lib/seo";
+import { JsonLd } from"@/components/json-ld";
+import { SiteFooter } from"@/components/site-footer";
+import { SiteHeader } from"@/components/site-header";
+import { getPublishedBlogPostBySlug, renderBlogBlocks } from"@/lib/blog";
+import { buildArticleJsonLd, buildSeatacMetadata } from"@/lib/seo";
 
-export const dynamic = "force-dynamic";
+export const dynamic ="force-dynamic";
 
 function renderInlineContent(text: string) {
-  const segments = text.split(/(\[[^\]]+\]\([^)]+\))/g).filter(Boolean);
+ const segments = text.split(/(\[[^\]]+\]\([^)]+\))/g).filter(Boolean);
 
-  return segments.map((segment, index) => {
-    const match = segment.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-    if (!match) {
-      return <span key={index}>{segment}</span>;
-    }
+ return segments.map((segment, index) => {
+ const match = segment.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+ if (!match) {
+ return <span key={index}>{segment}</span>;
+ }
 
-    const [, label, href] = match;
-    const isInternal = href.startsWith("/");
+ const [, label, href] = match;
+ const isInternal = href.startsWith("/");
 
-    if (isInternal) {
-      return (
-        <Link key={index} href={href} className="font-semibold text-emerald-700 underline decoration-emerald-200 underline-offset-4 transition-colors hover:text-emerald-800">
-          {label}
-        </Link>
-      );
-    }
+ if (isInternal) {
+ return (
+ <Link key={index} href={href} className="font-semibold text-emerald-700 underline decoration-emerald-200 underline-offset-4 transition-colors hover:text-emerald-800">
+ {label}
+ </Link>
+ );
+ }
 
-    return (
-      <a
-        key={index}
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        className="font-semibold text-emerald-700 underline decoration-emerald-200 underline-offset-4 transition-colors hover:text-emerald-800"
-      >
-        {label}
-      </a>
-    );
-  });
+ return (
+ <a
+ key={index}
+ href={href}
+ target="_blank"rel="noreferrer"className="font-semibold text-emerald-700 underline decoration-emerald-200 underline-offset-4 transition-colors hover:text-emerald-800">
+ {label}
+ </a>
+ );
+ });
 }
 
 function formatDate(value: Date | string | null | undefined) {
-  if (!value) {
-    return "Draft";
-  }
+ if (!value) {
+ return"Draft";
+ }
 
-  const date = value instanceof Date ? value : new Date(value);
-  return new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
+ const date = value instanceof Date ? value : new Date(value);
+ return new Intl.DateTimeFormat("en-US", {
+ month:"long",
+ day:"numeric",
+ year:"numeric",
+ }).format(date);
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const post = await getPublishedBlogPostBySlug(slug);
+ const { slug } = await params;
+ const post = await getPublishedBlogPostBySlug(slug);
 
-  if (!post) {
-    return buildSeatacMetadata({
-      title: "Article not found | Seatac Connection",
-      description: "The requested article is not available.",
-      path: `/blog/${slug}`,
-      index: false,
-    });
-  }
+ if (!post) {
+ return buildSeatacMetadata({
+ title:"Article not found | Seatac Connection",
+ description:"The requested article is not available.",
+ path: `/blog/${slug}`,
+ index: false,
+ });
+ }
 
-  return buildSeatacMetadata({
-    title: post.seoTitle ?? `${post.title} | Seatac Connection`,
-    description:
-      post.seoDescription ??
-      post.excerpt ??
-      "Sea-Tac and Seattle travel planning guidance from Seatac Connection.",
-    path: `/blog/${post.slug}`,
-  });
+ return buildSeatacMetadata({
+ title: post.seoTitle ?? `${post.title} | Seatac Connection`,
+ description:
+ post.seoDescription ??
+ post.excerpt ??"Sea-Tac and Seattle travel planning guidance from Seatac Connection.",
+ path: `/blog/${post.slug}`,
+ });
 }
 
 export default async function BlogPostPage({
-  params,
+ params,
 }: {
-  params: Promise<{ slug: string }>;
+ params: Promise<{ slug: string }>;
 }) {
-  const { slug } = await params;
-  const post = await getPublishedBlogPostBySlug(slug);
+ const { slug } = await params;
+ const post = await getPublishedBlogPostBySlug(slug);
 
-  if (!post) {
-    notFound();
-  }
+ if (!post) {
+ notFound();
+ }
 
-  const blocks = renderBlogBlocks(post.content);
+ const blocks = renderBlogBlocks(post.content);
 
-  return (
-    <div className="site-shell min-h-screen bg-[#f8f9fa]">
-      <SiteHeader />
-      <main className="mx-auto max-w-4xl px-6 pb-16 pt-28 lg:px-8">
-        <JsonLd
-          data={buildArticleJsonLd({
-            title: post.title,
-            description:
-              post.seoDescription ??
-              post.excerpt ??
-              "Sea-Tac and Seattle travel planning guidance from Seatac Connection.",
-            path: `/blog/${post.slug}`,
-            datePublished: post.publishedAt ?? post.updatedAt,
-            dateModified: post.updatedAt,
-            authorName: post.author?.name ?? "Seatac Connection",
-            image: post.coverImage ?? null,
-          })}
-        />
-        <article className="rounded-[2rem] border border-emerald-100 bg-white px-8 py-10 shadow-sm">
-          <div className="flex flex-wrap items-center gap-3 text-[0.72rem] font-semibold uppercase tracking-[0.28em] text-emerald-600">
-            <span>{post.category ?? "Guide"}</span>
-            <span>{formatDate(post.publishedAt ?? post.updatedAt)}</span>
-            {post.author?.name ? <span>{post.author.name}</span> : null}
-          </div>
-          <h1 className="mt-4 text-5xl font-extrabold tracking-[-0.04em] text-emerald-950">
-            {post.title}
-          </h1>
-          {post.excerpt ? (
-            <p className="mt-5 text-xl leading-9 text-slate-600">{post.excerpt}</p>
-          ) : null}
-          <div className="mt-10 space-y-6 text-lg leading-8 text-slate-700">
-            {blocks.map((block, index) => {
-              if (block.type === "heading") {
-                return (
-                  <h2
-                    key={index}
-                    className="pt-4 text-2xl font-bold tracking-[-0.02em] text-emerald-950"
-                  >
-                    {block.text}
-                  </h2>
-                );
-              }
+ return (
+ <div className="site-shell min-h-screen bg-[#f8f9fa]">
+ <SiteHeader />
+ <main className="mx-auto max-w-4xl px-6 pb-16 pt-28 lg:px-8">
+ <JsonLd
+ data={buildArticleJsonLd({
+ title: post.title,
+ description:
+ post.seoDescription ??
+ post.excerpt ??"Sea-Tac and Seattle travel planning guidance from Seatac Connection.",
+ path: `/blog/${post.slug}`,
+ datePublished: post.publishedAt ?? post.updatedAt,
+ dateModified: post.updatedAt,
+ authorName: post.author?.name ??"Seatac Connection",
+ image: post.coverImage ?? null,
+ })}
+ />
+ <article className="rounded-[2rem] border border-emerald-100 bg-white px-8 py-10 shadow-sm">
+ <div className="flex flex-wrap items-center gap-3 text-[0.72rem] font-semibold uppercase tracking-[0.28em] text-emerald-600">
+ <span>{post.category ??"Guide"}</span>
+ <span>{formatDate(post.publishedAt ?? post.updatedAt)}</span>
+ {post.author?.name ? <span>{post.author.name}</span> : null}
+ </div>
+ <h1 className="mt-4 text-5xl font-extrabold text-emerald-950">
+ {post.title}
+ </h1>
+ {post.excerpt ? (
+ <p className="mt-5 text-xl leading-9 text-slate-600">{post.excerpt}</p>
+ ) : null}
+ <div className="mt-10 space-y-6 text-lg leading-8 text-slate-700">
+ {blocks.map((block, index) => {
+ if (block.type ==="heading") {
+ return (
+ <h2
+ key={index}
+ className="pt-4 text-2xl font-bold text-emerald-950">
+ {block.text}
+ </h2>
+ );
+ }
 
-              if (block.type === "list") {
-                return (
-                  <ul key={index} className="space-y-3 pl-6 text-base leading-7 text-slate-700 marker:text-emerald-700 list-disc">
-                    {block.items.map((item, itemIndex) => (
-                      <li key={itemIndex}>{renderInlineContent(item)}</li>
-                    ))}
-                  </ul>
-                );
-              }
+ if (block.type ==="list") {
+ return (
+ <ul key={index} className="space-y-3 pl-6 text-base leading-7 text-slate-700 marker:text-emerald-700 list-disc">
+ {block.items.map((item, itemIndex) => (
+ <li key={itemIndex}>{renderInlineContent(item)}</li>
+ ))}
+ </ul>
+ );
+ }
 
-              return <p key={index}>{renderInlineContent(block.text)}</p>;
-            })}
-          </div>
-        </article>
-      </main>
-      <SiteFooter />
-    </div>
-  );
+ return <p key={index}>{renderInlineContent(block.text)}</p>;
+ })}
+ </div>
+ </article>
+ </main>
+ <SiteFooter />
+ </div>
+ );
 }

@@ -4,7 +4,7 @@ import {
   shouldChargeComponent,
   type BookingConstraints,
 } from "@/lib/booking-constraints";
-import { extrasCatalog } from "@/lib/site-content";
+import type { RideExtra } from "@/lib/extras-catalog";
 
 export type ServiceMode = "airport" | "corporate" | "hourly" | "events";
 
@@ -20,6 +20,7 @@ export type QuoteInput = {
   routeDistanceMiles?: number | null;
   routeDurationMinutes?: number | null;
   returnTrip: boolean;
+  extrasCatalog?: RideExtra[];
   selectedExtras: string[];
   bookingConstraints?: BookingConstraints | null;
 };
@@ -113,7 +114,7 @@ export function quoteReservation(input: QuoteInput) {
       ? input.bags * bagFee
       : 0;
   const extrasTotal = input.selectedExtras.reduce((sum, key) => {
-    const match = extrasCatalog.find((item) => item.key === key);
+    const match = (input.extrasCatalog ?? []).find((item) => item.key === key);
     return sum + (match?.price ?? 0);
   }, 0);
 

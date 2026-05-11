@@ -14,6 +14,11 @@ import { normalizeBookingConstraints } from "@/lib/booking-constraints";
 import { getCoverageLinks } from "@/lib/coverage-links";
 import { getActiveRoutes, getActiveVehicles, getSettingsMap } from "@/lib/data";
 import { env } from "@/env";
+import {
+  EXTRAS_CATALOG_KEY,
+  getDefaultExtrasCatalog,
+  getEnabledExtrasCatalog,
+} from "@/lib/extras-catalog";
 import { formatCurrency } from "@/lib/format";
 import { buildLocalBusinessJsonLd, buildWebSiteJsonLd } from "@/lib/seo";
 import { coverageAreas, siteChrome } from "@/lib/site-content";
@@ -29,6 +34,10 @@ export default async function Home() {
   ]);
 
   const bookingConstraints = normalizeBookingConstraints(settings.bookingConstraints);
+  const extrasCatalog = getEnabledExtrasCatalog(
+    settings[EXTRAS_CATALOG_KEY],
+    getDefaultExtrasCatalog(env.siteSlug),
+  );
   const theme = getSiteThemeContent(env.siteSlug);
   const startingFare = vehicles.reduce<number | null>((lowest, vehicle) => {
     const basePrice = Number(vehicle.basePrice);
@@ -226,6 +235,7 @@ export default async function Home() {
               <div className="w-full text-left">
                 <ReserveWizard
                   bookingConstraints={bookingConstraints}
+                  extrasCatalog={extrasCatalog}
                   vehicles={vehicles}
                   routes={routes}
                   landingOnly

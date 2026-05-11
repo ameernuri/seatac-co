@@ -2,6 +2,11 @@ import { ReserveWizard } from "@/components/reserve-wizard";
 import { normalizeBookingConstraints } from "@/lib/booking-constraints";
 import { getActiveRoutes, getActiveVehicles, getSettingsMap } from "@/lib/data";
 import { env } from "@/env";
+import {
+  EXTRAS_CATALOG_KEY,
+  getDefaultExtrasCatalog,
+  getEnabledExtrasCatalog,
+} from "@/lib/extras-catalog";
 import { getRoutePage } from "@/lib/route-pages";
 import { getRouteReserveHref } from "@/lib/route-booking";
 
@@ -15,6 +20,10 @@ export async function RoutePageScreen({ slug }: { slug: string }) {
     getSettingsMap(env.siteSlug),
   ]);
   const bookingConstraints = normalizeBookingConstraints(settings.bookingConstraints);
+  const extrasCatalog = getEnabledExtrasCatalog(
+    settings[EXTRAS_CATALOG_KEY],
+    getDefaultExtrasCatalog(env.siteSlug),
+  );
 
   return (
     <RouteLandingPage
@@ -27,6 +36,7 @@ export async function RoutePageScreen({ slug }: { slug: string }) {
       reservationPanel={
         <ReserveWizard
           bookingConstraints={bookingConstraints}
+          extrasCatalog={extrasCatalog}
           vehicles={vehicles}
           routes={routes}
           showTitle={false}
