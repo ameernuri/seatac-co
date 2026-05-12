@@ -15,6 +15,14 @@ export async function SiteHeader() {
     <header className="site-main-header">
       <div className="site-topbar">
         <div className="site-topbar-inner">
+          <Link
+            href={siteChrome.reservationPhoneHref}
+            className="site-topbar-call-link hover:text-emerald-700 transition-colors"
+            aria-label="Call Seatac Connection dispatch"
+          >
+            <PhoneCall className="size-3.5" aria-hidden="true" />
+            <span>{siteChrome.reservationPhoneLabel}</span>
+          </Link>
 
           <div className="site-topbar-account-links">
             {userLabel ? (
@@ -42,7 +50,14 @@ export async function SiteHeader() {
           ))}
         </nav>
         <div className="flex items-center gap-3">
-
+          <Link
+            href={siteChrome.reservationPhoneHref}
+            className="hidden items-center gap-2 rounded-full border border-[#2d6a4f]/15 bg-white px-4 py-3 text-sm font-semibold text-[#1a3d34] transition hover:border-[#2d6a4f]/30 hover:bg-[#f8f7f4] lg:inline-flex"
+            aria-label="Call Seatac Connection dispatch"
+          >
+            <PhoneCall className="size-4" aria-hidden="true" />
+            Call
+          </Link>
           <SeatacPrimaryButton href="/reserve" emphasis="cta" className="px-5 py-3">
             Book ride
           </SeatacPrimaryButton>

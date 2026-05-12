@@ -26,6 +26,7 @@ import {
 import { getBookingConstraintsBySiteId } from "@/lib/booking-constraints-store";
 import { validateBookingWindow } from "@/lib/booking-constraints";
 import { quoteReservation, type ServiceMode } from "@/lib/quote";
+import { fetchGoogleRoutePreview } from "@/lib/route-preview";
 import { getRequiredSite } from "@/lib/sites";
 import { evaluateAvailabilityWindow } from "@/lib/vehicle-schedule";
 import { getVehicleAvailabilityScheduleForSiteVehicle } from "@/lib/vehicle-schedule-store";
@@ -262,6 +263,28 @@ export async function createBookingDraft(
       })
     : null;
 
+  if (payload.tripType === "flat" && !selectedRoute) {
+    throw new BookingGuardrailError("Choose a valid flat-rate route.");
+  }
+
+  let resolvedRouteDistanceMiles = payload.routeDistanceMiles;
+  let resolvedRouteDurationMinutes = payload.routeDurationMinutes;
+
+  if (payload.tripType === "distance") {
+    const destination = payload.dropoffAddress?.trim() ?? "";
+    const previewResult = await fetchGoogleRoutePreview(
+      payload.pickupAddress,
+      destination,
+    );
+
+    if (!previewResult.preview) {
+      throw new BookingGuardrailError("Route distance must be confirmed before checkout.");
+    }
+
+    resolvedRouteDistanceMiles = previewResult.preview.distanceMiles;
+    resolvedRouteDurationMinutes = previewResult.preview.durationMinutes;
+  }
+
   const [vehicleRow] = await db
     .select({ vehicle: vehicles })
     .from(vehicles)
@@ -335,8 +358,8 @@ export async function createBookingDraft(
     passengers: payload.passengers,
     bags: payload.bags,
     hoursRequested: payload.hoursRequested,
-    routeDistanceMiles: payload.routeDistanceMiles,
-    routeDurationMinutes: payload.routeDurationMinutes,
+    routeDistanceMiles: resolvedRouteDistanceMiles,
+    routeDurationMinutes: resolvedRouteDurationMinutes,
     returnTrip: payload.returnTrip,
     extrasCatalog,
     selectedExtras,
@@ -357,7 +380,7 @@ export async function createBookingDraft(
       returnAt: payload.returnAt,
       returnTrip: payload.returnTrip,
       tripType: payload.tripType,
-      routeDurationMinutes: pricing.routeDurationMinutes ?? payload.routeDurationMinutes,
+      routeDurationMinutes: pricing.routeDurationMinutes ?? resolvedRouteDurationMinutes,
       defaultRouteDurationMinutes: selectedRoute?.durationMinutes,
       hoursRequested: payload.hoursRequested,
     },

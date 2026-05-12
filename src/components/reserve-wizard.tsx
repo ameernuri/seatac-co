@@ -732,19 +732,26 @@ export function ReserveWizard({
  const [pickupAddress, setPickupAddress] = useState(
  coalesceText(
  initialState?.pickupAddress,
- defaultPickupAddressForPricingType(initialPricingType, initialModeRoute),
+ defaultPickupAddressForPricingType(
+ initialPricingType,
+ initialModeRoute ?? (initialPricingType ==="distance"? defaultFlatRoute : null),
+ ),
  ),
  );
  const [dropoffAddress, setDropoffAddress] = useState(
  coalesceText(
  initialState?.dropoffAddress,
- initialModeRoute?.destination,
- defaultFlatRoute?.destination,
+ initialPricingType ==="flat"
+ ? initialModeRoute?.destination
+ : initialPricingType ==="distance"
+ ? defaultFlatRoute?.destination
+ : undefined,
  ),
  );
  const [pickupPlace, setPickupPlace] = useState<GoogleAddress | null>(null);
  const [dropoffPlace, setDropoffPlace] = useState<GoogleAddress | null>(null);
  const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
+ const [routePreviewError, setRoutePreviewError] = useState<string | null>(null);
  const [stepOneAttempted, setStepOneAttempted] = useState(false);
  const [flightNumber, setFlightNumber] = useState("");
  const [pickupDate, setPickupDate] = useState(initialPickupSlot.date);
@@ -911,7 +918,7 @@ export function ReserveWizard({
  pricingTypeConfig.find((item) => item.value === selectedPricingType)?.label ??"Flat rate";
  const routeConfidenceLabel = routeSummary
  ? `${routeSummary.distanceMiles.toFixed(1)} mi • ${routeSummary.durationMinutes} min`
- : tripType ==="flat"?"Route ready":"Add both addresses";
+ : tripType ==="flat"?"Route ready": routePreviewError ??"Confirm route";
  const bookingRouteName =
  tripType ==="flat"&& selectedRoute
  ? selectedRoute.name
@@ -979,10 +986,15 @@ export function ReserveWizard({
  dropoffAddressRequired && !dropoffAddress.trim() ?"Enter a drop-off address.": null;
  const routeSelectionError =
  tripType ==="flat"&& !selectedRoute ?"Choose a flat-rate route.": null;
+ const distanceRouteError =
+ tripType ==="distance"&& !routeSummary
+ ? routePreviewError ??"Confirm the route distance before continuing."
+ : null;
  const stepOneMissingItems = [
  pickupAddressError ?"pickup address": null,
  dropoffAddressError ?"drop-off address": null,
  routeSelectionError ?"flat-rate route": null,
+ distanceRouteError ?"route distance": null,
  ].filter((item): item is string => Boolean(item));
  const stepOneReady = stepOneMissingItems.length === 0;
  const dispatchReadiness = [
@@ -1406,6 +1418,91 @@ export function ReserveWizard({
  }, [returnTime, returnTimeOptions, returnTrip]);
 
  useEffect(() => {
+ if (tripType ==="flat") {
+ setRoutePreviewError(null);
+
+ if (!selectedRoute) {
+ setRouteSummary(null);
+ return;
+ }
+
+ setRouteSummary({
+ distanceMiles: Number(selectedRoute.mileage),
+ durationMinutes: selectedRoute.durationMinutes,
+ endAddress: selectedRoute.destination,
+ startAddress: selectedRoute.origin,
+ });
+ return;
+ }
+
+ if (tripType !=="distance") {
+ setRoutePreviewError(null);
+ setRouteSummary(null);
+ return;
+ }
+
+ const origin = pickupPlace?.label ?? pickupAddress.trim();
+ const destination = dropoffPlace?.label ?? dropoffAddress.trim();
+
+ if (!origin || !destination) {
+ setRoutePreviewError(null);
+ setRouteSummary(null);
+ return;
+ }
+
+ const controller = new AbortController();
+ const timeoutId = window.setTimeout(() => {
+ fetch("/api/route-preview", {
+ method:"POST",
+ headers: {"Content-Type":"application/json"},
+ signal: controller.signal,
+ body: JSON.stringify({ destination, origin }),
+ })
+ .then(async (response) => {
+ const data = await response.json().catch(() => ({}));
+
+ if (!response.ok) {
+ throw new Error(
+ typeof data.error ==="string"
+ ? data.error
+ :"Route distance could not be confirmed.",
+ );
+ }
+
+ return data as RouteSummary;
+ })
+ .then((summary) => {
+ setRouteSummary(summary);
+ setRoutePreviewError(null);
+ })
+ .catch((error) => {
+ if (controller.signal.aborted) {
+ return;
+ }
+
+ setRouteSummary(null);
+ setRoutePreviewError(
+ error instanceof Error
+ ? error.message
+ :"Route distance could not be confirmed.",
+ );
+ });
+ }, 250);
+
+ return () => {
+ controller.abort();
+ window.clearTimeout(timeoutId);
+ };
+ }, [
+ dropoffAddress,
+ dropoffPlace?.label,
+ pickupAddress,
+ pickupPlace?.label,
+ selectedRoute,
+ tripType,
+ ]);
+
+ useEffect(() => {
  const canCheckAvailability =
  Boolean(pickupDate && pickupTime) &&
  (!returnTrip || Boolean(returnDate && returnTime));
@@ -1572,7 +1669,10 @@ export function ReserveWizard({
  })
  : null;
  const priceIsLoading =
- availabilityLoading || !vehicleStatuses || Boolean(scheduleValidationMessage);
+ availabilityLoading ||
+ !vehicleStatuses ||
+ Boolean(scheduleValidationMessage) ||
+ (tripType ==="distance"&& Boolean(pickupAddress.trim()&& dropoffAddress.trim()) && !routeSummary && !routePreviewError);
  const sidebarPriceLabel = priceIsLoading
  ?"Checking": selectedVehicle
  ? formatCurrency(pricing?.total ?? 0)
@@ -1780,7 +1880,10 @@ export function ReserveWizard({
 
  function handlePickupAddressChange(nextValue: string) {
  setPickupAddress(nextValue);
+ if (tripType !=="flat") {
  setRouteSummary(null);
+ }
+ setRoutePreviewError(null);
  setStepOneAttempted(false);
 
  if (
@@ -1798,7 +1901,10 @@ export function ReserveWizard({
 
  function handleDropoffAddressChange(nextValue: string) {
  setDropoffAddress(nextValue);
+ if (tripType !=="flat") {
  setRouteSummary(null);
+ }
+ setRoutePreviewError(null);
  setStepOneAttempted(false);
 
  if (
@@ -1824,6 +1930,7 @@ export function ReserveWizard({
  setPickupPlace(dropoffPlace);
  setDropoffPlace(pickupPlace);
  setRouteSummary(null);
+ setRoutePreviewError(null);
  setStepOneAttempted(false);
 
  if (tripType ==="flat") {
@@ -2112,6 +2219,11 @@ export function ReserveWizard({
  return false;
  }
 
+ if (distanceRouteError) {
+ toast.error(distanceRouteError);
+ return false;
+ }
+
  if (dropoffAddressError) {
  toast.error(dropoffAddressError);
  return false;
@@ -2365,6 +2477,9 @@ export function ReserveWizard({
 
  {stepOneAttempted && routeSelectionError ? (
  <p className="text-sm font-medium text-rose-500">{routeSelectionError}</p>
+ ) : null}
+ {stepOneAttempted && distanceRouteError ? (
+ <p className="text-sm font-medium text-rose-500">{distanceRouteError}</p>
  ) : null}
  </div>
  </div>
@@ -2964,6 +3079,9 @@ export function ReserveWizard({
  ) : null}
  {stepOneAttempted && routeSelectionError ? (
  <p className="mt-3 text-sm font-medium text-rose-500">{routeSelectionError}</p>
+ ) : null}
+ {stepOneAttempted && distanceRouteError ? (
+ <p className="mt-3 text-sm font-medium text-rose-500">{distanceRouteError}</p>
  ) : null}
 
  {landingOnly ? (

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Cal_Sans } from "next/font/google";
 
-import { PhoneClickTracker } from "@/components/phone-click-tracker";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
@@ -16,6 +15,9 @@ const displayFont = Cal_Sans({
   subsets: ["latin"],
   weight: "400",
 });
+
+const googleAdsCallConversionLabel =
+  process.env.NEXT_PUBLIC_GOOGLE_ADS_CALL_CONVERSION_LABEL ?? "";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://seatac.co"),
@@ -54,6 +56,40 @@ export default function RootLayout({
               window.gtag('js', new Date());
               window.gtag('config', 'AW-18023510769');
               window.gtag('config', 'G-2NSD507P33');
+            `,
+          }}
+        />
+        <script
+          id="google-phone-click-conversion"
+          dangerouslySetInnerHTML={{
+            __html: `
+              document.addEventListener('click', function(event) {
+                var target = event.target;
+                var link = target && target.closest ? target.closest('a[href^="tel:"]') : null;
+
+                if (!link || typeof window.gtag !== 'function') {
+                  return;
+                }
+
+                var phoneNumber = link.href.replace(/^tel:/, '');
+                var payload = {
+                  event_category: 'lead',
+                  event_label: phoneNumber,
+                  phone_number: phoneNumber
+                };
+
+                window.gtag('event', 'click_to_call', payload);
+
+                var adsConversionLabel = ${JSON.stringify(googleAdsCallConversionLabel)};
+                if (adsConversionLabel) {
+                  window.gtag('event', 'conversion', {
+                    event_category: payload.event_category,
+                    event_label: payload.event_label,
+                    phone_number: payload.phone_number,
+                    send_to: 'AW-18023510769/' + adsConversionLabel
+                  });
+                }
+              }, true);
             `,
           }}
         />

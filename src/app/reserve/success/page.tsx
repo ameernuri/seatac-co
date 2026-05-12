@@ -25,7 +25,14 @@ export default async function ReserveSuccessPage({ searchParams }: Props) {
     redirect("/reserve");
   }
 
-  const result = await getReserveSuccessState(sessionId);
+  let result: Awaited<ReturnType<typeof getReserveSuccessState>>;
+
+  try {
+    result = await getReserveSuccessState(sessionId);
+  } catch (error) {
+    console.error("Reserve success lookup failed.", error);
+    redirect("/reserve");
+  }
 
   if (!result) {
     redirect("/reserve");
