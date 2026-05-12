@@ -37,6 +37,11 @@ export const defaultBookingConstraints = {
   operatingHoursStart: "04:00",
   hourlyMinimumHours: 3,
   hourlyServiceFee: 0,
+  homeBaseEnabled: false,
+  homeBaseAddress: "",
+  homeBaseIncludedMiles: 0,
+  homeBasePerMileFee: 0,
+  returnTripMultiplier: 1,
   presetRouteDefaultPricing: "flat",
   timeZone: "America/Los_Angeles",
 } as const;
@@ -76,6 +81,11 @@ const bookingConstraintsSchema = z.object({
   operatingHoursStart: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   hourlyMinimumHours: z.number().int().min(1).max(24).optional(),
   hourlyServiceFee: z.number().min(0).max(5000).optional(),
+  homeBaseEnabled: z.boolean().optional(),
+  homeBaseAddress: z.string().max(300).optional(),
+  homeBaseIncludedMiles: z.number().min(0).max(500).optional(),
+  homeBasePerMileFee: z.number().min(0).max(500).optional(),
+  returnTripMultiplier: z.number().min(0).max(5).optional(),
   presetRouteDefaultPricing: z.enum(["flat", "distance"]).optional(),
   timeZone: z.string().min(1).optional(),
 });
@@ -115,6 +125,11 @@ export type BookingConstraints = {
   operatingHoursStart: string;
   hourlyMinimumHours: number;
   hourlyServiceFee: number;
+  homeBaseEnabled: boolean;
+  homeBaseAddress: string;
+  homeBaseIncludedMiles: number;
+  homeBasePerMileFee: number;
+  returnTripMultiplier: number;
   presetRouteDefaultPricing: "flat" | "distance";
   timeZone: string;
 };
@@ -317,6 +332,20 @@ export function normalizeBookingConstraints(value: unknown): BookingConstraints 
       defaultBookingConstraints.hourlyMinimumHours,
     hourlyServiceFee:
       parsed.data.hourlyServiceFee ?? defaultBookingConstraints.hourlyServiceFee,
+    homeBaseEnabled:
+      parsed.data.homeBaseEnabled ?? defaultBookingConstraints.homeBaseEnabled,
+    homeBaseAddress:
+      parsed.data.homeBaseAddress?.trim() ??
+      defaultBookingConstraints.homeBaseAddress,
+    homeBaseIncludedMiles:
+      parsed.data.homeBaseIncludedMiles ??
+      defaultBookingConstraints.homeBaseIncludedMiles,
+    homeBasePerMileFee:
+      parsed.data.homeBasePerMileFee ??
+      defaultBookingConstraints.homeBasePerMileFee,
+    returnTripMultiplier:
+      parsed.data.returnTripMultiplier ??
+      defaultBookingConstraints.returnTripMultiplier,
     presetRouteDefaultPricing:
       parsed.data.presetRouteDefaultPricing ??
       defaultBookingConstraints.presetRouteDefaultPricing,

@@ -7,6 +7,8 @@ export type RoutePreview = {
 
 export async function fetchGoogleRoutePreview(origin: string, destination: string) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const normalizedOrigin = origin.trim().toLowerCase();
+  const normalizedDestination = destination.trim().toLowerCase();
 
   if (!apiKey) {
     return {
@@ -19,6 +21,18 @@ export async function fetchGoogleRoutePreview(origin: string, destination: strin
     return {
       error: "Origin and destination are required.",
       preview: null,
+    } as const;
+  }
+
+  if (normalizedOrigin === normalizedDestination) {
+    return {
+      error: null,
+      preview: {
+        distanceMiles: 0,
+        durationMinutes: 0,
+        endAddress: destination,
+        startAddress: origin,
+      } satisfies RoutePreview,
     } as const;
   }
 

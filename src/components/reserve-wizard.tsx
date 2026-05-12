@@ -831,6 +831,9 @@ export function ReserveWizard({
  const [submitting, setSubmitting] = useState(false);
  const [draftLoaded, setDraftLoaded] = useState(false);
  const [resumedDraft, setResumedDraft] = useState(false);
+ const [homeBaseDistanceMiles, setHomeBaseDistanceMiles] = useState<number | null>(null);
+ const [homeBasePreviewError, setHomeBasePreviewError] = useState<string | null>(null);
+ const [homeBasePreviewLoading, setHomeBasePreviewLoading] = useState(false);
  const customerName = combineCustomerName(customerFirstName, customerLastName);
  const normalizedCustomerPhone = normalizeClientPhone(customerPhone);
  const normalizedCustomerEmail = customerEmail.trim().toLowerCase();
@@ -923,6 +926,12 @@ export function ReserveWizard({
  tripType ==="flat"&& selectedRoute
  ? selectedRoute.name
  : [pickupAddress, dropoffAddress].filter(Boolean).join("to") ||"Custom route";
+ const homeBasePricingActive =
+ bookingConstraints.homeBaseEnabled && Boolean(bookingConstraints.homeBaseAddress.trim());
+ const homeBaseDistanceError =
+ homeBasePricingActive && pickupAddress.trim() && homeBaseDistanceMiles === null
+ ? homeBasePreviewError ??"Confirm pickup distance from home base before continuing."
+ : null;
  const returnTripReady = returnTrip && Boolean(returnDate && returnTime);
  const recommendedVehicleId = useMemo(() => {
  if (availableVehicles.length === 0) {
@@ -942,6 +951,7 @@ export function ReserveWizard({
  hoursRequested: Number(hoursRequested),
  routeDistanceMiles: routeSummary?.distanceMiles ?? null,
  routeDurationMinutes: routeSummary?.durationMinutes ?? null,
+ homeBaseDistanceMiles,
  returnTrip: returnTripReady,
  extrasCatalog,
  selectedExtras,
@@ -956,6 +966,7 @@ export function ReserveWizard({
  bookingConstraints,
  baseVehicleFloor,
  extrasCatalog,
+ homeBaseDistanceMiles,
  hoursRequested,
  passengers,
  returnTripReady,
@@ -995,6 +1006,7 @@ export function ReserveWizard({
  dropoffAddressError ?"drop-off address": null,
  routeSelectionError ?"flat-rate route": null,
  distanceRouteError ?"route distance": null,
+ homeBaseDistanceError ?"pickup distance": null,
  ].filter((item): item is string => Boolean(item));
  const stepOneReady = stepOneMissingItems.length === 0;
  const dispatchReadiness = [
@@ -1503,6 +1515,80 @@ export function ReserveWizard({
  ]);
 
  useEffect(() => {
+ if (!homeBasePricingActive) {
+ setHomeBaseDistanceMiles(null);
+ setHomeBasePreviewError(null);
+ setHomeBasePreviewLoading(false);
+ return;
+ }
+
+ const origin = bookingConstraints.homeBaseAddress.trim();
+ const destination = pickupPlace?.label ?? pickupAddress.trim();
+
+ if (!destination) {
+ setHomeBaseDistanceMiles(null);
+ setHomeBasePreviewError(null);
+ setHomeBasePreviewLoading(false);
+ return;
+ }
+
+ const controller = new AbortController();
+ setHomeBasePreviewLoading(true);
+ const timeoutId = window.setTimeout(() => {
+ fetch("/api/route-preview", {
+ method:"POST",
+ headers: {"Content-Type":"application/json"},
+ signal: controller.signal,
+ body: JSON.stringify({ destination, origin }),
+ })
+ .then(async (response) => {
+ const data = await response.json().catch(() => ({}));
+
+ if (!response.ok) {
+ throw new Error(
+ typeof data.error ==="string"
+ ? data.error
+ :"Pickup distance could not be confirmed.",
+ );
+ }
+
+ return data as RouteSummary;
+ })
+ .then((summary) => {
+ setHomeBaseDistanceMiles(summary.distanceMiles);
+ setHomeBasePreviewError(null);
+ })
+ .catch((error) => {
+ if (controller.signal.aborted) {
+ return;
+ }
+
+ setHomeBaseDistanceMiles(null);
+ setHomeBasePreviewError(
+ error instanceof Error
+ ? error.message
+ :"Pickup distance could not be confirmed.",
+ );
+ })
+ .finally(() => {
+ if (!controller.signal.aborted) {
+ setHomeBasePreviewLoading(false);
+ }
+ });
+ }, 250);
+
+ return () => {
+ controller.abort();
+ window.clearTimeout(timeoutId);
+ };
+ }, [
+ bookingConstraints.homeBaseAddress,
+ homeBasePricingActive,
+ pickupAddress,
+ pickupPlace?.label,
+ ]);
+
+ useEffect(() => {
  const canCheckAvailability =
  Boolean(pickupDate && pickupTime) &&
  (!returnTrip || Boolean(returnDate && returnTime));
@@ -1662,6 +1748,7 @@ export function ReserveWizard({
  hoursRequested: Number(hoursRequested),
  routeDistanceMiles: routeSummary?.distanceMiles ?? null,
  routeDurationMinutes: routeSummary?.durationMinutes ?? null,
+ homeBaseDistanceMiles,
  returnTrip: returnTripReady,
  extrasCatalog,
  selectedExtras,
@@ -1670,6 +1757,7 @@ export function ReserveWizard({
  : null;
  const priceIsLoading =
  availabilityLoading ||
+ homeBasePreviewLoading ||
  !vehicleStatuses ||
  Boolean(scheduleValidationMessage) ||
  (tripType ==="distance"&& Boolean(pickupAddress.trim()&& dropoffAddress.trim()) && !routeSummary && !routePreviewError);
@@ -1716,6 +1804,7 @@ export function ReserveWizard({
  hoursRequested: Number(hoursRequested),
  routeDistanceMiles: routeSummary?.distanceMiles ?? null,
  routeDurationMinutes: routeSummary?.durationMinutes ?? null,
+ homeBaseDistanceMiles,
  returnTrip: returnTripReady,
  extrasCatalog,
  selectedExtras,
@@ -2221,6 +2310,11 @@ export function ReserveWizard({
 
  if (distanceRouteError) {
  toast.error(distanceRouteError);
+ return false;
+ }
+
+ if (homeBaseDistanceError) {
+ toast.error(homeBaseDistanceError);
  return false;
  }
 
@@ -2814,6 +2908,15 @@ export function ReserveWizard({
  <span>{formatCurrency(pricing.mileageCharge ?? 0)}</span>
  </div>
  )}
+ {(pricing.homeBaseCharge ?? 0) > 0 && (
+ <div className="flex items-center justify-between">
+ <span>
+ Home base pickup ({(pricing.homeBaseBillableMiles ?? 0).toFixed(1)} mi ×{""}
+ {formatCurrency(pricing.homeBasePerMileFee ?? 0)})
+ </span>
+ <span>{formatCurrency(pricing.homeBaseCharge ?? 0)}</span>
+ </div>
+ )}
  {(pricing.passengerTotal ?? 0) > 0 && (
  <div className="flex items-center justify-between">
  <span>
@@ -2839,6 +2942,12 @@ export function ReserveWizard({
  <span>{formatCurrency(total)}</span>
  </div>
  ))}
+ {returnTripReady && (pricing.returnPremium ?? 0) > 0 ? (
+ <div className="flex items-center justify-between">
+ <span>Return trip</span>
+ <span>{formatCurrency(pricing.returnPremium ?? 0)}</span>
+ </div>
+ ) : null}
  </div>
  ) : null}
  </div>

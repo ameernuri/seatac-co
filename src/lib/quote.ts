@@ -19,6 +19,7 @@ export type QuoteInput = {
   hoursRequested?: number | null;
   routeDistanceMiles?: number | null;
   routeDurationMinutes?: number | null;
+  homeBaseDistanceMiles?: number | null;
   returnTrip: boolean;
   extrasCatalog?: RideExtra[];
   selectedExtras: string[];
@@ -54,6 +55,23 @@ export function quoteReservation(input: QuoteInput) {
     1,
   );
   const hourlyServiceFee = Number(input.bookingConstraints?.hourlyServiceFee ?? 0);
+  const homeBaseEnabled =
+    input.bookingConstraints?.homeBaseEnabled === true &&
+    Boolean(input.bookingConstraints.homeBaseAddress.trim());
+  const homeBasePerMileFee = Number(
+    input.bookingConstraints?.homeBasePerMileFee ?? 0,
+  );
+  const homeBaseIncludedMiles = Number(
+    input.bookingConstraints?.homeBaseIncludedMiles ?? 0,
+  );
+  const homeBaseDistanceMiles = Math.max(input.homeBaseDistanceMiles ?? 0, 0);
+  const homeBaseBillableMiles = homeBaseEnabled
+    ? Math.max(homeBaseDistanceMiles - Math.max(homeBaseIncludedMiles, 0), 0)
+    : 0;
+  const homeBaseCharge =
+    homeBaseEnabled && homeBasePerMileFee > 0
+      ? homeBaseBillableMiles * homeBasePerMileFee
+      : 0;
   let baseFare = baseVehicleFare;
 
   if (
@@ -84,7 +102,6 @@ export function quoteReservation(input: QuoteInput) {
     input.serviceMode === "events"
       ? hourlyServiceFee
       : 0;
-  const returnPremium = input.returnTrip ? Math.round(baseFare * 0.72) : 0;
   const passengerFee = Number(
     input.selectedVehicle.passengerFee ??
       (input.bookingConstraints
@@ -113,19 +130,28 @@ export function quoteReservation(input: QuoteInput) {
     shouldChargeComponent(input.bookingConstraints, input.tripType, "bags")
       ? input.bags * bagFee
       : 0;
+  const transportationSubtotal =
+    baseFare +
+    mileageCharge +
+    homeBaseCharge +
+    hourlyCharge +
+    eventPremium +
+    passengerTotal +
+    bagTotal;
   const extrasTotal = input.selectedExtras.reduce((sum, key) => {
     const match = (input.extrasCatalog ?? []).find((item) => item.key === key);
     return sum + (match?.price ?? 0);
   }, 0);
+  const returnTripMultiplier = Number(
+    input.bookingConstraints?.returnTripMultiplier ?? 1,
+  );
+  const returnPremium = input.returnTrip
+    ? transportationSubtotal * Math.max(returnTripMultiplier, 0)
+    : 0;
 
   const subtotal = Math.round(
-      baseFare +
-      mileageCharge +
-      hourlyCharge +
-      eventPremium +
+      transportationSubtotal +
       returnPremium +
-      passengerTotal +
-      bagTotal +
       extrasTotal,
   );
   const total = subtotal;
@@ -140,6 +166,10 @@ export function quoteReservation(input: QuoteInput) {
     mileageFee: Math.round(mileageFee * 100) / 100,
     hourlyCharge: Math.round(hourlyCharge),
     hourlyMinimumHours: minimumHourlyHours,
+    homeBaseCharge: Math.round(homeBaseCharge),
+    homeBaseDistanceMiles: Number(homeBaseDistanceMiles.toFixed(1)),
+    homeBaseBillableMiles: Number(homeBaseBillableMiles.toFixed(1)),
+    homeBasePerMileFee: Math.round(homeBasePerMileFee * 100) / 100,
     passengerFee: Math.round(passengerFee * 100) / 100,
     passengerTotal: Math.round(passengerTotal),
     routeDistanceMiles: Number(actualRouteMiles.toFixed(1)),
