@@ -50,10 +50,10 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', 'AW-18023510769');
-              gtag('config', 'G-2NSD507P33');
+              window.gtag = function(){window.dataLayer.push(arguments);}
+              window.gtag('js', new Date());
+              window.gtag('config', 'AW-18023510769');
+              window.gtag('config', 'G-2NSD507P33');
             `,
           }}
         />
@@ -61,7 +61,6 @@ export default function RootLayout({
       <body
         className={`${bodyFont.variable} ${displayFont.variable} min-h-screen bg-background text-foreground antialiased`}
       >
-        <PhoneClickTracker adsConversionLabel={process.env.NEXT_PUBLIC_GOOGLE_ADS_CALL_CONVERSION_LABEL} />
         <Providers>{children}</Providers>
       </body>
     </html>

@@ -3496,19 +3496,23 @@ export function ReserveWizard({
  ) : null}
 
  {!landingOnly ? (
- <div className="fixed inset-x-3 bottom-4 z-50 rounded-[1.7rem] border border-[#2d6a4f]/15 bg-white/95 p-4 backdrop-blur-xl shadow-[0_16px_40px_-12px_rgba(45,106,79,0.25)] lg:hidden">
-   <div className="flex items-center justify-between gap-4">
-     <Drawer>
-       <DrawerTrigger asChild>
-         <button type="button" className="flex min-w-0 flex-1 flex-col pl-2 pr-2 text-left">
-           <div className="mb-2 flex w-full flex-col gap-1.5 text-[0.65rem] font-medium leading-[1.3] text-[#5a7a6e]">
+ <div className="fixed inset-x-3 bottom-4 z-50 flex flex-col gap-3 rounded-[1.7rem] border border-[#2d6a4f]/15 bg-white/95 p-4 backdrop-blur-xl shadow-[0_16px_40px_-12px_rgba(45,106,79,0.25)] lg:hidden">
+    <Drawer>
+      {pickupAddress || dropoffAddress ? (
+        <DrawerTrigger asChild>
+          <button type="button" className="flex w-full items-center gap-1.5 px-2 text-left text-[0.75rem] font-medium leading-[1.3] text-[#5a7a6e]">
+            <span className="line-clamp-1">{checkoutPickupPreview || "Start"}</span>
+            <ArrowRight className="size-3 shrink-0 opacity-70" />
+            <span className="line-clamp-1">{checkoutDropoffPreview || "End"}</span>
+          </button>
+        </DrawerTrigger>
+      ) : null}
+      <div className="flex items-end justify-between gap-4">
+        <DrawerTrigger asChild>
+          <button type="button" className="flex min-w-0 flex-1 flex-col pl-2 pr-2 text-left">
+            <div className="mb-1 flex items-center gap-3 text-[0.65rem] font-medium leading-[1.3] text-[#5a7a6e]">
               {pickupAddress || dropoffAddress ? (
                 <>
-                  <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
-                    <span className="truncate">{checkoutPickupPreview || "Start"}</span>
-                    <ArrowRight className="size-3 shrink-0 opacity-70" />
-                    <span className="truncate">{checkoutDropoffPreview || "End"}</span>
-                  </div>
                   <div className="flex items-center gap-3">
                     {pickupDate && (
                       <span className="flex items-center gap-1">
@@ -3622,9 +3626,7 @@ export function ReserveWizard({
            </div>
          </DrawerFooter>
        </DrawerContent>
-     </Drawer>
-
-     <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 gap-2 pb-0.5">
        {step > minimumStep && step < 3 && (
          <Button
            type="button"
@@ -3657,11 +3659,12 @@ export function ReserveWizard({
          >
            {submitting ? "Redirecting..." : "Pay now"} <ChevronRight className="size-4" />
          </Button>
-       )}
-     </div>
-   </div>
- </div>
- ) : null}
+        )}
+      </div>
+      </div>
+    </Drawer>
+  </div>
+  ) : null}
  </div>
  );
 }

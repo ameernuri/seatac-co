@@ -15,10 +15,7 @@ export async function SiteHeader() {
     <header className="site-main-header">
       <div className="site-topbar">
         <div className="site-topbar-inner">
-          <Link href={siteChrome.reservationPhoneHref} className="site-topbar-call-link md:hidden">
-            <PhoneCall className="size-3.5" />
-            <span>{siteChrome.reservationPhoneLabel.replace("Reservations: ", "")}</span>
-          </Link>
+
           <div className="site-topbar-account-links">
             {userLabel ? (
               <HeaderAccountMenu label={userLabel} />
@@ -45,10 +42,7 @@ export async function SiteHeader() {
           ))}
         </nav>
         <div className="flex items-center gap-3">
-          <Link href={siteChrome.reservationPhoneHref} className="site-header-utility hidden md:inline-flex">
-            <PhoneCall className="size-4" />
-            <span>{siteChrome.reservationPhoneLabel.replace("Reservations: ", "")}</span>
-          </Link>
+
           <SeatacPrimaryButton href="/reserve" emphasis="cta" className="px-5 py-3">
             Book ride
           </SeatacPrimaryButton>

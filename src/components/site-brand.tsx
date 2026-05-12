@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import { SeatacLogo } from "@/components/seatac-logo";
 import { siteChrome } from "@/lib/site-content";
 
 type SiteBrandProps = {
@@ -10,10 +9,11 @@ type SiteBrandProps = {
 export function SiteBrand({ compact = false }: SiteBrandProps) {
   return (
     <Link href="/" className={`site-brand-lockup${compact ? " is-compact" : ""}`}>
-      <SeatacLogo
-        size={compact ? "8.8rem" : "10.25rem"}
-        color="#1a3d34"
+      <img
+        src="/seatac.co.svg"
+        alt="Seatac Connection Logo"
         className="site-logo-full"
+        style={{ width: compact ? "8.8rem" : "10.25rem", height: "auto" }}
       />
       <span className="site-brand-meta">
         <span className="site-brand-title">{siteChrome.brandName}</span>

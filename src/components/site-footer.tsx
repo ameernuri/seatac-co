@@ -24,28 +24,30 @@ export function SiteFooter() {
  ] as const;
 
  return (
- <footer className="mx-auto mt-16 max-w-[1240px] px-6 pb-10 lg:px-8">
- <div className="grid gap-10 rounded-[2.4rem] border border-emerald-100 bg-white px-7 py-10 shadow-sm lg:grid-cols-[1.2fr_1fr] lg:px-10">
- <div className="space-y-4">
- <div className="space-y-3">
+ <footer className="mx-auto mt-8 max-w-[1240px] px-4 pb-36 lg:mt-16 lg:px-8 lg:pb-10">
+ <div className="grid gap-4 rounded-[1.5rem] border border-emerald-100 bg-white px-5 py-5 shadow-sm lg:grid-cols-[1.2fr_1fr] lg:gap-10 lg:rounded-[2.4rem] lg:px-10 lg:py-10">
+ <div className="space-y-2 lg:space-y-4">
+ <div className="space-y-1 lg:space-y-3">
+ <div className="hidden lg:block">
  <SiteBrand compact />
- <p className="text-[0.75rem] uppercase tracking-[0.24em] text-emerald-600">
+ </div>
+ <p className="text-[0.65rem] uppercase tracking-[0.24em] text-emerald-600 lg:text-[0.75rem]">
  {siteChrome.footer.eyebrow}
  </p>
  </div>
- <h2 className="max-w-xl text-[2.2rem] leading-[1.05] text-emerald-950">
+ <h2 className="max-w-xl text-base font-medium leading-snug text-emerald-950 lg:text-[2.2rem] lg:leading-[1.05]">
  {siteChrome.footer.title}
  </h2>
- <p className="max-w-xl text-lg leading-8 text-slate-500">
+ <p className="hidden max-w-xl text-sm leading-relaxed text-slate-500 lg:block lg:text-lg lg:leading-8">
  {siteChrome.footer.body}
  </p>
  </div>
- <div className="grid gap-10 sm:grid-cols-3">
- <div>
- <p className="mb-4 text-[0.75rem] uppercase tracking-[0.34em] text-emerald-600">
+ <div className="grid gap-8 sm:grid-cols-3 lg:gap-10">
+ <div className="hidden sm:block">
+ <p className="mb-3 text-[0.65rem] uppercase tracking-[0.34em] text-emerald-600 lg:mb-4 lg:text-[0.75rem]">
  Coverage
  </p>
- <ul className="space-y-2 text-sm text-slate-500">
+ <ul className="space-y-1.5 text-xs text-slate-500 lg:space-y-2 lg:text-sm">
  {coverageLinks.map((area) => (
  <li key={area.label}>
  <Link href={area.href} className="transition-colors hover:text-emerald-700">
@@ -55,11 +57,11 @@ export function SiteFooter() {
  ))}
  </ul>
  </div>
- <div>
- <p className="mb-4 text-[0.75rem] uppercase tracking-[0.34em] text-emerald-600">
+ <div className="hidden sm:block">
+ <p className="mb-3 text-[0.65rem] uppercase tracking-[0.34em] text-emerald-600 lg:mb-4 lg:text-[0.75rem]">
  Popular searches
  </p>
- <ul className="space-y-2 text-sm text-slate-500">
+ <ul className="space-y-1.5 text-xs text-slate-500 lg:space-y-2 lg:text-sm">
  {popularSearchLinks.map((link) => (
  <li key={link.label}>
  <Link href={link.href} className="transition-colors hover:text-emerald-700">
@@ -69,8 +71,8 @@ export function SiteFooter() {
  ))}
  </ul>
  </div>
- <div className="space-y-3 text-sm text-slate-500">
- <p className="text-[0.75rem] uppercase tracking-[0.34em] text-emerald-600">
+ <div className="space-y-2 text-xs text-slate-500 lg:space-y-3 lg:text-sm">
+ <p className="text-[0.65rem] uppercase tracking-[0.34em] text-emerald-600 lg:text-[0.75rem]">
  Contact
  </p>
  <p>{siteChrome.footer.contactPhone}</p>
@@ -80,14 +82,14 @@ export function SiteFooter() {
  {siteChrome.footer.operatingHours}
  </p>
  ) : null}
- <div className="flex flex-col gap-1 pt-3 text-slate-600">
- <Link href="/privacy"className="transition-colors hover:text-emerald-700">
+ <div className="flex flex-wrap gap-x-4 gap-y-2 pt-2 text-slate-600 lg:flex-col lg:gap-1 lg:pt-3">
+ <Link href="/privacy" className="transition-colors hover:text-emerald-700">
  Privacy policy
  </Link>
- <Link href="/terms"className="transition-colors hover:text-emerald-700">
+ <Link href="/terms" className="transition-colors hover:text-emerald-700">
  Terms of service
  </Link>
- <Link href="/sms-policy"className="transition-colors hover:text-emerald-700">
+ <Link href="/sms-policy" className="transition-colors hover:text-emerald-700">
  SMS policy
  </Link>
  </div>
