@@ -270,6 +270,7 @@ export async function createBookingDraft(
   let resolvedRouteDistanceMiles = payload.routeDistanceMiles;
   let resolvedRouteDurationMinutes = payload.routeDurationMinutes;
   let resolvedHomeBaseDistanceMiles: number | null = null;
+  let resolvedReturnHomeBaseDistanceMiles: number | null = null;
 
   if (payload.tripType === "distance") {
     const destination = payload.dropoffAddress?.trim() ?? "";
@@ -303,6 +304,26 @@ export async function createBookingDraft(
     }
 
     resolvedHomeBaseDistanceMiles = homeBasePreview.preview.distanceMiles;
+  }
+
+  if (
+    payload.returnTrip &&
+    bookingConstraints.homeBaseEnabled &&
+    bookingConstraints.homeBaseAddress.trim() &&
+    payload.dropoffAddress?.trim()
+  ) {
+    const returnHomeBasePreview = await fetchGoogleRoutePreview(
+      bookingConstraints.homeBaseAddress,
+      payload.dropoffAddress,
+    );
+
+    if (!returnHomeBasePreview.preview) {
+      throw new BookingGuardrailError(
+        "Return pickup distance from home base must be confirmed before checkout.",
+      );
+    }
+
+    resolvedReturnHomeBaseDistanceMiles = returnHomeBasePreview.preview.distanceMiles;
   }
 
   const [vehicleRow] = await db
@@ -381,6 +402,7 @@ export async function createBookingDraft(
     routeDistanceMiles: resolvedRouteDistanceMiles,
     routeDurationMinutes: resolvedRouteDurationMinutes,
     homeBaseDistanceMiles: resolvedHomeBaseDistanceMiles,
+    returnHomeBaseDistanceMiles: resolvedReturnHomeBaseDistanceMiles,
     returnTrip: payload.returnTrip,
     extrasCatalog,
     selectedExtras,

@@ -20,6 +20,7 @@ export type QuoteInput = {
   routeDistanceMiles?: number | null;
   routeDurationMinutes?: number | null;
   homeBaseDistanceMiles?: number | null;
+  returnHomeBaseDistanceMiles?: number | null;
   returnTrip: boolean;
   extrasCatalog?: RideExtra[];
   selectedExtras: string[];
@@ -65,12 +66,23 @@ export function quoteReservation(input: QuoteInput) {
     input.bookingConstraints?.homeBaseIncludedMiles ?? 0,
   );
   const homeBaseDistanceMiles = Math.max(input.homeBaseDistanceMiles ?? 0, 0);
+  const returnHomeBaseDistanceMiles = Math.max(
+    input.returnHomeBaseDistanceMiles ?? 0,
+    0,
+  );
   const homeBaseBillableMiles = homeBaseEnabled
     ? Math.max(homeBaseDistanceMiles - Math.max(homeBaseIncludedMiles, 0), 0)
+    : 0;
+  const returnHomeBaseBillableMiles = homeBaseEnabled
+    ? Math.max(returnHomeBaseDistanceMiles - Math.max(homeBaseIncludedMiles, 0), 0)
     : 0;
   const homeBaseCharge =
     homeBaseEnabled && homeBasePerMileFee > 0
       ? homeBaseBillableMiles * homeBasePerMileFee
+      : 0;
+  const returnHomeBaseCharge =
+    homeBaseEnabled && homeBasePerMileFee > 0
+      ? returnHomeBaseBillableMiles * homeBasePerMileFee
       : 0;
   let baseFare = baseVehicleFare;
 
@@ -138,6 +150,14 @@ export function quoteReservation(input: QuoteInput) {
     eventPremium +
     passengerTotal +
     bagTotal;
+  const returnTransportationSubtotal =
+    baseFare +
+    mileageCharge +
+    returnHomeBaseCharge +
+    hourlyCharge +
+    eventPremium +
+    passengerTotal +
+    bagTotal;
   const extrasTotal = input.selectedExtras.reduce((sum, key) => {
     const match = (input.extrasCatalog ?? []).find((item) => item.key === key);
     return sum + (match?.price ?? 0);
@@ -146,7 +166,7 @@ export function quoteReservation(input: QuoteInput) {
     input.bookingConstraints?.returnTripMultiplier ?? 1,
   );
   const returnPremium = input.returnTrip
-    ? transportationSubtotal * Math.max(returnTripMultiplier, 0)
+    ? returnTransportationSubtotal * Math.max(returnTripMultiplier, 0)
     : 0;
 
   const subtotal = Math.round(
@@ -170,6 +190,9 @@ export function quoteReservation(input: QuoteInput) {
     homeBaseDistanceMiles: Number(homeBaseDistanceMiles.toFixed(1)),
     homeBaseBillableMiles: Number(homeBaseBillableMiles.toFixed(1)),
     homeBasePerMileFee: Math.round(homeBasePerMileFee * 100) / 100,
+    returnHomeBaseCharge: Math.round(returnHomeBaseCharge),
+    returnHomeBaseDistanceMiles: Number(returnHomeBaseDistanceMiles.toFixed(1)),
+    returnHomeBaseBillableMiles: Number(returnHomeBaseBillableMiles.toFixed(1)),
     passengerFee: Math.round(passengerFee * 100) / 100,
     passengerTotal: Math.round(passengerTotal),
     routeDistanceMiles: Number(actualRouteMiles.toFixed(1)),

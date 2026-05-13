@@ -832,6 +832,7 @@ export function ReserveWizard({
  const [draftLoaded, setDraftLoaded] = useState(false);
  const [resumedDraft, setResumedDraft] = useState(false);
  const [homeBaseDistanceMiles, setHomeBaseDistanceMiles] = useState<number | null>(null);
+ const [returnHomeBaseDistanceMiles, setReturnHomeBaseDistanceMiles] = useState<number | null>(null);
  const [homeBasePreviewError, setHomeBasePreviewError] = useState<string | null>(null);
  const [homeBasePreviewLoading, setHomeBasePreviewLoading] = useState(false);
  const customerName = combineCustomerName(customerFirstName, customerLastName);
@@ -928,11 +929,18 @@ export function ReserveWizard({
  : [pickupAddress, dropoffAddress].filter(Boolean).join("to") ||"Custom route";
  const homeBasePricingActive =
  bookingConstraints.homeBaseEnabled && Boolean(bookingConstraints.homeBaseAddress.trim());
+ const returnTripReady = returnTrip && Boolean(returnDate && returnTime);
  const homeBaseDistanceError =
  homeBasePricingActive && pickupAddress.trim() && homeBaseDistanceMiles === null
  ? homeBasePreviewError ??"Confirm pickup distance from home base before continuing."
  : null;
- const returnTripReady = returnTrip && Boolean(returnDate && returnTime);
+ const returnHomeBaseDistanceError =
+ homeBasePricingActive &&
+ returnTripReady &&
+ dropoffAddress.trim() &&
+ returnHomeBaseDistanceMiles === null
+ ? homeBasePreviewError ??"Confirm return pickup distance from home base before continuing."
+ : null;
  const recommendedVehicleId = useMemo(() => {
  if (availableVehicles.length === 0) {
  return"";
@@ -952,6 +960,7 @@ export function ReserveWizard({
  routeDistanceMiles: routeSummary?.distanceMiles ?? null,
  routeDurationMinutes: routeSummary?.durationMinutes ?? null,
  homeBaseDistanceMiles,
+ returnHomeBaseDistanceMiles,
  returnTrip: returnTripReady,
  extrasCatalog,
  selectedExtras,
@@ -969,6 +978,7 @@ export function ReserveWizard({
  homeBaseDistanceMiles,
  hoursRequested,
  passengers,
+ returnHomeBaseDistanceMiles,
  returnTripReady,
  routeSummary?.distanceMiles,
  routeSummary?.durationMinutes,
@@ -1007,6 +1017,7 @@ export function ReserveWizard({
  routeSelectionError ?"flat-rate route": null,
  distanceRouteError ?"route distance": null,
  homeBaseDistanceError ?"pickup distance": null,
+ returnHomeBaseDistanceError ?"return pickup distance": null,
  ].filter((item): item is string => Boolean(item));
  const stepOneReady = stepOneMissingItems.length === 0;
  const dispatchReadiness = [
@@ -1517,10 +1528,11 @@ export function ReserveWizard({
  useEffect(() => {
  if (!homeBasePricingActive) {
  setHomeBaseDistanceMiles(null);
+ setReturnHomeBaseDistanceMiles(null);
  setHomeBasePreviewError(null);
  setHomeBasePreviewLoading(false);
  return;
- }
+}
 
  const origin = bookingConstraints.homeBaseAddress.trim();
  const destination = pickupPlace?.label ?? pickupAddress.trim();
@@ -1586,6 +1598,77 @@ export function ReserveWizard({
  homeBasePricingActive,
  pickupAddress,
  pickupPlace?.label,
+ ]);
+
+ useEffect(() => {
+ if (!homeBasePricingActive || !returnTripReady) {
+ setReturnHomeBaseDistanceMiles(null);
+ return;
+ }
+
+ const origin = bookingConstraints.homeBaseAddress.trim();
+ const destination = dropoffPlace?.label ?? dropoffAddress.trim();
+
+ if (!destination) {
+ setReturnHomeBaseDistanceMiles(null);
+ return;
+ }
+
+ const controller = new AbortController();
+ setHomeBasePreviewLoading(true);
+ const timeoutId = window.setTimeout(() => {
+ fetch("/api/route-preview", {
+ method:"POST",
+ headers: {"Content-Type":"application/json"},
+ signal: controller.signal,
+ body: JSON.stringify({ destination, origin }),
+ })
+ .then(async (response) => {
+ const data = await response.json().catch(() => ({}));
+
+ if (!response.ok) {
+ throw new Error(
+ typeof data.error ==="string"
+ ? data.error
+ :"Return pickup distance could not be confirmed.",
+ );
+ }
+
+ return data as RouteSummary;
+ })
+ .then((summary) => {
+ setReturnHomeBaseDistanceMiles(summary.distanceMiles);
+ setHomeBasePreviewError(null);
+ })
+ .catch((error) => {
+ if (controller.signal.aborted) {
+ return;
+ }
+
+ setReturnHomeBaseDistanceMiles(null);
+ setHomeBasePreviewError(
+ error instanceof Error
+ ? error.message
+ :"Return pickup distance could not be confirmed.",
+ );
+ })
+ .finally(() => {
+ if (!controller.signal.aborted) {
+ setHomeBasePreviewLoading(false);
+ }
+ });
+ }, 250);
+
+ return () => {
+ controller.abort();
+ window.clearTimeout(timeoutId);
+ };
+ }, [
+ bookingConstraints.homeBaseAddress,
+ dropoffAddress,
+ dropoffPlace?.label,
+ homeBasePricingActive,
+ returnTripReady,
  ]);
 
  useEffect(() => {
@@ -1749,6 +1832,7 @@ export function ReserveWizard({
  routeDistanceMiles: routeSummary?.distanceMiles ?? null,
  routeDurationMinutes: routeSummary?.durationMinutes ?? null,
  homeBaseDistanceMiles,
+ returnHomeBaseDistanceMiles,
  returnTrip: returnTripReady,
  extrasCatalog,
  selectedExtras,
@@ -1805,6 +1889,7 @@ export function ReserveWizard({
  routeDistanceMiles: routeSummary?.distanceMiles ?? null,
  routeDurationMinutes: routeSummary?.durationMinutes ?? null,
  homeBaseDistanceMiles,
+ returnHomeBaseDistanceMiles,
  returnTrip: returnTripReady,
  extrasCatalog,
  selectedExtras,
@@ -2315,6 +2400,11 @@ export function ReserveWizard({
 
  if (homeBaseDistanceError) {
  toast.error(homeBaseDistanceError);
+ return false;
+ }
+
+ if (returnHomeBaseDistanceError) {
+ toast.error(returnHomeBaseDistanceError);
  return false;
  }
 
@@ -2944,7 +3034,13 @@ export function ReserveWizard({
  ))}
  {returnTripReady && (pricing.returnPremium ?? 0) > 0 ? (
  <div className="flex items-center justify-between">
- <span>Return trip</span>
+ <span>
+ {`Return trip${
+ (pricing.returnHomeBaseCharge ?? 0) > 0
+ ? ` (${(pricing.returnHomeBaseBillableMiles ?? 0).toFixed(1)} mi home base pickup)`
+ : ""
+ }`}
+ </span>
  <span>{formatCurrency(pricing.returnPremium ?? 0)}</span>
  </div>
  ) : null}
