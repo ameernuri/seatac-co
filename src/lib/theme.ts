@@ -145,10 +145,10 @@ export const siteThemes: Record<string, SiteThemeContent> = {
     reservationPhoneLabel: "Reservations: (206) 737-0808",
     reservationPhoneHref: "tel:+12067370808",
     navLinks: [
-      { href: "/rides", label: "Book ride" },
-      { href: "/seatac-airport-car-service", label: "Sea-Tac" },
-      { href: "/seatac-to-pier-66", label: "Cruise" },
-      { href: "/seatac-to-bellevue", label: "Bellevue" },
+      { href: "/seatac-airport-guide", label: "Airport guide" },
+      { href: "/cruises", label: "Cruise terminals" },
+      { href: "/seatac-hotel-transfer-guide", label: "Hotel rides" },
+      { href: "/eastside-airport-transfer-guide", label: "Eastside rides" },
     ],
     footer: {
       eyebrow: "Seatac Connection",
