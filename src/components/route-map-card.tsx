@@ -5,6 +5,7 @@ import { MapPinned, Navigation2, TimerReset } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { type GoogleAddress, loadGoogleMapsApi } from "@/lib/google-maps";
+import { normalizeAddressForWashingtonLookup } from "@/lib/route-preview";
 
 // Seatac.co theme colors
 const SEATAC_GREEN = "#2d6a4f";
@@ -141,12 +142,12 @@ export function RouteMapCard({
       const origin = pickupPlace
         ? new googleMaps.maps.LatLng(pickupPlace.lat, pickupPlace.lng)
         : isRoutableAddress(pickupAddress)
-          ? pickupAddress.trim()
+          ? normalizeAddressForWashingtonLookup(pickupAddress)
           : null;
       const destination = dropoffPlace
         ? new googleMaps.maps.LatLng(dropoffPlace.lat, dropoffPlace.lng)
         : isRoutableAddress(dropoffAddress)
-          ? dropoffAddress.trim()
+          ? normalizeAddressForWashingtonLookup(dropoffAddress)
           : null;
 
       if (!origin || !destination) {

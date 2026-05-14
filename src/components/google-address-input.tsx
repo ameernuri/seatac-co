@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input";
 import { loadGoogleMapsApi, type GoogleAddress } from "@/lib/google-maps";
 import { cn } from "@/lib/utils";
 
+const WASHINGTON_BIAS_CENTER = { lat: 47.4502, lng: -122.3088 };
+const WASHINGTON_BIAS_RADIUS_METERS = 240000;
+
 type Props = {
   id: string;
   value: string;
@@ -118,6 +121,10 @@ export function GoogleAddressInput({
         {
           input: query,
           componentRestrictions: { country: "us" },
+          locationBias: {
+            center: WASHINGTON_BIAS_CENTER,
+            radius: WASHINGTON_BIAS_RADIUS_METERS,
+          },
         },
         (predictions, status) => {
           if (!active) {

@@ -5,10 +5,42 @@ export type RoutePreview = {
   startAddress: string;
 };
 
+const WASHINGTON_PLACE_ALIASES: Array<[RegExp, string]> = [
+  [/^(sea[\s-]?tac|seatac)( airport)?$/i, "Seattle-Tacoma International Airport, SeaTac, WA, USA"],
+  [/^(pier|port)\s*66$/i, "Bell Street Cruise Terminal at Pier 66, Seattle, WA, USA"],
+  [/^(pier|port)\s*91$/i, "Smith Cove Cruise Terminal at Pier 91, Seattle, WA, USA"],
+  [/^downtown seattle$/i, "Downtown Seattle, Seattle, WA, USA"],
+];
+
+const STATE_OR_COUNTRY_HINT =
+  /\b(al|ak|az|ar|ca|co|ct|dc|de|fl|ga|hi|ia|id|il|in|ks|ky|la|ma|md|me|mi|mn|mo|ms|mt|nc|nd|ne|nh|nj|nm|nv|ny|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|va|vt|wa|wi|wv|wy|washington|united states|usa)\b/i;
+
+export function normalizeAddressForWashingtonLookup(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  for (const [pattern, replacement] of WASHINGTON_PLACE_ALIASES) {
+    if (pattern.test(trimmed)) {
+      return replacement;
+    }
+  }
+
+  if (trimmed.includes(",") || /\d/.test(trimmed) || STATE_OR_COUNTRY_HINT.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `${trimmed}, WA, USA`;
+}
+
 export async function fetchGoogleRoutePreview(origin: string, destination: string) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  const normalizedOrigin = origin.trim().toLowerCase();
-  const normalizedDestination = destination.trim().toLowerCase();
+  const normalizedOriginQuery = normalizeAddressForWashingtonLookup(origin);
+  const normalizedDestinationQuery = normalizeAddressForWashingtonLookup(destination);
+  const normalizedOrigin = normalizedOriginQuery.toLowerCase();
+  const normalizedDestination = normalizedDestinationQuery.toLowerCase();
 
   if (!apiKey) {
     return {
@@ -17,7 +49,7 @@ export async function fetchGoogleRoutePreview(origin: string, destination: strin
     } as const;
   }
 
-  if (!origin.trim() || !destination.trim()) {
+  if (!normalizedOriginQuery || !normalizedDestinationQuery) {
     return {
       error: "Origin and destination are required.",
       preview: null,
@@ -30,18 +62,18 @@ export async function fetchGoogleRoutePreview(origin: string, destination: strin
       preview: {
         distanceMiles: 0,
         durationMinutes: 0,
-        endAddress: destination,
-        startAddress: origin,
+        endAddress: normalizedDestinationQuery,
+        startAddress: normalizedOriginQuery,
       } satisfies RoutePreview,
     } as const;
   }
 
   const params = new URLSearchParams({
     departure_time: "now",
-    destination,
+    destination: normalizedDestinationQuery,
     key: apiKey,
     mode: "driving",
-    origin,
+    origin: normalizedOriginQuery,
   });
 
   try {
@@ -87,8 +119,8 @@ export async function fetchGoogleRoutePreview(origin: string, destination: strin
           Math.round((leg.duration_in_traffic?.value ?? leg.duration.value) / 60),
           1,
         ),
-        endAddress: leg.end_address ?? destination,
-        startAddress: leg.start_address ?? origin,
+        endAddress: leg.end_address ?? normalizedDestinationQuery,
+        startAddress: leg.start_address ?? normalizedOriginQuery,
       } satisfies RoutePreview,
     } as const;
   } catch {
