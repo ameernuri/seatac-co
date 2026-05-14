@@ -48,6 +48,7 @@ export function GoogleAddressInput({
   const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
   const [focused, setFocused] = useState(false);
+  const [servicesReady, setServicesReady] = useState(false);
   const [predictionItems, setPredictionItems] = useState<SuggestionItem[]>([]);
 
   useEffect(() => {
@@ -80,11 +81,13 @@ export function GoogleAddressInput({
 
       autocompleteServiceRef.current = new googleMaps.maps.places.AutocompleteService();
       placesServiceRef.current = new googleMaps.maps.places.PlacesService(document.createElement("div"));
+      setServicesReady(true);
     }
 
     attachServices().catch(() => {
       autocompleteServiceRef.current = null;
       placesServiceRef.current = null;
+      setServicesReady(false);
     });
 
     return () => {
@@ -105,7 +108,7 @@ export function GoogleAddressInput({
 
     const service = autocompleteServiceRef.current;
 
-    if (!service) {
+    if (!service || !servicesReady) {
       return;
     }
 
@@ -149,12 +152,23 @@ export function GoogleAddressInput({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [focused, value]);
+  }, [focused, servicesReady, value]);
 
-  const visibleItems =
-    value.trim() === "" ? commonItems : predictionItems;
+  const visibleItems = useMemo(() => {
+    const query = value.trim().toLowerCase();
 
-  async function selectPrediction(placeId: string, fallbackValue: string, displayValue: string) {
+    if (!query) {
+      return commonItems;
+    }
+
+    if (predictionItems.length > 0) {
+      return predictionItems;
+    }
+
+    return commonItems.filter((item) => item.title.toLowerCase().includes(query)).slice(0, 6);
+  }, [commonItems, predictionItems, value]);
+
+  async function selectPrediction(placeId: string, fallbackValue: string) {
     const service = placesServiceRef.current;
 
     if (!service) {
@@ -180,10 +194,10 @@ export function GoogleAddressInput({
           return;
         }
 
-        const label = displayValue || place.name || place.formatted_address || fallbackValue;
-        onChangeRef.current(label);
+        const resolvedAddress = place.formatted_address || fallbackValue;
+        onChangeRef.current(resolvedAddress);
         onResolvedRef.current({
-          label,
+          label: resolvedAddress,
           lat: place.geometry.location.lat(),
           lng: place.geometry.location.lng(),
         });
@@ -237,7 +251,7 @@ export function GoogleAddressInput({
                     selectCommon(item.value);
                     return;
                   }
-                  void selectPrediction(item.placeId, item.value, item.title);
+                  void selectPrediction(item.placeId, item.value);
                 }}
                 className="rounded-xl px-3 py-3 text-left transition hover:bg-[#f4f7f3]"
               >

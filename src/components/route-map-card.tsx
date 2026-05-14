@@ -34,14 +34,14 @@ const SEA_TAC = {
   lng: -122.3088,
 } satisfies GoogleAddress;
 
-function isSpecificAddress(value?: string | null) {
+function isRoutableAddress(value?: string | null) {
   const normalized = value?.trim();
 
   if (!normalized) {
     return false;
   }
 
-  return normalized.includes(",") || normalized.length >= 14;
+  return normalized.length >= 3;
 }
 
 export function RouteMapCard({
@@ -140,13 +140,13 @@ export function RouteMapCard({
 
       const origin = pickupPlace
         ? new googleMaps.maps.LatLng(pickupPlace.lat, pickupPlace.lng)
-        : isSpecificAddress(pickupAddress)
-          ? pickupAddress
+        : isRoutableAddress(pickupAddress)
+          ? pickupAddress.trim()
           : null;
       const destination = dropoffPlace
         ? new googleMaps.maps.LatLng(dropoffPlace.lat, dropoffPlace.lng)
-        : isSpecificAddress(dropoffAddress)
-          ? dropoffAddress
+        : isRoutableAddress(dropoffAddress)
+          ? dropoffAddress.trim()
           : null;
 
       if (!origin || !destination) {
