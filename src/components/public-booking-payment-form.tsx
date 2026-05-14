@@ -45,6 +45,8 @@ function PaymentForm({
   const elements = useElements();
   const [cardholderName, setCardholderName] = useState(customerName);
   const [error, setError] = useState<string | null>(null);
+  const [paymentElementAvailable, setPaymentElementAvailable] = useState(true);
+  const [paymentElementReady, setPaymentElementReady] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -124,11 +126,24 @@ function PaymentForm({
           onChange={(event) => setCardholderName(event.target.value)}
         />
       </div>
-      <PaymentElement />
+      <PaymentElement
+        onLoadError={() => {
+          setPaymentElementAvailable(false);
+          setPaymentElementReady(false);
+          setError("Payment methods are unavailable right now.");
+        }}
+        onReady={() => {
+          setPaymentElementAvailable(true);
+          setPaymentElementReady(true);
+          setError((current) =>
+            current === "Payment methods are unavailable right now." ? null : current,
+          );
+        }}
+      />
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <Button
         className="h-12 w-full rounded-full bg-[#0f6a56] text-base hover:bg-[#0b5645]"
-        disabled={!stripe || !elements || submitting}
+        disabled={!stripe || !elements || submitting || !paymentElementReady || !paymentElementAvailable}
         type="submit"
       >
         {submitting ? "Processing payment..." : "Pay now"}

@@ -79,7 +79,11 @@ export async function createOrReuseBookingPaymentIntent(bookingId: string) {
         throw new Error("This booking is already paid.");
       }
 
-      if (canReusePaymentIntent(existingIntent.status) && existingIntent.client_secret) {
+      if (
+        canReusePaymentIntent(existingIntent.status) &&
+        existingIntent.client_secret &&
+        existingIntent.payment_method_types.includes("card")
+      ) {
         paymentIntent = existingIntent;
       }
     } catch (error) {
@@ -94,15 +98,13 @@ export async function createOrReuseBookingPaymentIntent(bookingId: string) {
   if (!paymentIntent) {
     paymentIntent = await stripe.paymentIntents.create({
       amount: booking.totalCents,
-      automatic_payment_methods: {
-        enabled: true,
-      },
       currency: env.stripeCurrency,
       description: `seatac.co ride ${booking.reference}`,
       metadata: {
         bookingId: booking.id,
         bookingReference: booking.reference,
       },
+      payment_method_types: ["card"],
       receipt_email: booking.customerEmail,
     });
 
