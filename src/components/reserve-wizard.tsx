@@ -63,6 +63,7 @@ import type { RideExtra } from "@/lib/extras-catalog";
 import { formatCurrency, formatDateTime } from"@/lib/format";
 import { type GoogleAddress } from"@/lib/google-maps";
 import { quoteReservation, type ServiceMode } from"@/lib/quote";
+import { buildReserveUrlSearchParams } from "@/lib/reserve-url-state";
 import { siteChrome } from"@/lib/site-content";
 import { cn } from"@/lib/utils";
 import { getVehicleDisplayName } from"@/lib/vehicle-display";
@@ -86,8 +87,21 @@ type Props = {
  serviceMode?: ServiceMode;
  tripType?: TripType;
  routeSlug?: string;
+ routeDistanceMiles?: number;
+ routeDurationMinutes?: number;
+ pickupDate?: string;
+ pickupTime?: string;
  pickupAddress?: string;
  dropoffAddress?: string;
+ returnTrip?: boolean;
+ returnDate?: string;
+ returnTime?: string;
+ passengers?: string;
+ bags?: string;
+ hoursRequested?: string;
+ selectedVehicleSlug?: string;
+ selectedExtras?: string[];
+ step?: Step;
  pickupDetail?: string;
  };
 };
@@ -726,7 +740,15 @@ export function ReserveWizard({
  initialPricingType ==="flat"? initialRoute ?? defaultFlatRoute
  : initialPricingType ==="hourly"? defaultRouteForPricingType(routes,"hourly")
  : null;
- const [step, setStep] = useState<Step>(initialStep);
+ const initialPassengers = Math.max(Number(initialState?.passengers) || 2, 1);
+ const initialBags = Math.max(Number(initialState?.bags) || 2, 0);
+ const initialSelectedVehicle =
+ initialState?.selectedVehicleSlug
+ ? vehicles.find((vehicle) => vehicle.slug === initialState.selectedVehicleSlug) ?? null
+ : null;
+ const [step, setStep] = useState<Step>(
+ initialState?.step ? Math.min(Math.max(initialState.step, minimumStep), 3) as Step : initialStep,
+ );
  const [tripType, setTripType] = useState<TripType>(initialTripType);
  const [routeId, setRouteId] = useState<string>(initialModeRoute?.id ??"");
  const [pickupAddress, setPickupAddress] = useState(
@@ -750,24 +772,54 @@ export function ReserveWizard({
  );
  const [pickupPlace, setPickupPlace] = useState<GoogleAddress | null>(null);
  const [dropoffPlace, setDropoffPlace] = useState<GoogleAddress | null>(null);
- const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
+ const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(() => {
+ if (
+ initialTripType !== "distance" ||
+ typeof initialState?.routeDistanceMiles !== "number" ||
+ typeof initialState?.routeDurationMinutes !== "number" ||
+ !initialState.pickupAddress ||
+ !initialState.dropoffAddress
+ ) {
+ return null;
+ }
+
+ return {
+ distanceMiles: initialState.routeDistanceMiles,
+ durationMinutes: initialState.routeDurationMinutes,
+ endAddress: initialState.dropoffAddress,
+ startAddress: initialState.pickupAddress,
+ };
+ });
  const [routePreviewError, setRoutePreviewError] = useState<string | null>(null);
  const [stepOneAttempted, setStepOneAttempted] = useState(false);
  const [flightNumber, setFlightNumber] = useState("");
- const [pickupDate, setPickupDate] = useState(initialPickupSlot.date);
- const [pickupTime, setPickupTime] = useState(initialPickupSlot.time);
- const [returnTrip, setReturnTrip] = useState(false);
- const [returnDate, setReturnDate] = useState("");
- const [returnTime, setReturnTime] = useState(initialPickupSlot.time);
- const [passengers, setPassengers] = useState("2");
- const [bags, setBags] = useState("2");
+ const [pickupDate, setPickupDate] = useState(
+ initialState?.pickupDate ?? initialPickupSlot.date,
+ );
+ const [pickupTime, setPickupTime] = useState(
+ initialState?.pickupTime ?? initialPickupSlot.time,
+ );
+ const [returnTrip, setReturnTrip] = useState(Boolean(initialState?.returnTrip));
+ const [returnDate, setReturnDate] = useState(initialState?.returnDate ?? "");
+ const [returnTime, setReturnTime] = useState(
+ initialState?.returnTime ?? initialPickupSlot.time,
+ );
+ const [passengers, setPassengers] = useState(String(initialPassengers));
+ const [bags, setBags] = useState(String(initialBags));
  const [hoursRequested, setHoursRequested] = useState(
- String(bookingConstraints.hourlyMinimumHours),
+ String(
+ Math.max(
+ Number(initialState?.hoursRequested) || bookingConstraints.hourlyMinimumHours,
+ bookingConstraints.hourlyMinimumHours,
+ ),
+ ),
  );
  const [selectedVehicleId, setSelectedVehicleId] = useState<string>(() =>
- findDefaultVehicleId(vehicles, 2, 2),
+ initialSelectedVehicle?.id ?? findDefaultVehicleId(vehicles, initialPassengers, initialBags),
  );
- const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
+ const [selectedExtras, setSelectedExtras] = useState<string[]>(
+ initialState?.selectedExtras ?? [],
+ );
  const availableExtraKeys = useMemo(
   () => new Set(extrasCatalog.map((extra) => extra.key)),
   [extrasCatalog],
@@ -1282,6 +1334,78 @@ export function ReserveWizard({
  selectedVehicleId,
  step,
  tripType,
+ ]);
+
+ useEffect(() => {
+ if (typeof window === "undefined" || !draftLoaded) {
+ return;
+ }
+
+ const currentParams = new URLSearchParams(window.location.search);
+ const selectedVehicleSlug =
+ selectedVehicle?.slug ??
+ (selectedVehicleId
+ ? vehicles.find((vehicle) => vehicle.id === selectedVehicleId)?.slug
+ : undefined);
+ const nextParams = buildReserveUrlSearchParams(
+ {
+ bags,
+ dropoffAddress: dropoffAddress.trim() || undefined,
+ hoursRequested:
+ tripType === "hourly" || tripType === "event" ? hoursRequested : undefined,
+ passengers,
+ pickupAddress: pickupAddress.trim() || undefined,
+ pickupDate,
+ pickupTime,
+ returnDate: returnTrip ? returnDate || undefined : undefined,
+ returnTime: returnTrip ? returnTime || undefined : undefined,
+ returnTrip,
+ routeDistanceMiles: routeSummary?.distanceMiles,
+ routeDurationMinutes: routeSummary?.durationMinutes,
+ routeSlug: tripType === "flat" ? selectedRoute?.slug : undefined,
+ selectedExtras,
+ selectedVehicleSlug,
+ step,
+ tripType: pricingTypeFromTripType(tripType),
+ },
+ currentParams,
+ );
+ const nextSearch = nextParams.toString();
+ const currentSearch = currentParams.toString();
+
+ if (nextSearch === currentSearch) {
+ return;
+ }
+
+ const timeoutId = window.setTimeout(() => {
+ const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`;
+ window.history.replaceState({}, "", nextUrl);
+ }, 250);
+
+ return () => {
+ window.clearTimeout(timeoutId);
+ };
+ }, [
+ bags,
+ draftLoaded,
+ dropoffAddress,
+ hoursRequested,
+ passengers,
+ pickupAddress,
+ pickupDate,
+ pickupTime,
+ returnDate,
+ returnTime,
+ returnTrip,
+ routeSummary?.distanceMiles,
+ routeSummary?.durationMinutes,
+ selectedExtras,
+ selectedRoute?.slug,
+ selectedVehicle?.slug,
+ selectedVehicleId,
+ step,
+ tripType,
+ vehicles,
  ]);
 
  useEffect(() => {

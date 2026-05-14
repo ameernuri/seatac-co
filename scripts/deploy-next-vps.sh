@@ -9,7 +9,7 @@ HOST="${1:?Usage: ./scripts/deploy-next-vps.sh <host-or-ip> [user] }"
 REMOTE_USER="${2:-root}"
 REMOTE="${REMOTE_USER}@${HOST}"
 REMOTE_DIR="/home/deploy/pierlimo-next"
-SSH_KEY="${PIERLIMO_SSH_KEY:-/Users/ameer/.ssh/do_digitalocean_ed25519}"
+SSH_KEY="${PIERLIMO_SSH_KEY:-$HOME/.ssh/do_digitalocean_ed25519}"
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new -i "$SSH_KEY")
 
 if [[ ! -f deploy/.env.production ]]; then

@@ -17,7 +17,7 @@ export const seededSiteData = {
   pierlimo: {
     chauffeurs: [
       {
-        name: "Ameer Nuri",
+        name: "Alex Parker",
         phone: "(206) 555-0112",
         color: "emerald",
         displayOrder: 1,

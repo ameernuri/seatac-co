@@ -10,6 +10,10 @@ function formatPickupAt(value: Date) {
   }).format(value);
 }
 
+function formatPartySummary(booking: BookingRecord) {
+  return `${booking.passengers} pax · ${booking.bags} bag${booking.bags === 1 ? "" : "s"}`;
+}
+
 export function buildCustomerBookingConfirmationSms({
   booking,
   bookingUrl,
@@ -63,6 +67,32 @@ export function buildCustomerReminderSms({
     `Pickup ${formatPickupAt(booking.pickupAt)}.`,
     booking.routeName ? `Route: ${booking.routeName}.` : null,
     bookingUrl ? `Manage booking: ${bookingUrl}` : null,
+    "Reply STOP to opt out, HELP for help.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function buildCustomerPaymentRequestSms({
+  booking,
+  summaryUrl,
+  siteName,
+}: {
+  booking: BookingRecord;
+  summaryUrl: string;
+  siteName: string;
+}) {
+  return [
+    `${siteName}: payment request for booking ${booking.reference}.`,
+    `Pickup ${formatPickupAt(booking.pickupAt)}.`,
+    `From ${booking.pickupAddress}.`,
+    booking.dropoffAddress ? `To ${booking.dropoffAddress}.` : null,
+    booking.returnAt ? `Return ${formatPickupAt(booking.returnAt)}.` : null,
+    booking.routeName ? `Trip: ${booking.routeName}.` : null,
+    booking.vehicleName ? `Vehicle: ${booking.vehicleName}.` : null,
+    `Party: ${formatPartySummary(booking)}.`,
+    `Amount due: ${booking.totalCents ? `$${(booking.totalCents / 100).toFixed(2)}` : ""}`,
+    `Review and pay: ${summaryUrl}`,
     "Reply STOP to opt out, HELP for help.",
   ]
     .filter(Boolean)

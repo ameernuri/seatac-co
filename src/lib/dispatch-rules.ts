@@ -37,12 +37,14 @@ const dispatchOverrideSchema = z.object({
   minimumTransferMinutes: z.number().int().min(0).max(24 * 60).optional(),
   transferMinutes: z.number().int().min(0).max(24 * 60).optional(),
   minimumBufferMinutes: z.number().int().min(0).max(24 * 60).optional(),
+  scheduleOverride: z.boolean().optional(),
 });
 
 export type DispatchOverride = {
   dropoffBufferMinutes?: number;
   minimumTransferMinutes?: number;
   pickupBufferMinutes?: number;
+  scheduleOverride?: boolean;
   transferMinutes?: number;
 };
 
@@ -89,6 +91,7 @@ export function normalizeDispatchOverride(value: unknown): DispatchOverride {
     minimumTransferMinutes: parsed.data.minimumTransferMinutes,
     pickupBufferMinutes:
       parsed.data.pickupBufferMinutes ?? parsed.data.minimumBufferMinutes,
+    scheduleOverride: parsed.data.scheduleOverride,
     transferMinutes: parsed.data.transferMinutes,
   };
 }

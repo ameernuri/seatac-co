@@ -41,6 +41,57 @@ function addMinutes(value: Date | string, minutes: number) {
   return new Date(date.getTime() + minutes * 60 * 1000);
 }
 
+function resolveLegDurationMinutes(value: number | null | undefined, fallback: number) {
+  return Math.max(value ?? fallback, 15);
+}
+
+export function resolveServiceLegWindows(
+  input: {
+    dispatchOverride?: DispatchOverride;
+    dropoffAddress: string | null;
+    pickupAddress: string;
+    pickupAt: Date;
+    returnAt?: Date | null;
+    returnDropoffAddress?: string | null;
+    returnPickupAddress?: string | null;
+    returnRouteDurationMinutes?: number | null;
+    routeDurationMinutes?: number | null;
+  },
+  rules: DispatchRules,
+) {
+  const outboundDurationMinutes = resolveLegDurationMinutes(
+    input.routeDurationMinutes,
+    rules.defaultRouteDurationMinutes,
+  );
+  const outboundWindow: AvailabilityBookingWindow = {
+    dispatchOverride: input.dispatchOverride,
+    dropoffAddress: input.dropoffAddress,
+    pickupAddress: input.pickupAddress,
+    pickupAt: input.pickupAt,
+    serviceEndAt: addMinutes(input.pickupAt, outboundDurationMinutes),
+  };
+
+  if (!input.returnAt) {
+    return [outboundWindow];
+  }
+
+  const returnDurationMinutes = resolveLegDurationMinutes(
+    input.returnRouteDurationMinutes ?? input.routeDurationMinutes,
+    rules.defaultRouteDurationMinutes,
+  );
+  const returnWindow: AvailabilityBookingWindow = {
+    dispatchOverride: input.dispatchOverride,
+    dropoffAddress:
+      input.returnDropoffAddress?.trim() || input.pickupAddress,
+    pickupAddress:
+      input.returnPickupAddress?.trim() || input.dropoffAddress?.trim() || input.pickupAddress,
+    pickupAt: input.returnAt,
+    serviceEndAt: addMinutes(input.returnAt, returnDurationMinutes),
+  };
+
+  return [outboundWindow, returnWindow];
+}
+
 export function resolveRequestedServiceEndAt(
   input: AvailabilityRequestInput,
   rules: DispatchRules,

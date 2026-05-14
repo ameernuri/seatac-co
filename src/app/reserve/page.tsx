@@ -13,16 +13,47 @@ import {
  getDefaultExtrasCatalog,
  getEnabledExtrasCatalog,
 } from "@/lib/extras-catalog";
+import {
+ buildReserveUrlPath,
+ parseReserveUrlState,
+ summarizeReserveLocations,
+ type ReserveUrlState,
+} from "@/lib/reserve-url-state";
 import { buildCollectionPageJsonLd, buildSeatacMetadata } from"@/lib/seo";
 import { getClientProfileByUserId, getServerSession } from"@/lib/session";
 
 export const dynamic ="force-dynamic";
 
-export const metadata: Metadata = buildSeatacMetadata({
+type ReservePageProps = {
+ searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function buildReservePageMetadata(state: ReserveUrlState) {
+ const { from, to } = summarizeReserveLocations(state);
+ const path = buildReserveUrlPath(state);
+
+ if (from && to) {
+ return buildSeatacMetadata({
+ title: `Reserve a ride from ${from} to ${to} | seatac.co`,
+ description: `Reserve a private ride from ${from} to ${to} with live vehicle options, route timing, and online checkout.`,
+ path,
+ });
+ }
+
+ if (to) {
+ return buildSeatacMetadata({
+ title: `Reserve a ride to ${to} | seatac.co`,
+ description: `Reserve a private ride to ${to} with live vehicle options, route timing, and online checkout.`,
+ path,
+ });
+ }
+
+ return buildSeatacMetadata({
  title:"Reserve a Sea-Tac airport or cruise terminal ride | seatac.co",
  description:"Book a private ride for Sea-Tac airport arrivals, airport departures, Pier 66, Pier 91, downtown Seattle hotels, Bellevue, Redmond, and Eastside pickups.",
- path:"/reserve",
-});
+ path,
+ });
+}
 
 type SessionUserWithPhone = {
  id: string;
@@ -33,7 +64,14 @@ type SessionUserWithPhone = {
  phoneNumberVerified?: boolean | null;
 };
 
-export default async function ReservePage() {
+export async function generateMetadata({
+ searchParams,
+}: ReservePageProps): Promise<Metadata> {
+ return buildReservePageMetadata(parseReserveUrlState(await searchParams));
+}
+
+export default async function ReservePage({ searchParams }: ReservePageProps) {
+ const reserveUrlState = parseReserveUrlState(await searchParams);
  const session = await getServerSession();
  const [vehicles, routes, settings, accountSnapshot, clientProfile] = await Promise.all([
  getActiveVehicles(env.siteSlug),
@@ -48,6 +86,20 @@ export default async function ReservePage() {
  getDefaultExtrasCatalog(env.siteSlug),
  );
  const sessionUser = session?.user as SessionUserWithPhone | undefined;
+ const { from, to } = summarizeReserveLocations(reserveUrlState);
+ const reservePath = buildReserveUrlPath(reserveUrlState);
+ const pageTitle =
+ from && to
+ ? `Reserve ${from} to ${to}.`
+ : to
+ ? `Reserve a ride to ${to}.`
+ : "Reserve a Sea-Tac ride.";
+ const pageBody =
+ from && to
+ ? `Book a direct private car from ${from} to ${to} with live vehicle pricing and route-specific timing.`
+ : to
+ ? `Book a direct private car to ${to} with live vehicle pricing and route-specific timing.`
+ : "Book a direct private car for Sea-Tac arrivals, airport departures, Pier 66, Pier 91, downtown Seattle hotels, Bellevue, Redmond, and Eastside pickups.";
  const initialClientAccount = session?.user
  ? {
  userId: session.user.id,
@@ -77,7 +129,7 @@ export default async function ReservePage() {
  <SiteHeader />
  <main className="mx-auto max-w-7xl px-6 py-10 lg:px-10 lg:py-14">
  <JsonLd
- data={buildCollectionPageJsonLd("Reserve Sea-Tac rides","Private ride booking for Sea-Tac airport, Seattle cruise terminals, downtown hotels, Bellevue, Redmond, and Eastside pickups.","/reserve",
+ data={buildCollectionPageJsonLd("Reserve Sea-Tac rides","Private ride booking for Sea-Tac airport, Seattle cruise terminals, downtown hotels, Bellevue, Redmond, and Eastside pickups.",reservePath,
  [
  { name:"Sea-Tac airport rides", path:"/seatac-airport-car-service"},
  { name:"Sea-Tac to Pier 66", path:"/seatac-to-pier-66"},
@@ -93,11 +145,10 @@ export default async function ReservePage() {
               Private ride reservation
             </p>
             <h1 className="mt-4 text-[clamp(3rem,5vw,5rem)] leading-[0.95] text-[#1a3d34]">
-              Reserve a Sea-Tac ride.
+              {pageTitle}
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-[#5a7a6e]">
-              Book a direct private car for Sea-Tac arrivals, airport departures, Pier 66,
-              Pier 91, downtown Seattle hotels, Bellevue, Redmond, and Eastside pickups.
+              {pageBody}
             </p>
           </div>
         </section>
@@ -105,6 +156,7 @@ export default async function ReservePage() {
  <ReserveWizard
  bookingConstraints={bookingConstraints}
  extrasCatalog={extrasCatalog}
+ initialState={reserveUrlState}
  initialClientAccount={initialClientAccount}
  vehicles={vehicles}
  routes={routes}

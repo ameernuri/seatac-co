@@ -19,6 +19,8 @@ export type QuoteInput = {
   hoursRequested?: number | null;
   routeDistanceMiles?: number | null;
   routeDurationMinutes?: number | null;
+  returnRouteDistanceMiles?: number | null;
+  returnRouteDurationMinutes?: number | null;
   homeBaseDistanceMiles?: number | null;
   returnHomeBaseDistanceMiles?: number | null;
   returnTrip: boolean;
@@ -33,6 +35,7 @@ export function quoteReservation(input: QuoteInput) {
   const routeBase = input.selectedRoute ? Number(input.selectedRoute.basePrice) : 0;
   const routeMiles = input.selectedRoute ? Number(input.selectedRoute.mileage) : 0;
   const actualRouteMiles = input.routeDistanceMiles ?? routeMiles;
+  const actualReturnRouteMiles = input.returnRouteDistanceMiles ?? actualRouteMiles;
   const baseVehicleFloor = Math.max(
     0,
     input.baseVehicleFloor ?? vehicleBase,
@@ -48,6 +51,11 @@ export function quoteReservation(input: QuoteInput) {
     input.bookingConstraints &&
     shouldChargeComponent(input.bookingConstraints, input.tripType, "mileage")
       ? actualRouteMiles * mileageFee
+      : 0;
+  const returnMileageCharge =
+    input.bookingConstraints &&
+    shouldChargeComponent(input.bookingConstraints, input.tripType, "mileage")
+      ? actualReturnRouteMiles * mileageFee
       : 0;
   const baseVehicleFare = vehicleBase;
   const vehicleUpgradePremium = Math.max(0, vehicleBase - baseVehicleFloor);
@@ -152,7 +160,7 @@ export function quoteReservation(input: QuoteInput) {
     bagTotal;
   const returnTransportationSubtotal =
     baseFare +
-    mileageCharge +
+    returnMileageCharge +
     returnHomeBaseCharge +
     hourlyCharge +
     eventPremium +
@@ -183,6 +191,7 @@ export function quoteReservation(input: QuoteInput) {
     baseVehicleFare: Math.round(baseVehicleFare),
     vehicleUpgradePremium: Math.round(vehicleUpgradePremium),
     mileageCharge: Math.round(mileageCharge),
+    returnMileageCharge: Math.round(returnMileageCharge),
     mileageFee: Math.round(mileageFee * 100) / 100,
     hourlyCharge: Math.round(hourlyCharge),
     hourlyMinimumHours: minimumHourlyHours,
@@ -196,7 +205,9 @@ export function quoteReservation(input: QuoteInput) {
     passengerFee: Math.round(passengerFee * 100) / 100,
     passengerTotal: Math.round(passengerTotal),
     routeDistanceMiles: Number(actualRouteMiles.toFixed(1)),
+    returnRouteDistanceMiles: Number(actualReturnRouteMiles.toFixed(1)),
     routeDurationMinutes: input.routeDurationMinutes ?? null,
+    returnRouteDurationMinutes: input.returnRouteDurationMinutes ?? null,
     eventPremium,
     returnPremium,
     extrasTotal,

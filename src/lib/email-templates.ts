@@ -17,6 +17,30 @@ function formatPickupAt(value: Date) {
   }).format(value);
 }
 
+function formatPartySummary(booking: BookingRecord) {
+  return `${booking.passengers} passenger${booking.passengers === 1 ? "" : "s"} · ${booking.bags} bag${booking.bags === 1 ? "" : "s"}`;
+}
+
+function formatTripSummary(booking: BookingRecord) {
+  return booking.routeName ?? "Custom route";
+}
+
+function paymentSummaryRows(booking: BookingRecord) {
+  return [
+    ["Reference", booking.reference],
+    ["Pickup time", formatPickupAt(booking.pickupAt)],
+    ["Pickup address", booking.pickupAddress],
+    ["Dropoff address", booking.dropoffAddress ?? "Open return / hourly service"],
+    ...(booking.returnAt
+      ? [["Return time", formatPickupAt(booking.returnAt)] as const]
+      : []),
+    ["Trip", formatTripSummary(booking)],
+    ["Vehicle", booking.vehicleName],
+    ["Party", formatPartySummary(booking)],
+    ["Amount due", formatCurrency(centsToDollars(booking.totalCents))],
+  ] as const;
+}
+
 function baseSummaryRows(booking: BookingRecord) {
   return [
     ["Reference", booking.reference],
@@ -190,6 +214,74 @@ export function buildCustomerReminderEmail({
               : ""
           }
           <p style="margin:20px 0 0;font-size:15px;line-height:1.7;">
+            If you need help, call <a href="tel:${site.dispatchPhone.replace(/\D/g, "")}" style="color:#0f6a56;">${site.dispatchPhone}</a>
+            or email <a href="mailto:${site.dispatchEmail}" style="color:#0f6a56;">${site.dispatchEmail}</a>.
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return { html, subject, text };
+}
+
+export function buildCustomerPaymentRequestEmail({
+  booking,
+  summaryUrl,
+  site,
+}: {
+  booking: BookingRecord;
+  summaryUrl: string;
+  site: NotificationSiteContext;
+}) {
+  const rows = paymentSummaryRows(booking);
+  const subject = `${site.companyName}: complete payment for booking ${booking.reference}`;
+  const text = [
+    `${site.companyName} created a payment request for your ride.`,
+    `Reference: ${booking.reference}`,
+    `Pickup time: ${formatPickupAt(booking.pickupAt)}`,
+    `Pickup address: ${booking.pickupAddress}`,
+    `Dropoff address: ${booking.dropoffAddress ?? "Open return / hourly service"}`,
+    booking.returnAt ? `Return time: ${formatPickupAt(booking.returnAt)}` : null,
+    `Trip: ${formatTripSummary(booking)}`,
+    `Vehicle: ${booking.vehicleName}`,
+    `Party: ${formatPartySummary(booking)}`,
+    `Amount due: ${formatCurrency(centsToDollars(booking.totalCents))}`,
+    booking.specialInstructions ? `Notes: ${booking.specialInstructions}` : null,
+    `Review and pay: ${summaryUrl}`,
+    `Questions: ${site.dispatchPhone} or ${site.dispatchEmail}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;background:#f2f7f5;padding:32px;color:#17352f;">
+      <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #d7e4df;border-radius:20px;overflow:hidden;">
+        <div style="padding:28px 28px 20px;background:#0f6a56;color:#f6f2e8;">
+          <div style="font-size:12px;letter-spacing:0.24em;text-transform:uppercase;opacity:0.85;">Payment request</div>
+          <h1 style="margin:12px 0 0;font-size:32px;line-height:1.05;">Complete your ride payment.</h1>
+        </div>
+        <div style="padding:28px;">
+          <p style="margin:0 0 18px;font-size:16px;line-height:1.7;">
+            ${site.companyName} prepared your booking and sent a secure Seatac payment page. Review the trip details below and pay when everything looks correct.
+          </p>
+          <table style="width:100%;border-collapse:collapse;border-spacing:0;">
+            ${renderRows(rows)}
+          </table>
+          ${
+            booking.specialInstructions
+              ? `<p style="margin:18px 0 0;font-size:15px;line-height:1.7;"><strong>Notes:</strong> ${booking.specialInstructions}</p>`
+              : ""
+          }
+          <p style="margin:22px 0;">
+            <a href="${summaryUrl}" style="display:inline-block;background:#0f6a56;color:#f6f2e8;text-decoration:none;padding:12px 18px;border-radius:999px;font-weight:600;">
+              Review and pay
+            </a>
+          </p>
+          <p style="margin:0 0 18px;font-size:14px;line-height:1.7;color:#4f6b63;">
+            If any detail is wrong, reply to this email or contact dispatch before paying.
+          </p>
+          <p style="margin:0;font-size:15px;line-height:1.7;">
             If you need help, call <a href="tel:${site.dispatchPhone.replace(/\D/g, "")}" style="color:#0f6a56;">${site.dispatchPhone}</a>
             or email <a href="mailto:${site.dispatchEmail}" style="color:#0f6a56;">${site.dispatchEmail}</a>.
           </p>

@@ -24,6 +24,10 @@ export const env = {
   adminPassword: process.env.ADMIN_PASSWORD!,
   adminName: process.env.ADMIN_NAME ?? "seatac.co Dispatch",
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
+  stripePublishableKey:
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ??
+    process.env.STRIPE_PUBLISHABLE_KEY ??
+    "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
   stripeCurrency: process.env.STRIPE_CURRENCY ?? "usd",
   amadeusClientId: process.env.AMADEUS_CLIENT_ID ?? "",
@@ -78,6 +82,7 @@ export const env = {
   resendFromName: process.env.RESEND_FROM_NAME ?? "",
   resendReplyToEmail: process.env.RESEND_REPLY_TO_EMAIL ?? "",
   resendDispatchEmailTo: process.env.RESEND_DISPATCH_EMAIL_TO ?? "",
+  adminInternalToken: process.env.ADMIN_INTERNAL_TOKEN ?? process.env.BETTER_AUTH_SECRET!,
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID ?? "",
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN ?? "",
   twilioApiKeySid: process.env.TWILIO_API_KEY_SID ?? "",

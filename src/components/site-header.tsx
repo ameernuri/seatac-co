@@ -10,6 +10,10 @@ import { SeatacPrimaryButton } from "@/components/ui/seatac-primary-button";
 export async function SiteHeader() {
   const session = await getServerSession();
   const userLabel = session?.user?.name?.trim().split(/\s+/)[0] || session?.user?.email || null;
+  const reservationPhoneNumber = siteChrome.reservationPhoneLabel.replace(
+    /^Reservations:\s*/i,
+    "",
+  ).trim();
 
   return (
     <header className="site-main-header">
@@ -17,7 +21,7 @@ export async function SiteHeader() {
         <div className="site-topbar-inner">
           <Link
             href={siteChrome.reservationPhoneHref}
-            className="site-topbar-call-link hover:text-emerald-700 transition-colors"
+            className="site-topbar-call-link hover:text-emerald-700 transition-colors lg:hidden"
             aria-label="Call Seatac Connection dispatch"
           >
             <PhoneCall className="size-3.5" aria-hidden="true" />
@@ -56,7 +60,7 @@ export async function SiteHeader() {
             aria-label="Call Seatac Connection dispatch"
           >
             <PhoneCall className="size-4" aria-hidden="true" />
-            Call
+            {reservationPhoneNumber}
           </Link>
           <SeatacPrimaryButton href="/reserve" emphasis="cta" className="px-5 py-3">
             Book ride

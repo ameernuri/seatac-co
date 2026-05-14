@@ -27,8 +27,7 @@ import {
   hasBlockConflict,
   hasSchedulingConflict,
   resolveOccupiedWindow,
-  resolveRequestedServiceEndAt,
-  type AvailabilityBookingWindow,
+  resolveServiceLegWindows,
 } from "@/lib/vehicle-availability";
 
 const availabilityRequestSchema = z.object({
@@ -70,7 +69,6 @@ export async function POST(request: Request) {
   }
 
   const dispatchRules = await getDispatchRulesBySiteId(site.id);
-  const serviceEndAt = resolveRequestedServiceEndAt(payload, dispatchRules);
 
   const rows = await db
     .select({
@@ -110,6 +108,7 @@ export async function POST(request: Request) {
     .select({
       dispatchOverride: bookings.dispatchOverride,
       dropoffAddress: bookings.dropoffAddress,
+      pricing: bookings.pricing,
       pickupAddress: bookings.pickupAddress,
       pickupAt: bookings.pickupAt,
       returnAt: bookings.returnAt,
@@ -160,38 +159,47 @@ export async function POST(request: Request) {
     return acc;
   }, {});
 
-  const serviceDurationMinutes = Math.max(
-    Math.round((serviceEndAt.getTime() - pickupAt.getTime()) / 60000),
-    15,
-  );
-
   async function countAvailableUnitsForVehicle(
     units: (typeof rows),
     pickupTime: Date,
   ) {
-    const candidate: AvailabilityBookingWindow = {
-      dropoffAddress: payload.dropoffAddress,
-      pickupAddress: payload.pickupAddress,
-      pickupAt: pickupTime,
-      serviceEndAt: addMinutes(pickupTime, serviceDurationMinutes),
-    };
-    const candidateOccupiedWindow = resolveOccupiedWindow(candidate, dispatchRules);
     const assignmentSchedule = availabilityRulesByAssignmentId.get(
       units[0]?.assignmentId ?? "",
     ) ?? {
       exceptions: [],
       rules: [],
     };
-    const scheduleDecision = evaluateAvailabilityWindow({
-      exceptions: assignmentSchedule.exceptions,
-      rules: assignmentSchedule.rules,
-      timeZone: bookingConstraints.timeZone,
-      windowEnd: candidateOccupiedWindow.endAt,
-      windowStart: candidateOccupiedWindow.startAt,
-    });
+    let failedScheduleDecision: ReturnType<typeof evaluateAvailabilityWindow> | null = null;
+    const pickupShiftMs = pickupTime.getTime() - pickupAt.getTime();
+    const shiftedReturnAt =
+      payload.returnTrip && returnAt
+        ? new Date(returnAt.getTime() + pickupShiftMs)
+        : null;
+    const candidateWindows = resolveServiceLegWindows(
+      {
+        dropoffAddress: payload.dropoffAddress,
+        pickupAddress: payload.pickupAddress,
+        pickupAt: pickupTime,
+        returnAt: shiftedReturnAt,
+        routeDurationMinutes: payload.routeDurationMinutes,
+      },
+      dispatchRules,
+    );
 
-    if (!scheduleDecision.allowed) {
-      return { availableUnits: 0, scheduleDecision };
+    for (const candidateWindow of candidateWindows) {
+      const candidateOccupiedWindow = resolveOccupiedWindow(candidateWindow, dispatchRules);
+      const scheduleDecision = evaluateAvailabilityWindow({
+        exceptions: assignmentSchedule.exceptions,
+        rules: assignmentSchedule.rules,
+        timeZone: bookingConstraints.timeZone,
+        windowEnd: candidateOccupiedWindow.endAt,
+        windowStart: candidateOccupiedWindow.startAt,
+      });
+
+      if (!scheduleDecision.allowed) {
+        failedScheduleDecision = scheduleDecision;
+        return { availableUnits: 0, scheduleDecision: failedScheduleDecision };
+      }
     }
 
     let availableUnits = 0;
@@ -202,42 +210,79 @@ export async function POST(request: Request) {
       let conflict = false;
 
       for (const booking of existingBookings) {
-        const bookingWindow: AvailabilityBookingWindow = {
-          dispatchOverride: normalizeDispatchOverride(booking.dispatchOverride),
-          pickupAt: new Date(booking.pickupAt),
-          serviceEndAt: new Date(booking.serviceEndAt ?? booking.returnAt ?? booking.pickupAt),
-          pickupAddress: booking.pickupAddress,
-          dropoffAddress: booking.dropoffAddress,
-        };
         const bookingRules =
           bookingRulesBySiteId.get(booking.siteId) ?? defaultDispatchRules;
+        const bookingWindows = resolveServiceLegWindows(
+          {
+            dispatchOverride: normalizeDispatchOverride(booking.dispatchOverride),
+            dropoffAddress: booking.dropoffAddress,
+            pickupAddress: booking.pickupAddress,
+            pickupAt: new Date(booking.pickupAt),
+            returnAt: booking.returnAt ? new Date(booking.returnAt) : null,
+            returnDropoffAddress: booking.pickupAddress,
+            returnPickupAddress: booking.dropoffAddress,
+            returnRouteDurationMinutes:
+              typeof booking.pricing === "object" &&
+              booking.pricing !== null &&
+              "returnRouteDurationMinutes" in booking.pricing &&
+              typeof booking.pricing.returnRouteDurationMinutes === "number"
+                ? booking.pricing.returnRouteDurationMinutes
+                : null,
+            routeDurationMinutes:
+              typeof booking.pricing === "object" &&
+              booking.pricing !== null &&
+              "routeDurationMinutes" in booking.pricing &&
+              typeof booking.pricing.routeDurationMinutes === "number"
+                ? booking.pricing.routeDurationMinutes
+                : null,
+          },
+          bookingRules,
+        );
 
-        if (
-          await hasSchedulingConflict(
-            bookingWindow,
-            candidate,
-            bookingRules,
-            dispatchRules,
-          )
-        ) {
-          conflict = true;
+        for (const bookingWindow of bookingWindows) {
+          for (const candidateWindow of candidateWindows) {
+            if (
+              await hasSchedulingConflict(
+                bookingWindow,
+                candidateWindow,
+                bookingRules,
+                dispatchRules,
+              )
+            ) {
+              conflict = true;
+              break;
+            }
+          }
+
+          if (conflict) {
+            break;
+          }
+        }
+
+        if (conflict) {
           break;
         }
       }
 
       if (!conflict) {
         for (const block of existingBlocks) {
-          if (
-            hasBlockConflict(
-              {
-                endAt: new Date(block.endAt),
-                startAt: new Date(block.startAt),
-              },
-              candidate,
-              dispatchRules,
-            )
-          ) {
-            conflict = true;
+          for (const candidateWindow of candidateWindows) {
+            if (
+              hasBlockConflict(
+                {
+                  endAt: new Date(block.endAt),
+                  startAt: new Date(block.startAt),
+                },
+                candidateWindow,
+                dispatchRules,
+              )
+            ) {
+              conflict = true;
+              break;
+            }
+          }
+
+          if (conflict) {
             break;
           }
         }
@@ -248,7 +293,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return { availableUnits, scheduleDecision };
+    return { availableUnits, scheduleDecision: failedScheduleDecision };
   }
 
   async function findNextAvailablePickupAt(units: (typeof rows)) {
@@ -281,7 +326,7 @@ export async function POST(request: Request) {
           ];
         }
 
-        const reasonType = result.scheduleDecision.allowed ? "inventory" : "schedule";
+        const reasonType = result.scheduleDecision?.allowed === false ? "schedule" : "inventory";
         const nextAvailablePickupAt = await findNextAvailablePickupAt(units);
 
         return [
@@ -291,7 +336,7 @@ export async function POST(request: Request) {
             nextAvailablePickupAt,
             reason:
               reasonType === "schedule"
-                ? result.scheduleDecision.reason ??
+                ? result.scheduleDecision?.reason ??
                   "Outside this vehicle's scheduled operating window."
                 : "All assigned units are already booked or blocked for that window.",
             reasonType,

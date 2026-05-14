@@ -22,9 +22,10 @@ type Props = {
   pickupPlace: GoogleAddress | null;
   dropoffPlace: GoogleAddress | null;
   fallbackCenter?: GoogleAddress | null;
-  onRouteResolved: (summary: RouteSummary | null) => void;
+  onRouteResolved?: (summary: RouteSummary | null) => void;
   compact?: boolean;
   embedded?: boolean;
+  minimal?: boolean;
 };
 
 const SEA_TAC = {
@@ -52,6 +53,7 @@ export function RouteMapCard({
   onRouteResolved,
   compact = false,
   embedded = false,
+  minimal = false,
 }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
@@ -149,7 +151,7 @@ export function RouteMapCard({
 
       if (!origin || !destination) {
         rendererRef.current?.set("directions", null);
-        onRouteResolved(null);
+        onRouteResolved?.(null);
         setSummary(null);
         setError(null);
 
@@ -170,7 +172,7 @@ export function RouteMapCard({
         const leg = response.routes[0]?.legs[0];
 
         if (!leg?.distance?.value || !leg.duration?.value) {
-          onRouteResolved(null);
+          onRouteResolved?.(null);
           setSummary(null);
           return;
         }
@@ -183,19 +185,19 @@ export function RouteMapCard({
         };
 
         setSummary(nextSummary);
-        onRouteResolved(nextSummary);
+        onRouteResolved?.(nextSummary);
         setError(null);
       } catch {
         rendererRef.current?.set("directions", null);
         setSummary(null);
-        onRouteResolved(null);
+        onRouteResolved?.(null);
         setError("Enter a more specific local address to preview the route.");
       }
     }
 
     renderRoute().catch(() => {
       setSummary(null);
-      onRouteResolved(null);
+      onRouteResolved?.(null);
     });
   }, [
     center.label,
@@ -221,137 +223,135 @@ export function RouteMapCard({
         <div
           ref={mapRef}
           className={
-            compact
+            compact && embedded && minimal
+              ? "h-[156px] overflow-hidden rounded-[1.2rem] border border-[#0d5c48]/12 bg-[#f8faf9] sm:h-[180px] lg:h-[212px]"
+              : compact
               ? "h-[252px] overflow-hidden rounded-[1.45rem] border border-[#0d5c48]/12 bg-[#f8faf9]"
               : "h-[320px] overflow-hidden rounded-[1.7rem] border border-[#0d5c48]/12 bg-[#f8faf9]"
           }
         />
-        <div
-          className={
-            embedded
-              ? compact
-                ? "space-y-2 border-t border-[#0d5c48]/10 pt-4 text-sm text-[#5a7a70]"
-                : "space-y-2 border-t border-[#0d5c48]/10 pt-5 text-sm text-[#5a7a70]"
-              : compact
-                ? "grid grid-cols-2 gap-3 border-t border-[#0d5c48]/10 pt-4 text-sm text-[#5a7a70]"
-                : "grid gap-3 border-t border-[#0d5c48]/10 pt-5 text-sm text-[#5a7a70] md:grid-cols-2"
-          }
-        >
-          <div
-            className={
-              embedded
-                ? ""
-                : ""
-            }
-          >
-            {embedded ? (
-              summary ? (
-                <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-                  <span>Distance</span>
-                  <span className="text-right font-medium text-[#1a3d34]">
-                    {`${summary.distanceMiles.toFixed(1)} mi`}
-                  </span>
-                </div>
-              ) : null
-            ) : (
-              <>
-                <div className="flex items-center gap-2 text-sm uppercase tracking-[0.2em] text-[#5a7a70]">
-                  <Navigation2 className="size-4 text-[#0d5c48]" />
-                  Distance
-                </div>
-                <div
-                  className={
-                    compact ? "mt-2 text-xl font-semibold text-[#1a3d34]" : "mt-2 text-2xl font-semibold text-[#1a3d34]"
-                  }
-                >
-                  {summary ? `${summary.distanceMiles.toFixed(1)} mi` : "Waiting for route"}
-                </div>
-              </>
-            )}
-          </div>
-          <div
-            className={
-              embedded
-                ? ""
-                : ""
-            }
-          >
-            {embedded ? (
-              summary ? (
-                <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-                  <span>Drive time</span>
-                  <span className="text-right font-medium text-[#1a3d34]">
-                    {`${summary.durationMinutes} min`}
-                  </span>
-                </div>
-              ) : null
-            ) : (
-              <>
-                <div className="flex items-center gap-2 text-sm uppercase tracking-[0.2em] text-[#5a7a70]">
-                  <TimerReset className="size-4 text-[#0d5c48]" />
-                  Drive time
-                </div>
-                <div
-                  className={
-                    compact ? "mt-2 text-xl font-semibold text-[#1a3d34]" : "mt-2 text-2xl font-semibold text-[#1a3d34]"
-                  }
-                >
-                  {summary ? `${summary.durationMinutes} min` : "Waiting for route"}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-        <div
-          className={
-            embedded
-              ? compact
-                ? "space-y-2 border-t border-[#0d5c48]/10 pt-4 text-sm text-[#5a7a70]"
-                : "space-y-2 border-t border-[#0d5c48]/10 pt-5 text-sm text-[#5a7a70]"
-              : compact
-                ? "space-y-2 border-t border-[#0d5c48]/10 pt-4 text-sm leading-6 text-[#5a7a70]"
-                : "space-y-2 border-t border-[#0d5c48]/10 pt-5 text-sm leading-7 text-[#5a7a70]"
-          }
-        >
-          {embedded ? (
-            <>
-              <div className="flex items-start gap-3">
-                <span className="shrink-0 whitespace-nowrap">Pickup</span>
-                <span className="ml-auto max-w-[16rem] text-right text-[#1a3d34]">
-                  {pickupAddress || summary?.startAddress || "—"}
-                </span>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="shrink-0 whitespace-nowrap">Drop-off</span>
-                <span className="ml-auto max-w-[16rem] text-right text-[#1a3d34]">
-                  {dropoffAddress || summary?.endAddress || "—"}
-                </span>
-              </div>
-              {error ? <div className="text-[#8aa89e]">{error}</div> : null}
-            </>
-          ) : (
-            <div className="flex items-start gap-3">
-              <MapPinned className="mt-1 size-4 text-[#0d5c48]" />
+        {minimal ? null : (
+          <>
+            <div
+              className={
+                embedded
+                  ? compact
+                    ? "space-y-2 border-t border-[#0d5c48]/10 pt-4 text-sm text-[#5a7a70]"
+                    : "space-y-2 border-t border-[#0d5c48]/10 pt-5 text-sm text-[#5a7a70]"
+                  : compact
+                    ? "grid grid-cols-2 gap-3 border-t border-[#0d5c48]/10 pt-4 text-sm text-[#5a7a70]"
+                    : "grid gap-3 border-t border-[#0d5c48]/10 pt-5 text-sm text-[#5a7a70] md:grid-cols-2"
+              }
+            >
               <div>
-                {summary ? (
-                  <>
-                    <div className="text-[#1a3d34]">{summary.startAddress}</div>
-                    <div className="text-[#8aa89e]">to</div>
-                    <div className="text-[#1a3d34]">{summary.endAddress}</div>
-                  </>
+                {embedded ? (
+                  summary ? (
+                    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+                      <span>Distance</span>
+                      <span className="text-right font-medium text-[#1a3d34]">
+                        {`${summary.distanceMiles.toFixed(1)} mi`}
+                      </span>
+                    </div>
+                  ) : null
                 ) : (
-                  <div>Choose pickup and drop-off addresses to render the live map route.</div>
+                  <>
+                    <div className="flex items-center gap-2 text-sm uppercase tracking-[0.2em] text-[#5a7a70]">
+                      <Navigation2 className="size-4 text-[#0d5c48]" />
+                      Distance
+                    </div>
+                    <div
+                      className={
+                        compact ? "mt-2 text-xl font-semibold text-[#1a3d34]" : "mt-2 text-2xl font-semibold text-[#1a3d34]"
+                      }
+                    >
+                      {summary ? `${summary.distanceMiles.toFixed(1)} mi` : "Waiting for route"}
+                    </div>
+                  </>
                 )}
-                {error && <div className="mt-2 text-[#8aa89e]">{error}</div>}
+              </div>
+              <div>
+                {embedded ? (
+                  summary ? (
+                    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+                      <span>Drive time</span>
+                      <span className="text-right font-medium text-[#1a3d34]">
+                        {`${summary.durationMinutes} min`}
+                      </span>
+                    </div>
+                  ) : null
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 text-sm uppercase tracking-[0.2em] text-[#5a7a70]">
+                      <TimerReset className="size-4 text-[#0d5c48]" />
+                      Drive time
+                    </div>
+                    <div
+                      className={
+                        compact ? "mt-2 text-xl font-semibold text-[#1a3d34]" : "mt-2 text-2xl font-semibold text-[#1a3d34]"
+                      }
+                    >
+                      {summary ? `${summary.durationMinutes} min` : "Waiting for route"}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
-          )}
-        </div>
+            <div
+              className={
+                embedded
+                  ? compact
+                    ? "space-y-2 border-t border-[#0d5c48]/10 pt-4 text-sm text-[#5a7a70]"
+                    : "space-y-2 border-t border-[#0d5c48]/10 pt-5 text-sm text-[#5a7a70]"
+                  : compact
+                    ? "space-y-2 border-t border-[#0d5c48]/10 pt-4 text-sm leading-6 text-[#5a7a70]"
+                    : "space-y-2 border-t border-[#0d5c48]/10 pt-5 text-sm leading-7 text-[#5a7a70]"
+              }
+            >
+              {embedded ? (
+                <>
+                  <div className="flex items-start gap-3">
+                    <span className="shrink-0 whitespace-nowrap">Pickup</span>
+                    <span className="ml-auto max-w-[16rem] text-right text-[#1a3d34]">
+                      {pickupAddress || summary?.startAddress || "—"}
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="shrink-0 whitespace-nowrap">Drop-off</span>
+                    <span className="ml-auto max-w-[16rem] text-right text-[#1a3d34]">
+                      {dropoffAddress || summary?.endAddress || "—"}
+                    </span>
+                  </div>
+                  {error ? <div className="text-[#8aa89e]">{error}</div> : null}
+                </>
+              ) : (
+                <div className="flex items-start gap-3">
+                  <MapPinned className="mt-1 size-4 text-[#0d5c48]" />
+                  <div>
+                    {summary ? (
+                      <>
+                        <div className="text-[#1a3d34]">{summary.startAddress}</div>
+                        <div className="text-[#8aa89e]">to</div>
+                        <div className="text-[#1a3d34]">{summary.endAddress}</div>
+                      </>
+                    ) : (
+                      <div>Choose pickup and drop-off addresses to render the live map route.</div>
+                    )}
+                    {error && <div className="mt-2 text-[#8aa89e]">{error}</div>}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
     </>
   );
 
   if (embedded) {
-    return <div className={compact ? "space-y-4 font-sans" : "space-y-5 font-sans"}>{body}</div>;
+    return (
+      <div className={minimal ? "font-sans" : compact ? "space-y-4 font-sans" : "space-y-5 font-sans"}>
+        {body}
+      </div>
+    );
   }
 
   return (

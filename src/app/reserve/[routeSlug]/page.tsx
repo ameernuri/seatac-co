@@ -12,6 +12,10 @@ import {
   getDefaultExtrasCatalog,
   getEnabledExtrasCatalog,
 } from "@/lib/extras-catalog";
+import {
+  parseReserveUrlState,
+  summarizeReserveLocations,
+} from "@/lib/reserve-url-state";
 import { deriveHotelReservationDefaults, getHotelRouteName } from "@/lib/hotels";
 import {
   deriveRouteReservationDefaults,
@@ -24,9 +28,7 @@ type ReserveRoutePageProps = {
   params: Promise<{
     routeSlug: string;
   }>;
-  searchParams: Promise<{
-    hotel?: string;
-  }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 async function loadRoute(routeSlug: string, hotelSlug?: string) {
@@ -48,8 +50,13 @@ export async function generateMetadata({
   searchParams,
 }: ReserveRoutePageProps): Promise<Metadata> {
   const { routeSlug } = await params;
-  const { hotel: hotelSlug } = await searchParams;
+  const rawSearchParams = await searchParams;
+  const hotelSlug =
+    typeof rawSearchParams.hotel === "string" ? rawSearchParams.hotel : undefined;
   const { hotel, route } = await loadRoute(routeSlug, hotelSlug);
+  const { from, to } = summarizeReserveLocations(
+    parseReserveUrlState(rawSearchParams),
+  );
 
   if (!route) {
     return {
@@ -62,10 +69,18 @@ export async function generateMetadata({
   }
 
   return {
-    title: hotel ? `Reserve ${getHotelRouteName(hotel)} | seatac.co` : `Reserve ${route.name} | seatac.co`,
-    description: hotel
-      ? `Book ${getHotelRouteName(hotel)} with route facts, hotel timing, and an online reservation form.`
-      : `Book ${route.name} with route facts, clear pricing details, and an online reservation form.`,
+    title:
+      from && to
+        ? `Reserve ${from} to ${to} | seatac.co`
+        : hotel
+          ? `Reserve ${getHotelRouteName(hotel)} | seatac.co`
+          : `Reserve ${route.name} | seatac.co`,
+    description:
+      from && to
+        ? `Book ${from} to ${to} with route facts, live vehicle options, and an online reservation form.`
+        : hotel
+          ? `Book ${getHotelRouteName(hotel)} with route facts, hotel timing, and an online reservation form.`
+          : `Book ${route.name} with route facts, clear pricing details, and an online reservation form.`,
     robots: {
       index: false,
       follow: false,
@@ -78,7 +93,9 @@ export async function generateMetadata({
 
 export default async function ReserveRoutePage({ params, searchParams }: ReserveRoutePageProps) {
   const { routeSlug } = await params;
-  const { hotel: hotelSlug } = await searchParams;
+  const rawSearchParams = await searchParams;
+  const hotelSlug =
+    typeof rawSearchParams.hotel === "string" ? rawSearchParams.hotel : undefined;
   const { hotel, route, routes, settings, vehicles } = await loadRoute(routeSlug, hotelSlug);
 
   if (!route) {
@@ -90,9 +107,13 @@ export default async function ReserveRoutePage({ params, searchParams }: Reserve
     settings[EXTRAS_CATALOG_KEY],
     getDefaultExtrasCatalog(env.siteSlug),
   );
-  const initialState = hotel
-    ? deriveHotelReservationDefaults(hotel, route)
-    : deriveRouteReservationDefaults(route);
+  const initialState = {
+    ...(hotel
+      ? deriveHotelReservationDefaults(hotel, route)
+      : deriveRouteReservationDefaults(route)),
+    ...parseReserveUrlState(rawSearchParams),
+    routeSlug: route.slug,
+  };
   const title = hotel ? getHotelRouteName(hotel) : route.name;
 
   return (

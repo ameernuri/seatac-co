@@ -25,8 +25,11 @@ import {
 } from "@/lib/extras-catalog";
 import { getBookingConstraintsBySiteId } from "@/lib/booking-constraints-store";
 import { validateBookingWindow } from "@/lib/booking-constraints";
+import {
+  QuoteGeometryError,
+  resolveQuoteGeometry,
+} from "@/lib/booking-quote-geometry";
 import { quoteReservation, type ServiceMode } from "@/lib/quote";
-import { fetchGoogleRoutePreview } from "@/lib/route-preview";
 import { getRequiredSite } from "@/lib/sites";
 import { evaluateAvailabilityWindow } from "@/lib/vehicle-schedule";
 import { getVehicleAvailabilityScheduleForSiteVehicle } from "@/lib/vehicle-schedule-store";
@@ -35,6 +38,7 @@ import {
   hasSchedulingConflict,
   resolveOccupiedWindow,
   resolveRequestedServiceEndAt,
+  resolveServiceLegWindows,
   type AvailabilityBookingWindow,
 } from "@/lib/vehicle-availability";
 
@@ -46,9 +50,15 @@ export const bookingPayloadSchema = z.object({
   pickupAddress: z.string().min(4),
   dropoffLabel: z.string().nullable(),
   dropoffAddress: z.string().nullable(),
+  returnPickupLabel: z.string().nullable().optional(),
+  returnPickupAddress: z.string().nullable().optional(),
+  returnDropoffLabel: z.string().nullable().optional(),
+  returnDropoffAddress: z.string().nullable().optional(),
   routeName: z.string().min(2).nullable(),
   routeDistanceMiles: z.number().min(0).nullable(),
   routeDurationMinutes: z.number().int().min(0).nullable(),
+  returnRouteDistanceMiles: z.number().min(0).nullable().optional(),
+  returnRouteDurationMinutes: z.number().int().min(0).nullable().optional(),
   pickupAt: z.string(),
   returnAt: z.string().nullable(),
   returnTrip: z.boolean(),
@@ -88,6 +98,7 @@ function buildReference() {
 const availabilityBookingColumns = {
   dispatchOverride: bookings.dispatchOverride,
   dropoffAddress: bookings.dropoffAddress,
+  pricing: bookings.pricing,
   pickupAddress: bookings.pickupAddress,
   pickupAt: bookings.pickupAt,
   returnAt: bookings.returnAt,
@@ -115,7 +126,7 @@ const bookingDraftColumns = {
 async function findAvailableVehicleUnit(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   vehicleId: string,
-  candidateWindow: AvailabilityBookingWindow,
+  candidateWindows: AvailabilityBookingWindow[],
   rules: Awaited<ReturnType<typeof getDispatchRulesBySiteId>>,
 ) {
   const units = await tx
@@ -188,42 +199,79 @@ async function findAvailableVehicleUnit(
     let conflict = false;
 
     for (const booking of existingBookings) {
-      const bookingWindow: AvailabilityBookingWindow = {
-        dispatchOverride: normalizeDispatchOverride(booking.dispatchOverride),
-        pickupAt: new Date(booking.pickupAt),
-        serviceEndAt: new Date(booking.serviceEndAt ?? booking.returnAt ?? booking.pickupAt),
-        pickupAddress: booking.pickupAddress,
-        dropoffAddress: booking.dropoffAddress,
-      };
       const bookingRules =
         bookingRulesBySiteId.get(booking.siteId) ?? defaultDispatchRules;
+      const bookingWindows = resolveServiceLegWindows(
+        {
+          dispatchOverride: normalizeDispatchOverride(booking.dispatchOverride),
+          dropoffAddress: booking.dropoffAddress,
+          pickupAddress: booking.pickupAddress,
+          pickupAt: new Date(booking.pickupAt),
+          returnAt: booking.returnAt ? new Date(booking.returnAt) : null,
+          returnDropoffAddress: booking.pickupAddress,
+          returnPickupAddress: booking.dropoffAddress,
+          returnRouteDurationMinutes:
+            typeof booking.pricing === "object" &&
+            booking.pricing !== null &&
+            "returnRouteDurationMinutes" in booking.pricing &&
+            typeof booking.pricing.returnRouteDurationMinutes === "number"
+              ? booking.pricing.returnRouteDurationMinutes
+              : null,
+          routeDurationMinutes:
+            typeof booking.pricing === "object" &&
+            booking.pricing !== null &&
+            "routeDurationMinutes" in booking.pricing &&
+            typeof booking.pricing.routeDurationMinutes === "number"
+              ? booking.pricing.routeDurationMinutes
+              : null,
+        },
+        bookingRules,
+      );
 
-      if (
-        await hasSchedulingConflict(
-          bookingWindow,
-          candidateWindow,
-          bookingRules,
-          rules,
-        )
-      ) {
-        conflict = true;
+      for (const bookingWindow of bookingWindows) {
+        for (const candidateWindow of candidateWindows) {
+          if (
+            await hasSchedulingConflict(
+              bookingWindow,
+              candidateWindow,
+              bookingRules,
+              rules,
+            )
+          ) {
+            conflict = true;
+            break;
+          }
+        }
+
+        if (conflict) {
+          break;
+        }
+      }
+
+      if (conflict) {
         break;
       }
     }
 
     if (!conflict) {
       for (const block of existingBlocks) {
-        if (
-          hasBlockConflict(
-            {
-              endAt: new Date(block.endAt),
-              startAt: new Date(block.startAt),
-            },
-            candidateWindow,
-            rules,
-          )
-        ) {
-          conflict = true;
+        for (const candidateWindow of candidateWindows) {
+          if (
+            hasBlockConflict(
+              {
+                endAt: new Date(block.endAt),
+                startAt: new Date(block.startAt),
+              },
+              candidateWindow,
+              rules,
+            )
+          ) {
+            conflict = true;
+            break;
+          }
+        }
+
+        if (conflict) {
           break;
         }
       }
@@ -241,6 +289,7 @@ export async function createBookingDraft(
   payload: BookingPayload,
   siteSlug: string = env.siteSlug,
   customerUserId?: string | null,
+  adminScheduleOverride = false,
 ) {
   const site = await getRequiredSite(siteSlug);
   const pickupAt = new Date(payload.pickupAt);
@@ -252,7 +301,7 @@ export async function createBookingDraft(
     returnAt,
   });
 
-  if (validationMessage) {
+  if (validationMessage && !adminScheduleOverride) {
     throw new BookingGuardrailError(validationMessage);
   }
 
@@ -267,63 +316,28 @@ export async function createBookingDraft(
     throw new BookingGuardrailError("Choose a valid flat-rate route.");
   }
 
-  let resolvedRouteDistanceMiles = payload.routeDistanceMiles;
-  let resolvedRouteDurationMinutes = payload.routeDurationMinutes;
-  let resolvedHomeBaseDistanceMiles: number | null = null;
-  let resolvedReturnHomeBaseDistanceMiles: number | null = null;
+  let geometry;
 
-  if (payload.tripType === "distance") {
-    const destination = payload.dropoffAddress?.trim() ?? "";
-    const previewResult = await fetchGoogleRoutePreview(
-      payload.pickupAddress,
-      destination,
-    );
-
-    if (!previewResult.preview) {
-      throw new BookingGuardrailError("Route distance must be confirmed before checkout.");
+  try {
+    geometry = await resolveQuoteGeometry({
+      dropoffAddress: payload.dropoffAddress,
+      homeBaseAddress:
+        bookingConstraints.homeBaseEnabled && bookingConstraints.homeBaseAddress.trim()
+          ? bookingConstraints.homeBaseAddress
+          : "",
+      pickupAddress: payload.pickupAddress,
+      returnDropoffAddress: payload.returnDropoffAddress,
+      returnPickupAddress: payload.returnPickupAddress,
+      returnTrip: payload.returnTrip,
+      selectedRoute,
+      tripType: payload.tripType,
+    });
+  } catch (error) {
+    if (error instanceof QuoteGeometryError) {
+      throw new BookingGuardrailError(error.message);
     }
 
-    resolvedRouteDistanceMiles = previewResult.preview.distanceMiles;
-    resolvedRouteDurationMinutes = previewResult.preview.durationMinutes;
-  }
-
-  if (
-    bookingConstraints.homeBaseEnabled &&
-    bookingConstraints.homeBaseAddress.trim() &&
-    payload.pickupAddress.trim()
-  ) {
-    const homeBasePreview = await fetchGoogleRoutePreview(
-      bookingConstraints.homeBaseAddress,
-      payload.pickupAddress,
-    );
-
-    if (!homeBasePreview.preview) {
-      throw new BookingGuardrailError(
-        "Pickup distance from home base must be confirmed before checkout.",
-      );
-    }
-
-    resolvedHomeBaseDistanceMiles = homeBasePreview.preview.distanceMiles;
-  }
-
-  if (
-    payload.returnTrip &&
-    bookingConstraints.homeBaseEnabled &&
-    bookingConstraints.homeBaseAddress.trim() &&
-    payload.dropoffAddress?.trim()
-  ) {
-    const returnHomeBasePreview = await fetchGoogleRoutePreview(
-      bookingConstraints.homeBaseAddress,
-      payload.dropoffAddress,
-    );
-
-    if (!returnHomeBasePreview.preview) {
-      throw new BookingGuardrailError(
-        "Return pickup distance from home base must be confirmed before checkout.",
-      );
-    }
-
-    resolvedReturnHomeBaseDistanceMiles = returnHomeBasePreview.preview.distanceMiles;
+    throw error;
   }
 
   const [vehicleRow] = await db
@@ -399,10 +413,12 @@ export async function createBookingDraft(
     passengers: payload.passengers,
     bags: payload.bags,
     hoursRequested: payload.hoursRequested,
-    routeDistanceMiles: resolvedRouteDistanceMiles,
-    routeDurationMinutes: resolvedRouteDurationMinutes,
-    homeBaseDistanceMiles: resolvedHomeBaseDistanceMiles,
-    returnHomeBaseDistanceMiles: resolvedReturnHomeBaseDistanceMiles,
+    routeDistanceMiles: geometry.routeDistanceMiles,
+    routeDurationMinutes: geometry.routeDurationMinutes,
+    returnRouteDistanceMiles: geometry.returnRouteDistanceMiles,
+    returnRouteDurationMinutes: geometry.returnRouteDurationMinutes,
+    homeBaseDistanceMiles: geometry.homeBaseDistanceMiles,
+    returnHomeBaseDistanceMiles: geometry.returnHomeBaseDistanceMiles,
     returnTrip: payload.returnTrip,
     extrasCatalog,
     selectedExtras,
@@ -423,36 +439,46 @@ export async function createBookingDraft(
       returnAt: payload.returnAt,
       returnTrip: payload.returnTrip,
       tripType: payload.tripType,
-      routeDurationMinutes: pricing.routeDurationMinutes ?? resolvedRouteDurationMinutes,
+      routeDurationMinutes: pricing.routeDurationMinutes ?? geometry.routeDurationMinutes,
       defaultRouteDurationMinutes: selectedRoute?.durationMinutes,
       hoursRequested: payload.hoursRequested,
     },
     dispatchRules,
   );
-  const candidateWindow: AvailabilityBookingWindow = {
-    dropoffAddress: payload.dropoffAddress,
-    pickupAddress: payload.pickupAddress,
-    pickupAt,
-    serviceEndAt,
-  };
-  const occupiedWindow = resolveOccupiedWindow(candidateWindow, dispatchRules);
+  const candidateWindows = resolveServiceLegWindows(
+    {
+      dropoffAddress: payload.dropoffAddress,
+      pickupAddress: payload.pickupAddress,
+      pickupAt,
+      returnAt,
+      returnDropoffAddress: payload.returnDropoffAddress,
+      returnPickupAddress: payload.returnPickupAddress,
+      returnRouteDurationMinutes:
+        pricing.returnRouteDurationMinutes ?? geometry.returnRouteDurationMinutes,
+      routeDurationMinutes: pricing.routeDurationMinutes ?? geometry.routeDurationMinutes,
+    },
+    dispatchRules,
+  );
   const availabilitySchedule = await getVehicleAvailabilityScheduleForSiteVehicle({
     siteId: site.id,
     vehicleId: vehicle.id,
   });
-  const scheduleDecision = evaluateAvailabilityWindow({
-    exceptions: availabilitySchedule.exceptions,
-    rules: availabilitySchedule.rules,
-    timeZone: bookingConstraints.timeZone,
-    windowEnd: occupiedWindow.endAt,
-    windowStart: occupiedWindow.startAt,
-  });
+  for (const candidateWindow of candidateWindows) {
+    const occupiedWindow = resolveOccupiedWindow(candidateWindow, dispatchRules);
+    const scheduleDecision = evaluateAvailabilityWindow({
+      exceptions: availabilitySchedule.exceptions,
+      rules: availabilitySchedule.rules,
+      timeZone: bookingConstraints.timeZone,
+      windowEnd: occupiedWindow.endAt,
+      windowStart: occupiedWindow.startAt,
+    });
 
-  if (!scheduleDecision.allowed) {
-    throw new VehicleAvailabilityError(
-      scheduleDecision.reason ??
-        `${vehicle.name} is not scheduled to operate for that time window.`,
-    );
+    if (!scheduleDecision.allowed && !adminScheduleOverride) {
+      throw new VehicleAvailabilityError(
+        scheduleDecision.reason ??
+          `${vehicle.name} is not scheduled to operate for that time window.`,
+      );
+    }
   }
 
   const created = await db.transaction(async (tx) => {
@@ -463,7 +489,7 @@ export async function createBookingDraft(
     const vehicleUnit = await findAvailableVehicleUnit(
       tx,
       vehicle.id,
-      candidateWindow,
+      candidateWindows,
       dispatchRules,
     );
 
@@ -502,7 +528,7 @@ export async function createBookingDraft(
         vehicleUnitId: vehicleUnit.id,
         vehicleName: vehicle.name,
         vehicleUnitLabel: vehicleUnit.label,
-        dispatchOverride: {},
+        dispatchOverride: adminScheduleOverride ? { scheduleOverride: true } : {},
         extras: selectedExtras,
         pricing,
         subtotalCents: Math.round(pricing.subtotal * 100),

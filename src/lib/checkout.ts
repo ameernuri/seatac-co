@@ -12,20 +12,33 @@ import { getStripeClient } from "@/lib/stripe";
 type BookingPayload = z.infer<typeof bookingPayloadSchema>;
 
 type CreateBookingCheckoutInput = {
+  adminScheduleOverride?: boolean;
   payload: BookingPayload;
   siteSlug?: string;
   customerUserId?: string | null;
+  priceOverrideDollars?: number | null;
+  priceOverrideReason?: string | null;
 };
 
 export async function createBookingCheckout({
+  adminScheduleOverride,
   payload,
   siteSlug,
   customerUserId,
+  priceOverrideDollars,
+  priceOverrideReason,
 }: CreateBookingCheckoutInput) {
   const checkoutStartedAt = Date.now();
-  const draft = await createBookingDraft(payload, siteSlug, customerUserId);
+  const draft = await createBookingDraft(
+    payload,
+    siteSlug,
+    customerUserId,
+    adminScheduleOverride,
+  );
   const draftCreatedAt = Date.now();
   const { booking, vehicle } = draft;
+  let bookingForCheckout = booking;
+  let checkoutAmountCents = booking.totalCents;
   const site = await db.query.sites.findFirst({
     where: (table, { eq }) => eq(table.id, booking.siteId),
   });
@@ -38,6 +51,35 @@ export async function createBookingCheckout({
   const routeSummary = [booking.pickupLabel, booking.dropoffLabel]
     .filter((value): value is string => Boolean(value))
     .join(" to ");
+  if (typeof priceOverrideDollars === "number" && Number.isFinite(priceOverrideDollars)) {
+    const overrideCents = Math.max(Math.round(priceOverrideDollars * 100), 0);
+
+    if (overrideCents > 0 && overrideCents !== booking.totalCents) {
+      const overriddenPricing = {
+        ...draft.pricing,
+        adminOverrideReason: priceOverrideReason?.trim() || null,
+        adminOverrideTotal: Math.round((overrideCents / 100) * 100) / 100,
+        calculatedTotal: draft.pricing.total,
+      };
+
+      await db
+        .update(bookings)
+        .set({
+          pricing: overriddenPricing,
+          subtotalCents: overrideCents,
+          totalCents: overrideCents,
+          updatedAt: new Date(),
+        })
+        .where(eq(bookings.id, booking.id));
+
+      bookingForCheckout = {
+        ...booking,
+        totalCents: overrideCents,
+      };
+      checkoutAmountCents = overrideCents;
+    }
+  }
+
   const checkoutDescription = [
     `${vehicle.name} ride`,
     pickupTime,
@@ -61,9 +103,9 @@ export async function createBookingCheckout({
           quantity: 1,
           price_data: {
             currency: env.stripeCurrency,
-            unit_amount: booking.totalCents,
+            unit_amount: checkoutAmountCents,
             product_data: {
-              name: `${siteName} ride ${booking.reference}`,
+              name: `${siteName} ride ${bookingForCheckout.reference}`,
               description: checkoutDescription,
             },
           },
@@ -71,20 +113,20 @@ export async function createBookingCheckout({
       ],
       custom_text: {
         submit: {
-          message: `Ride ${booking.reference}: ${pickupTime}. ${routeSummary || booking.routeName || "Custom route"}.`,
+          message: `Ride ${bookingForCheckout.reference}: ${pickupTime}. ${routeSummary || booking.routeName || "Custom route"}.`,
         },
       },
       metadata: {
-        bookingId: booking.id,
-        bookingReference: booking.reference,
+        bookingId: bookingForCheckout.id,
+        bookingReference: bookingForCheckout.reference,
         pickupAt: pickupAtDate.toISOString(),
         route: routeSummary || booking.routeName || "Custom route",
       },
       payment_intent_data: {
-        description: `${siteName} ride ${booking.reference}`,
+        description: `${siteName} ride ${bookingForCheckout.reference}`,
         metadata: {
-          bookingId: booking.id,
-          bookingReference: booking.reference,
+          bookingId: bookingForCheckout.id,
+          bookingReference: bookingForCheckout.reference,
           pickupAt: pickupAtDate.toISOString(),
           route: routeSummary || booking.routeName || "Custom route",
         },
@@ -111,7 +153,7 @@ export async function createBookingCheckout({
 
     return {
       booking: {
-        ...booking,
+        ...bookingForCheckout,
         paymentCheckoutSessionId: session.id,
       },
       checkoutSessionId: session.id,
